@@ -35,7 +35,7 @@ class ArkivQueue:
         self.post("/readings", {"summaries": summaries})
 
     def decision(self, decision_id: int) -> None:
-        d = next((x for x in self.store.decisions(limit=50) if x["id"] == decision_id), None)
+        d = self.store.decision(decision_id)
         if not d:
             return
         self.post("/decision", {
@@ -58,6 +58,13 @@ class ArkivQueue:
     # ---- worker ----------------------------------------------------------
     def _send(self, path: str, body: dict) -> dict:
         decision_id = body.pop("_decision_id", None)
+        if path == "/decision" and decision_id:
+            # Read at send time: the 0G Storage root may have come in while this waited in the queue,
+            # and a decision already on Arkiv gets the root patched in instead of a second entity.
+            d = self.store.decision(decision_id) or {}
+            body["storage_root"] = d.get("storage_root") or body.get("storage_root")
+            if d.get("arkiv_key"):
+                body["arkiv_key"] = d["arkiv_key"]
         r = httpx.post(f"{self.url}{path}", json=body, timeout=60)
         r.raise_for_status()
         out = r.json()
