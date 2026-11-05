@@ -1,15 +1,16 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { demoState } from "../data/demo.js";
-import { getConnection, isBlocked, onConnectionChange, openConnection } from "./connection.js";
+import { getConnection, isBlocked, isValidPiUrl, onConnectionChange, openConnection } from "./connection.js";
 import { demoHero, getScene } from "./scene.js";
 
 /** The Pi's address right now (set at runtime, see lib/connection.js). */
 export const apiUrl = () => getConnection().piUrl;
 
 const blockedError = () => new Error("Blocked: this https page can't reach an http Pi");
+const unusable = () => (isBlocked() ? blockedError() : !isValidPiUrl() ? new Error("The Pi address isn't a valid http(s) URL") : null);
 
 export async function getJSON(path, { timeout = 4000 } = {}) {
-  if (isBlocked()) throw blockedError();
+  if (unusable()) throw unusable();
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeout);
   try {
@@ -23,7 +24,7 @@ export async function getJSON(path, { timeout = 4000 } = {}) {
 
 /** Admin calls need the key the committee admin typed in (it is never in the bundle). */
 export async function postJSON(path, body, { admin = false } = {}) {
-  if (isBlocked()) throw blockedError();
+  if (unusable()) throw unusable();
   const key = getConnection().adminKey;
   if (admin && !key) {
     openConnection("This action needs the committee admin key.");
@@ -47,7 +48,7 @@ export async function postJSON(path, body, { admin = false } = {}) {
 // reached the app shows demo data and retries with backoff (2 s -> 10 s) instead of the
 // browser's endless 3-second reconnect.
 const demoLive = () => {
-  const s = { ...demoState(), demo: true, connected: false, blocked: isBlocked(), runner: { mode: "plan", jobs: {} } };
+  const s = { ...demoState(), demo: true, connected: false, blocked: isBlocked(), reason: whyNot(), runner: { mode: "plan", jobs: {} } };
   const sc = getScene();
   if (sc.offline) {
     // 0G "unplugged" on the projector: the same safe defaults the Pi uses
@@ -62,6 +63,14 @@ const demoLive = () => {
   }
   return s;
 };
+
+// Why there's no live data, for the connection pill
+let failReason = "connecting…";
+function whyNot() {
+  if (isBlocked()) return "https page, http Pi";
+  if (!isValidPiUrl()) return "address isn't a valid URL";
+  return failReason;
+}
 
 let liveState = demoLive();
 const liveSubs = new Set();
@@ -88,7 +97,7 @@ const stopDemo = () => {
 function openStream() {
   clearTimeout(retryTimer);
   retryTimer = null;
-  if (isBlocked()) {
+  if (isBlocked() || !isValidPiUrl()) {
     startDemo(); // the browser would refuse anyway; say so instead of spamming the console
     return;
   }
@@ -106,6 +115,7 @@ function openStream() {
   };
   es.onerror = () => {
     clearTimeout(first);
+    failReason = "no answer";
     es?.close();
     es = null;
     startDemo();
@@ -140,6 +150,7 @@ onConnectionChange(() => {
   const { piUrl } = getConnection();
   if (piUrl === lastUrl) return;
   lastUrl = piUrl;
+  failReason = "connecting…";
   es?.close();
   es = null;
   retryMs = 2000;

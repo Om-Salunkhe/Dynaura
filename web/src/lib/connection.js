@@ -51,12 +51,31 @@ export function setPiUrl(url) {
   emit();
 }
 
+/** Back to the built-in default (VITE_API_URL, else localhost:8000). */
+export const clearPiUrl = () => setPiUrl("");
+export const defaultPiUrl = () => clean(DEFAULT_PI);
+
+/** "dynaura.local:8000" from "http://dynaura.local:8000" */
+export function piHost(url = state.piUrl) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/** Only absolute http(s) addresses; anything else would quietly hit the web host instead. */
+export const isValidPiUrl = (url = state.piUrl) => /^https?:\/\/[^/\s]+/i.test(url || "");
+
 export function setAdminKey(key) {
   const adminKey = (key || "").trim();
   write(ADMIN_KEY, adminKey);
   state = { ...state, adminKey };
   emit();
 }
+
+/** Forget the admin key on this browser: admin actions ask for it again. */
+export const lockAdmin = () => setAdminKey("");
 
 /** Open the Connection dialog, optionally saying why ("Admin key needed…"). */
 export function openConnection(reason = null) {

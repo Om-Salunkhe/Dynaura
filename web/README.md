@@ -17,11 +17,17 @@ Import the repo, set **Root Directory** to `web`, framework Vite. Add every `VIT
 `web/.env.example` under Environment Variables. `vercel.json` sends every route to `index.html`
 so links like `/jobs` work on refresh.
 
-The Pi address is set at runtime: tap the Live/Demo pill in any header, or open a link with
-`?pi=<address>` (it is remembered). An https page (like Vercel) can't read an http Pi, so the app
-says "Pi blocked" and shows demo data. For the live demo, open the app from the laptop on the Pi's
-Wi-Fi (`npm run dev`), or give the Pi an https address. The admin key is never in the bundle: the
-committee admin types it in the same dialog.
+The Pi address is set at runtime, so a new tunnel URL needs no redeploy. The app takes, in order:
+`?pi=<address>` in the link (remembered in this browser), then the saved address, then
+`VITE_API_URL`, then `http://localhost:8000`. To change or clear it, tap the connection pill (or the
+bar on phones), or use the account menu → Connection & admin key.
+
+An https page (Vercel) can't read an http Pi. The app says "Pi URL must be https" instead of failing
+quietly. On the Pi, run `cloudflared tunnel --url http://localhost:8000` and open
+`https://<app>/?pi=https://<name>.trycloudflare.com`.
+
+The admin key is never in the bundle (there is no `VITE_ADMIN_KEY`). The committee admin types it once
+in the Connection dialog; it is sent as `X-Admin-Key`, stays in that browser, and **Lock** forgets it.
 
 ## Projector mode
 
