@@ -4,6 +4,7 @@ import { RoleProvider, useRole } from "./lib/role.jsx";
 import { useTheme } from "./lib/theme.js";
 import AdminOverview from "./pages/AdminOverview.jsx";
 import AdminTrading from "./pages/AdminTrading.jsx";
+import AskDyna from "./pages/AskDyna.jsx";
 import Bill from "./pages/Bill.jsx";
 import Building from "./pages/Building.jsx";
 import CleanerJobs from "./pages/CleanerJobs.jsx";
@@ -35,6 +36,7 @@ function Routed() {
   const [who] = useRole();
   return (
     <Routes>
+      <Route path="/ask" element={<AskDyna />} />
       <Route element={<Layout nav={NAV[who.role]} />}>
         <Route path="/" element={who.role === "resident" ? <Home /> : <Navigate to={HOME[who.role]} replace />} />
         <Route path="/society" element={<Society />} />
