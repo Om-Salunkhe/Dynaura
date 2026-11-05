@@ -6,14 +6,16 @@ import time
 from typing import Callable
 
 from hw import FLATS, METERS, Hardware
+from signer import DeviceSigner
 from store import Store
 
 log = logging.getLogger("dynaura.meter")
 
 
 class MeterLoop:
-    def __init__(self, hw: Hardware, store: Store, interval: float = 1.0):
+    def __init__(self, hw: Hardware, store: Store, signer: DeviceSigner | None = None, interval: float = 1.0):
         self.hw = hw
+        self.signer = signer
         self.store = store
         self.interval = interval
         self.state: dict = {}
@@ -79,6 +81,8 @@ class MeterLoop:
                 "samples": a["n"],
             })
         self._acc = {}
+        if self.signer:
+            out = [self.signer.sign(s) for s in out]
         for s in out:
             self.store.add_summary(s)
         for fn in self._summary_listeners:
