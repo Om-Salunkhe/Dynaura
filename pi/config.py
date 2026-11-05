@@ -26,3 +26,10 @@ API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8000") or 8000)
 DB_PATH = os.getenv("DB_PATH", "dynaura.db")
 DEVICE_PRIVATE_KEY = os.getenv("DEVICE_PRIVATE_KEY", "").strip()
+
+# Location for the sun forecast (default: Mumbai)
+LAT = float(os.getenv("LAT", "19.07") or 19.07)
+LON = float(os.getenv("LON", "72.88") or 72.88)
+TIMEZONE = os.getenv("TIMEZONE", "Asia/Kolkata")
+# Real rooftop size the demo stands for, used to show building-scale kWh in the app
+BUILDING_KWP = float(os.getenv("BUILDING_KWP", "2.0") or 2.0)
