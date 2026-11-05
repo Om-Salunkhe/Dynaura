@@ -5,7 +5,7 @@ import Legend from "../components/Legend.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import StackBars from "../components/StackBars.jsx";
 import { hourly, plan, recommendations, today } from "../data/demo.js";
-import { useLive } from "../lib/api.js";
+import { shortId, useLive, usePi } from "../lib/api.js";
 import { FLATS, useRole } from "../lib/role.jsx";
 
 export default function Home() {
@@ -15,6 +15,10 @@ export default function Home() {
   const meter = live.meters?.[flat.id];
   const source = live.flats?.[flat.id]?.source ?? "grid";
   const day = today[flat.id];
+  const api = usePi("/api/plan", null);
+  const livePlan = !api.demo && api.data?.plan;
+  const recs = livePlan ? api.data.plan.recommendations?.[flat.id] ?? [] : recommendations;
+  const reqId = livePlan ? shortId(api.data.request_id) : plan.requestId;
 
   return (
     <div className="flex flex-col gap-3">
@@ -80,10 +84,11 @@ export default function Home() {
         <div className="flex items-center justify-between">
           <span className="flex flex-col gap-0.5">
             <span className="text-base font-bold">Recommended for you</span>
-            <span className="text-[11px] text-muted">By 0G from tomorrow's sun · {plan.requestId}</span>
+            <span className="mono text-[11px] text-muted">By 0G from the sun forecast · {reqId}</span>
           </span>
         </div>
-        {recommendations.map((r) => (
+        {recs.length === 0 && <span className="text-sm text-muted">No tips today. Your use already follows the sun.</span>}
+        {recs.map((r) => (
           <div key={r.title} className="inner flex items-center gap-3 rounded-[18px] py-2.5 pl-3 pr-2.5">
             <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-sun-soft text-sun-ink">
               <Icon name={r.icon} />

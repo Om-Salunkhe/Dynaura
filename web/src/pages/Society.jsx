@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import DemoBadge from "../components/DemoBadge.jsx";
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { plan as demoPlan } from "../data/demo.js";
+import { planToView } from "../data/society.js";
+import { postJSON, shortId, usePi } from "../lib/api.js";
 import { useRole } from "../lib/role.jsx";
 
 const DAY_START = 9; // 9 AM
@@ -13,11 +16,38 @@ const fmt = (h) => `${Math.floor(h)}:${h % 1 ? "30" : "00"}`;
 export default function Society() {
   const [who] = useRole();
   const isAdmin = who.role === "admin";
+  const api = usePi("/api/plan", null);
+  const live = !api.demo && api.data?.plan;
   const [plan, setPlan] = useState(demoPlan);
   const [editing, setEditing] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (live) setPlan(planToView(api.data, api.data.runner?.jobs));
+  }, [api.data, live]);
+
+  const replan = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      api.set(await postJSON("/api/plan/run?which=today", {}, { admin: true }));
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
   const total = plan.split.flats + plan.split.common + plan.split.buffer;
 
-  const move = (gi, ji, start) =>
+  const move = (gi, ji, start) => {
+    const job = plan.groups[gi].jobs[ji];
+    if (live && job.id) {
+      const hh = `${String(Math.floor(start)).padStart(2, "0")}:${start % 1 ? "30" : "00"}`;
+      postJSON("/api/admin/jobs", { id: job.id, start: hh }, { admin: true })
+        .then((d) => api.set({ ...api.data, ...d }))
+        .catch((e) => setErr(String(e.message || e)));
+    }
     setPlan((p) => ({
       ...p,
       groups: p.groups.map((g, i) =>
@@ -31,13 +61,25 @@ export default function Society() {
             }
       ),
     }));
+  };
+
+  const noAi = !api.demo && api.data?.mode === "no-ai";
 
   return (
     <div className="flex flex-col gap-3">
       <PageHeader
         kicker={`Sunrise Apartments · ${plan.date}`}
         title="Spare sun runs the building."
+        right={<DemoBadge demo={api.demo} />}
       />
+
+      {noAi && (
+        <section className="card flex flex-col gap-1 rounded-[22px] border-bad">
+          <span className="text-[11px] font-extrabold tracking-wider text-bad">NO-AI MODE</span>
+          <span className="text-sm font-bold">0G could not be reached, so nothing was moved. Every flat is on grid.</span>
+          <span className="text-xs text-muted">{api.data.reason}</span>
+        </section>
+      )}
 
       <section className="card flex flex-col gap-3 rounded-[26px]">
         {!isAdmin && (
@@ -64,8 +106,9 @@ export default function Society() {
       <section className="card flex flex-col gap-2 rounded-[26px]">
         <div className="flex items-center justify-between">
           <span className="text-base font-bold">Planned by 0G</span>
-          <span className="mono text-[11px] text-muted">{plan.requestId}</span>
+          <span className="mono text-[11px] text-muted" title={plan.requestId}>{shortId(plan.requestId)}</span>
         </div>
+        {plan.summary && <span className="text-xs text-ink-2">{plan.summary}</span>}
         <div className="grid grid-cols-[112px_1fr] gap-2 text-[11px] text-muted">
           <span />
           <span className="flex justify-between">
@@ -131,6 +174,15 @@ export default function Society() {
           </div>
         ))}
       </section>
+
+      {isAdmin && (
+        <div className="flex flex-col gap-1">
+          <button type="button" className="btn-ghost" onClick={replan} disabled={busy}>
+            {busy ? "Asking 0G…" : "Re-plan today on 0G"}
+          </button>
+          {err && <span className="px-1 text-xs text-bad">{err}</span>}
+        </div>
+      )}
 
       <p className="px-1 text-xs leading-relaxed text-muted">
         Only the committee admin can add or change jobs. Lifts, corridor lights and CCTV always stay on grid. If tomorrow is

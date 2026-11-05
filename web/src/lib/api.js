@@ -15,10 +15,12 @@ export async function getJSON(path, { timeout = 4000 } = {}) {
   }
 }
 
-export async function postJSON(path, body) {
+export const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY || "";
+
+export async function postJSON(path, body, { admin = false } = {}) {
   const res = await fetch(API_URL + path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(admin ? { "X-Admin-Key": ADMIN_KEY } : {}) },
     body: JSON.stringify(body ?? {}),
   });
   if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
@@ -81,6 +83,7 @@ export function useLive() {
 /** Fetch once from the Pi; use `fallback` when it is offline. */
 export function usePi(path, fallback) {
   const [data, setData] = useState({ data: fallback, demo: true, loading: true });
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let alive = true;
     getJSON(path)
@@ -90,6 +93,9 @@ export function usePi(path, fallback) {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path]);
-  return data;
+  }, [path, tick]);
+  return { ...data, reload: () => setTick((t) => t + 1), set: (d) => setData({ data: d, demo: false, loading: false }) };
 }
+
+/** "0x7f3a…c21e" */
+export const shortId = (id) => (id && id.length > 12 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id || "");
