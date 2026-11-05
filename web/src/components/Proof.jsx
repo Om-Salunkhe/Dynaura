@@ -3,15 +3,15 @@ import { ogStorageUrl } from "../lib/hero.js";
 import { isFakeId } from "../lib/scene.js";
 
 /**
- * One proof: an Arc tx or a 0G Storage root. Demo ids are shown as "demo" and never linked,
+ * One proof: an Arc tx, a 0G Storage root, or a plain hash (kind "hash", never linked). Demo ids are shown as "demo" and never linked,
  * so nobody clicks through to a hash that doesn't exist.
  */
 export default function Proof({ kind = "arc", id, label, className = "" }) {
   if (!id) return null;
   const fake = isFakeId(id);
   const name = label || (kind === "arc" ? "Arc tx" : "0G proof");
-  const href = fake ? null : kind === "arc" ? txUrl(id) : ogStorageUrl(id);
-  const tone = kind === "arc" ? "text-link" : "text-sun-ink";
+  const href = fake ? null : kind === "arc" ? txUrl(id) : kind === "og" ? ogStorageUrl(id) : null;
+  const tone = kind === "arc" ? "text-link" : kind === "og" ? "text-sun-ink" : "text-ink-2";
   const body = (
     <>
       <span className="font-extrabold">{name}</span>
