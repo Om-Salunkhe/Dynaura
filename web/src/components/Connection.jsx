@@ -21,7 +21,13 @@ export function ConnectionPill({ size = "md" }) {
       className={`chip whitespace-nowrap ${tone} ${xl ? "px-5 py-3 text-lg" : "py-1.5 text-[11px]"}`}
     >
       <span className={`rounded-full ${dot} ${xl ? "h-3 w-3" : "h-2 w-2"}`} />
-      {xl ? label : <><span className="sm:hidden">{short}</span><span className="hidden sm:inline">{label}</span></>}
+      {xl ? label : (
+        <>
+          {/* phones: just the dot, except when blocked (that one needs words) */}
+          <span className={blocked ? "sm:hidden" : "sr-only sm:hidden"}>{short}</span>
+          <span className="hidden sm:inline">{label}</span>
+        </>
+      )}
     </button>
   );
 }

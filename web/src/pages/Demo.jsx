@@ -85,7 +85,7 @@ export default function Demo() {
   }, [idx, run]);
 
   return (
-    <div className="flex min-h-screen flex-col gap-6 px-[3vw] py-[2.5vw]">
+    <div className="flex min-h-screen flex-col gap-4 px-[3vw] py-[2vw] 2xl:gap-6">
       <header className="flex items-center justify-between gap-6">
         <Link to="/" className="flex items-center gap-4" title="Back to the app">
           <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#111418] text-sun">
@@ -93,7 +93,7 @@ export default function Demo() {
           </span>
           <span className="flex flex-col">
             <span className="text-3xl font-extrabold tracking-[-0.5px]">Dynaura</span>
-            <span className="text-lg text-muted">Sunrise Apartments · 0G decides, Arc pays, Arkiv remembers</span>
+            <span className="hidden text-lg text-muted 2xl:block">Sunrise Apartments · 0G decides, Arc pays, Arkiv remembers</span>
           </span>
         </Link>
         <nav className="flex gap-2 rounded-full border border-line bg-card p-1.5 backdrop-blur-xl" aria-label="Moments">
@@ -105,7 +105,8 @@ export default function Demo() {
               className={`flex items-center gap-2 rounded-full px-5 py-3 text-lg font-bold ${m.key === moment.key ? "bg-btn text-btn-ink" : "text-muted hover:text-ink"}`}
             >
               <span className="opacity-60">{m.n}</span>
-              {m.label}
+              <span className="hidden 2xl:inline">{m.label}</span>
+              <span className="2xl:hidden">{m.short}</span>
             </button>
           ))}
         </nav>
@@ -181,14 +182,14 @@ function Morning({ connected, offline, live }) {
     // live, but no AI plan: say so; never show the demo plan as if it were real
     return (
       <section className="grid flex-1 grid-cols-[1.1fr_1fr] gap-8">
-        <div className="card flex flex-col justify-center gap-8 rounded-[40px] p-10">
+        <div className="card flex flex-col justify-center gap-8 rounded-[40px] p-7 2xl:p-10">
           <Kicker n={1}>MORNING PLAN</Kicker>
-          <span className="text-5xl font-extrabold leading-tight">{offline ? "No plan today: 0G can't be reached." : "No 0G plan yet today."}</span>
+          <span className="text-4xl font-extrabold leading-tight 2xl:text-5xl">{offline ? "No plan today: 0G can't be reached." : "No 0G plan yet today."}</span>
           <span className="text-2xl text-muted">
             {offline ? "Dyna won't guess. Until 0G answers, every flat stays on grid." : "Press the button and the Pi asks 0G Compute for today's plan."}
           </span>
         </div>
-        <div className="card flex flex-col justify-center gap-4 rounded-[40px] p-10">
+        <div className="card flex flex-col justify-center gap-4 rounded-[40px] p-7 2xl:p-10">
           <span className="text-3xl font-extrabold">Jobs wait for a plan</span>
           <span className="text-2xl text-muted">Pumps and chargers only move into the sun when Dyna has a plan with a 0G proof behind it.</span>
         </div>
@@ -197,9 +198,9 @@ function Morning({ connected, offline, live }) {
   }
   return (
     <section className="grid flex-1 grid-cols-[1.1fr_1fr] gap-8">
-      <div className="card flex flex-col justify-between gap-8 rounded-[40px] p-10">
+      <div className="card flex flex-col justify-between gap-8 rounded-[40px] p-7 2xl:p-10">
         <Kicker n={1}>MORNING PLAN</Kicker>
-        <span className="text-5xl font-extrabold leading-tight">Dyna planned today's sun on 0G.</span>
+        <span className="text-4xl font-extrabold leading-tight 2xl:text-5xl">Dyna planned today's sun on 0G.</span>
         <div className="flex flex-wrap gap-x-14 gap-y-6">
           <span className="flex flex-col gap-2">
             <span className="text-2xl text-muted">Solar window</span>
@@ -232,7 +233,7 @@ function Morning({ connected, offline, live }) {
           {!hasPlan && <span className="chip bg-inner px-5 py-2.5 text-xl text-muted">{connected ? "No 0G plan yet today" : "Demo plan"}</span>}
         </span>
       </div>
-      <div className="card flex flex-col gap-4 rounded-[40px] p-10">
+      <div className="card flex flex-col gap-4 rounded-[40px] p-7 2xl:p-10">
         <span className="text-3xl font-extrabold">Jobs moved into the sun</span>
         {jobs.map((j) => (
           <div key={j.name} className="inner flex items-center justify-between gap-4 px-6 py-5">
@@ -266,8 +267,8 @@ function demoBuilding(live, scene, hero, offline) {
 
 function Building({ b, caption }) {
   return (
-    <div className="card flex flex-col gap-4 rounded-[40px] p-10">
-      <div className="flex items-center justify-between rounded-3xl bg-sun-soft px-8 py-6">
+    <div className="card flex flex-col gap-3 rounded-[40px] p-7 2xl:gap-4 2xl:p-10">
+      <div className="flex items-center justify-between rounded-3xl bg-sun-soft px-8 py-4 2xl:py-6">
         <span className="flex items-center gap-4 text-3xl font-extrabold">
           <Icon name="panel" size={36} /> Roof panel
         </span>
@@ -279,14 +280,14 @@ function Building({ b, caption }) {
         return (
           <div
             key={f}
-            className={`flex items-center justify-between rounded-3xl border-4 px-8 py-6 ${
+            className={`flex items-center justify-between rounded-3xl border-4 px-8 py-4 2xl:py-6 ${
               st.away ? "border-line bg-inner opacity-60" : solar ? "border-sun bg-sun-soft" : "border-grid bg-[rgba(110,155,255,0.14)]"
             }`}
           >
             <span className="flex items-center gap-4">
               <span className={`h-6 w-6 rounded-full ${solar ? "bg-sun" : "bg-grid"}`} />
-              <span className="text-4xl font-extrabold">{FLATS[f].name}</span>
-              <span className="text-2xl text-muted">{FLATS[f].floor}</span>
+              <span className="whitespace-nowrap text-3xl font-extrabold 2xl:text-4xl">{FLATS[f].name}</span>
+              <span className="hidden text-2xl text-muted 2xl:inline">{FLATS[f].floor}</span>
             </span>
             <span className="flex items-center gap-4">
               {st.away && <span className="chip bg-card-solid px-4 py-2 text-xl">Away</span>}
@@ -296,7 +297,7 @@ function Building({ b, caption }) {
           </div>
         );
       })}
-      <div className="flex items-center justify-between rounded-3xl bg-inner px-8 py-5 text-2xl">
+      <div className="flex items-center justify-between rounded-3xl bg-inner px-8 py-4 text-2xl 2xl:py-5">
         <span className="flex items-center gap-4 font-bold">
           <Icon name="water" size={28} /> Overhead tank pump
         </span>
@@ -314,9 +315,9 @@ function Noon({ live, scene, offline, hero }) {
   const onSolar = Object.entries(b.flats).filter(([, s]) => s.source === "solar").map(([f]) => f);
   return (
     <section className="grid flex-1 grid-cols-[1fr_1.2fr] gap-8">
-      <div className="card flex flex-col gap-8 rounded-[40px] p-10">
+      <div className="card flex flex-col gap-8 rounded-[40px] p-7 2xl:p-10">
         <Kicker n={2}>NOON ROUTING</Kicker>
-        <span className="text-5xl font-extrabold leading-tight">
+        <span className="text-4xl font-extrabold leading-tight 2xl:text-5xl">
           {!onSolar.length
             ? offline
               ? "No AI, no solar switching: every flat is on grid."
@@ -344,10 +345,10 @@ function Dust({ hero }) {
   const ring = paid ? "--good" : dusty ? "--bad" : "--sun";
   return (
     <section className="grid flex-1 grid-cols-[1fr_1.15fr] gap-8">
-      <div className="card flex flex-col items-center justify-center gap-8 rounded-[40px] p-10">
+      <div className="card flex flex-col items-center justify-center gap-8 rounded-[40px] p-7 2xl:p-10">
         <Kicker n={3}>DUSTY PANEL</Kicker>
         <div
-          className="relative grid aspect-square w-[min(30vw,460px)] place-items-center rounded-full transition-[background] duration-300"
+          className="relative grid aspect-square w-[min(30vw,40vh,460px)] place-items-center rounded-full transition-[background] duration-300"
           style={{ background: `conic-gradient(var(${ring}) 0 ${pct ?? 0}%, var(--idle) ${pct ?? 0}% 100%)` }}
         >
           {/* alert line at dustPct, clean line at cleanPct */}
@@ -376,18 +377,18 @@ function Dust({ hero }) {
             <span className={`text-4xl font-extrabold ${dusty ? "text-bad" : ""}`}>{hero.actualW != null ? `${hero.actualW.toFixed(2)} W` : "–"}</span>
           </span>
         </div>
-        <span className="text-xl text-muted">
+        <span className="text-xl text-muted [@media(max-height:820px)]:hidden">
           Alert under {hero.dustPct}% · pays at {hero.cleanPct}%+
         </span>
       </div>
-      <div className="card flex flex-col justify-center gap-6 rounded-[40px] p-10">
+      <div className="card flex flex-col justify-center gap-6 rounded-[40px] p-7 2xl:p-10">
         {paid ? (
-          <span className="flex flex-col gap-1 rounded-3xl bg-[rgba(47,158,106,0.16)] px-8 py-6">
+          <span className="flex flex-col gap-1 rounded-3xl bg-[rgba(47,158,106,0.16)] px-8 py-6 [@media(max-height:820px)]:py-3">
             <span className="text-2xl font-extrabold tracking-wider text-good">PAID BY THE SUN</span>
-            <span className="text-5xl font-extrabold">{hero.job.fee.toFixed(2)} USDC to {hero.job.cleaner?.startsWith?.("0x") ? shortId(hero.job.cleaner) : hero.job.cleaner || "the cleaner"}</span>
+            <span className="text-4xl font-extrabold 2xl:text-5xl [@media(max-height:820px)]:text-3xl">{hero.job.fee.toFixed(2)} USDC to {hero.job.cleaner?.startsWith?.("0x") ? shortId(hero.job.cleaner) : hero.job.cleaner || "the cleaner"}</span>
           </span>
         ) : (
-          <span className="text-4xl font-extrabold leading-tight">
+          <span className="text-3xl font-extrabold leading-tight 2xl:text-4xl">
             {hero.stage === "clean" ? "Tracing paper goes on the panel…" : "The meter is the judge. Nobody presses approve."}
           </span>
         )}
@@ -423,9 +424,9 @@ function Settle({ connected, scene }) {
   const total = rows.reduce((s, r) => s + r.usdc, 0);
   return (
     <section className="grid flex-1 grid-cols-[1fr_1.3fr] gap-8">
-      <div className="card flex flex-col gap-8 rounded-[40px] p-10">
+      <div className="card flex flex-col gap-8 rounded-[40px] p-7 2xl:p-10">
         <Kicker n={4}>MONTH-END SETTLE</Kicker>
-        <span className="text-5xl font-extrabold leading-tight">Each flat pays for what its own meter measured.</span>
+        <span className="text-4xl font-extrabold leading-tight 2xl:text-5xl">Each flat pays for what its own meter measured.</span>
         <span className="flex flex-col gap-2">
           <span className="text-2xl text-muted">The building's bill this month</span>
           <span className={big}>
@@ -435,7 +436,7 @@ function Settle({ connected, scene }) {
         </span>
         <span className="text-2xl text-muted">Plain arithmetic, no AI: kWh from the signed meter readings × the committee's rates. Posted on Arc, paid in USDC.</span>
       </div>
-      <div className="card flex flex-col gap-4 rounded-[40px] p-10">
+      <div className="card flex flex-col gap-4 rounded-[40px] p-7 2xl:p-10">
         {rows.map((r) => (
           <div key={r.flat} className="inner flex items-center justify-between gap-6 px-8 py-6">
             <span className="flex flex-col gap-1">
@@ -467,8 +468,8 @@ function Offline({ live, scene, offline, hero }) {
         {offline ? (
           <OfflineBanner size="xl" />
         ) : (
-          <div className="card flex flex-col gap-6 rounded-[40px] p-10">
-            <span className="text-5xl font-extrabold leading-tight">0G is online. Unplug the internet to see what happens.</span>
+          <div className="card flex flex-col gap-6 rounded-[40px] p-7 2xl:p-10">
+            <span className="text-4xl font-extrabold leading-tight 2xl:text-5xl">0G is online. Unplug the internet to see what happens.</span>
             <span className="text-2xl text-muted">
               Without Dyna the Pi never guesses: every flat drops to grid, the pump runs on its safety timer, and no decision is made without a proof.
             </span>

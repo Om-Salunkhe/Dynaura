@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import PageHeader from "../components/PageHeader.jsx";
 import { admin } from "../data/demo.js";
 import { postJSON } from "../lib/api.js";
+import { txUrl } from "../lib/arc.js";
 import { fetchMaintenance, short, useArkiv } from "../lib/arkiv.js";
 
 export default function AdminTrading() {
@@ -12,7 +13,7 @@ export default function AdminTrading() {
   const [note, setNote] = useState("");
   useEffect(() => {
     if (fromArkiv.live)
-      setRecords(fromArkiv.data.map((m) => ({ date: m.date, title: m.title, text: m.text, link: m.arcTx ? `Arc ${short(m.arcTx)}` : `Arkiv ${short(m.key)}` })));
+      setRecords(fromArkiv.data.map((m) => ({ date: m.date, title: m.title, text: m.text, link: m.arcTx ? `Arc ${short(m.arcTx)}` : `Arkiv ${short(m.key)}`, href: m.arcTx ? txUrl(m.arcTx) : null })));
   }, [fromArkiv]);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ title: "", text: "" });
@@ -71,9 +72,9 @@ export default function AdminTrading() {
                 {s.kwh} kWh · {s.when}
               </span>
             </span>
-            <a href="#" className="text-[13px] font-bold text-link">
-              {(s.kwh * s.price).toFixed(2)} USDC · tx
-            </a>
+            <span className="text-[13px] font-bold text-ink-2" title="Demo sale: no transaction">
+              {(s.kwh * s.price).toFixed(2)} USDC
+            </span>
           </div>
         ))}
       </section>
@@ -115,9 +116,13 @@ export default function AdminTrading() {
               <span className="text-sm font-bold">{m.title}</span>
               <span className="text-xs text-muted">{m.text}</span>
             </span>
-            <a href="#" className="text-xs font-bold text-link">
-              {m.link}
-            </a>
+            {m.href ? (
+              <a href={m.href} target="_blank" rel="noreferrer" className="text-xs font-bold text-link">
+                {m.link}
+              </a>
+            ) : (
+              <span className="text-xs font-bold text-muted">{m.link}</span>
+            )}
           </div>
         ))}
       </section>

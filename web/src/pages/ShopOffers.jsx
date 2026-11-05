@@ -5,7 +5,9 @@ import WalletButton from "../components/WalletButton.jsx";
 import { ABI, ADDR, ARC_READY, ensureAllowance, errText, publicClient, txUrl, write } from "../lib/arc.js";
 import { ARKIV_READY, fetchOffers, short, useArkiv } from "../lib/arkiv.js";
 
-const DEMO = [{ key: "demo", day: "today", kwh: 1.2, price: 0.08, windowEnd: Math.floor(Date.now() / 1000) + 3 * 3600, requestId: "0x7f3a…c21e" }];
+// Demo offer: the plan's solar window closes at 3 PM today
+const demoEnd = () => Math.floor(new Date().setHours(15, 0, 0, 0) / 1000);
+const DEMO = [{ key: "demo", day: "today", kwh: 1.2, price: 0.08, windowEnd: demoEnd(), requestId: "0x7f3a…c21e" }];
 
 export default function ShopOffers() {
   const offers = useArkiv(fetchOffers, DEMO);

@@ -59,25 +59,25 @@ export default function HeroSteps({ hero, size = "md" }) {
   const firstOpen = [1, 2, 3, 4, 5].find((k) => i < (k === 4 ? 5 : k));
   const xl = size === "xl";
   return (
-    <ol className={`flex flex-col ${xl ? "gap-5" : "gap-3"}`}>
+    <ol className={`flex flex-col ${xl ? "gap-3 2xl:gap-5 [@media(max-height:820px)]:gap-2" : "gap-3"}`}>
       {steps.map((s) => {
         // step 4 (meter at 90%+) is only done once the release went through
         const done = i >= (s.at === 4 ? 5 : s.at);
         const active = !done && i >= 1 && s.at === firstOpen;
         return (
-          <li key={s.at} className={`flex items-start ${xl ? "gap-5" : "gap-3"} ${!done && !active ? "opacity-40" : ""}`}>
+          <li key={s.at} className={`flex items-start ${xl ? "gap-4 2xl:gap-5" : "gap-3"} ${!done && !active ? "opacity-40" : ""}`}>
             <span
-              className={`grid flex-none place-items-center rounded-full font-extrabold ${xl ? "h-14 w-14 text-2xl" : "h-8 w-8 text-sm"} ${
+              className={`grid flex-none place-items-center rounded-full font-extrabold ${xl ? "h-11 w-11 text-xl 2xl:h-14 2xl:w-14 2xl:text-2xl" : "h-8 w-8 text-sm"} ${
                 done ? (refunded && s.at === 5 ? "bg-bad text-white" : "bg-good text-white") : active ? "animate-pulse bg-sun text-[#111418]" : "bg-inner text-muted"
               }`}
             >
               {done ? <Icon name="check" size={xl ? 28 : 16} /> : s.at}
             </span>
             <span className="flex min-w-0 flex-col gap-1">
-              <span className={`font-extrabold ${xl ? "text-3xl" : "text-[15px]"}`}>{s.title}</span>
-              <span className={`text-muted ${xl ? "text-xl" : "text-xs"}`}>{s.text}</span>
+              <span className={`font-extrabold ${xl ? "text-2xl 2xl:text-3xl" : "text-[15px]"}`}>{s.title}</span>
+              <span className={`text-muted ${xl ? "text-lg 2xl:text-xl [@media(max-height:820px)]:hidden" : "text-xs"}`}>{s.text}</span>
               {s.proofs && (done || active) && (
-                <span className={`flex flex-wrap gap-2 ${xl ? "pt-1 text-lg" : "text-[11px]"}`}>
+                <span className={`flex flex-wrap gap-2 ${xl ? "pt-1 text-base 2xl:text-lg" : "text-[11px]"}`}>
                   {s.proofs.map(([kind, id, label]) => (
                     <Proof key={label} kind={kind} id={id} label={label} />
                   ))}

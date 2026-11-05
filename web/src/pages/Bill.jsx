@@ -145,7 +145,7 @@ export default function Bill() {
             <div key={p.month} className="flex items-center justify-between py-2 text-sm">
               <span className="font-semibold">{p.month}</span>
               <span className="font-bold">{p.amount.toFixed(2)} USDC</span>
-              <span className="text-xs font-bold text-link">{p.status} · Arc tx</span>
+              <span className="text-xs font-bold text-muted">{p.status}</span>
             </div>
           ))}
         </section>
