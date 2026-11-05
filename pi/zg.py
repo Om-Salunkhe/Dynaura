@@ -96,3 +96,9 @@ def extract_json(text: str) -> dict:
         except json.JSONDecodeError:
             continue
     raise ZGUnavailable("0G answer had no valid JSON")
+
+
+def extract_text(text: str) -> str:
+    """Drop any <think> block a reasoning model adds before its answer."""
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+    return text.split("</think>")[-1].strip()

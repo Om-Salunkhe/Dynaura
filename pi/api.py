@@ -15,6 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 import config
+import dyna
+import zg
 from brain import Brain
 from hw import FLATS, load_hardware
 from jobs import JobRunner, PlanScheduler
@@ -137,6 +139,27 @@ def edit_job(body: dict, x_admin_key: str | None = Header(default=None)):
             plan["jobs"].sort(key=lambda x: x["start"])
             return App.brain.public()
     raise HTTPException(status_code=404, detail="job not in plan")
+
+
+@app.post("/api/ask")
+def ask(body: dict):
+    """Ask Dyna: {"question": "...", "flat": "A"}"""
+    flat = body.get("flat") if body.get("flat") in FLATS else "A"
+    question = str(body.get("question", "")).strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question is empty")
+    try:
+        return dyna.ask(App.store, App.brain, flat, question)
+    except zg.ZGUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/api/decisions")
+def decisions(kind: str | None = None, limit: int = 20):
+    rows = App.store.decisions(kind, min(limit, 100))
+    for r in rows:
+        r.pop("input", None)
+    return rows
 
 
 @app.post("/api/moment/{name}")
