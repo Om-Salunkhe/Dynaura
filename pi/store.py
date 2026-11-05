@@ -31,6 +31,21 @@ CREATE TABLE IF NOT EXISTS summaries (
     sig     TEXT,
     PRIMARY KEY (minute, meter)
 );
+
+CREATE TABLE IF NOT EXISTS decisions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts           REAL NOT NULL,
+    kind         TEXT NOT NULL,      -- plan | ask | dust | clean
+    mode         TEXT NOT NULL,      -- ai | no-ai
+    request_id   TEXT,               -- 0G ZG-Res-Key
+    model        TEXT,
+    tee          TEXT,               -- JSON of TEE fields from the Router
+    summary      TEXT,
+    input        TEXT,               -- prompt (JSON or text)
+    output       TEXT,               -- JSON result
+    storage_root TEXT,               -- 0G Storage root of the episode log
+    arkiv_key    TEXT                -- Arkiv entity key, once written
+);
 """
 
 
@@ -71,6 +86,76 @@ class Store:
         args.append(limit)
         with self._lock:
             return [dict(r) for r in self._db.execute(q, args)]
+
+    # ---- 0G decisions --------------------------------------------------
+    def add_decision(self, kind: str, mode: str, summary: str, output: dict, *, request_id=None,
+                     model=None, tee=None, input=None) -> int:
+        import json
+        with self._lock:
+            cur = self._db.execute(
+                "INSERT INTO decisions (ts, kind, mode, request_id, model, tee, summary, input, output)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (time.time(), kind, mode, request_id, model, json.dumps(tee or {}), summary,
+                 input if isinstance(input, str) or input is None else json.dumps(input), json.dumps(output)),
+            )
+            self._db.commit()
+            return cur.lastrowid
+
+    def set_decision(self, decision_id: int, **fields) -> None:
+        allowed = {"storage_root", "arkiv_key", "summary"}
+        sets = {k: v for k, v in fields.items() if k in allowed}
+        if not sets:
+            return
+        with self._lock:
+            self._db.execute(
+                f"UPDATE decisions SET {', '.join(f'{k} = ?' for k in sets)} WHERE id = ?",
+                (*sets.values(), decision_id),
+            )
+            self._db.commit()
+
+    @staticmethod
+    def _decision(row) -> dict:
+        import json
+        d = dict(row)
+        d["tee"] = json.loads(d["tee"] or "{}")
+        d["output"] = json.loads(d["output"] or "{}")
+        return d
+
+    def decisions(self, kind: str | None = None, limit: int = 20) -> list[dict]:
+        q, args = "SELECT * FROM decisions", []
+        if kind:
+            q += " WHERE kind = ?"
+            args.append(kind)
+        q += " ORDER BY id DESC LIMIT ?"
+        args.append(limit)
+        with self._lock:
+            return [self._decision(r) for r in self._db.execute(q, args)]
+
+    def latest(self, kind: str) -> dict | None:
+        rows = self.decisions(kind, 1)
+        return rows[0] if rows else None
+
+    # ---- daily totals for the planner and the app ------------------------
+    def daily(self, days: int = 7) -> list[dict]:
+        since = int(time.time()) - days * 86400
+        q = """SELECT date(minute, 'unixepoch', 'localtime') AS day, meter,
+                      SUM(wh) AS wh, SUM(solar_wh) AS solar_wh
+               FROM summaries WHERE minute >= ? GROUP BY day, meter ORDER BY day"""
+        with self._lock:
+            rows = [dict(r) for r in self._db.execute(q, (since,))]
+        out: dict[str, dict] = {}
+        for r in rows:
+            d = out.setdefault(r["day"], {"day": r["day"], "panel_wh": 0.0, "flats_wh": 0.0, "flats_solar_wh": 0.0})
+            if r["meter"] == "panel":
+                d["panel_wh"] += r["wh"]
+            else:
+                d["flats_wh"] += r["wh"]
+                d["flats_solar_wh"] += r["solar_wh"]
+        for d in out.values():
+            d["solar_pct"] = round(100 * d["flats_solar_wh"] / d["flats_wh"]) if d["flats_wh"] else 0
+            for k in ("panel_wh", "flats_wh", "flats_solar_wh"):
+                d[k] = round(d[k], 3)
+        return list(out.values())
 
     def prune(self, now: float | None = None) -> int:
         cutoff = (now or time.time()) - KEEP_SECONDS
