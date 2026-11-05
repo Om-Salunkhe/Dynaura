@@ -21,6 +21,7 @@ from brain import Brain
 from hw import FLATS, load_hardware
 from jobs import JobRunner, PlanScheduler
 from meter import MeterLoop
+from og_storage import Uploader
 from signer import DeviceSigner
 from store import Store
 
@@ -35,6 +36,7 @@ class App:
     loop = None
     brain = None
     runner = None
+    uploader = None
     scheduler = None
 
 
@@ -48,7 +50,8 @@ async def lifespan(_: FastAPI):
     App.loop = MeterLoop(App.hw, App.store, App.signer)
     App.loop.tick()
     App.loop.start()
-    App.brain = Brain(App.hw, App.store)
+    App.uploader = Uploader(App.store)
+    App.brain = Brain(App.hw, App.store, App.uploader)
     App.runner = JobRunner(App.hw, App.loop, App.brain)
     App.runner.start()
     App.scheduler = PlanScheduler(App.brain)
@@ -149,7 +152,9 @@ def ask(body: dict):
     if not question:
         raise HTTPException(status_code=400, detail="question is empty")
     try:
-        return dyna.ask(App.store, App.brain, flat, question)
+        out = dyna.ask(App.store, App.brain, flat, question)
+        App.uploader.enqueue(out["decision_id"])
+        return out
     except zg.ZGUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
 

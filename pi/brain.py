@@ -13,9 +13,10 @@ log = logging.getLogger("dynaura.brain")
 
 
 class Brain:
-    def __init__(self, hw, store):
+    def __init__(self, hw, store, uploader=None):
         self.hw = hw
         self.store = store
+        self.uploader = uploader
         self.plan: dict | None = None
         self.decision: dict | None = None
         self._lock = threading.Lock()
@@ -39,6 +40,8 @@ class Brain:
                 "plan", "ai", plan["summary"], plan,
                 request_id=reply.request_id, model=reply.model, tee=reply.tee, input=prompt,
             )
+            if self.uploader:
+                self.uploader.enqueue(did, {"forecast": forecast, "raw_answer": reply.text})
             self.plan = plan
             self.decision = self.store.latest("plan")
             log.info("plan #%s recorded (0G %s)", did, reply.request_id)

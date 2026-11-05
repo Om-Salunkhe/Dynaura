@@ -45,3 +45,9 @@ SOLAR_MIN_W = float(os.getenv("SOLAR_MIN_W", "0.3") or 0.3)  # panel must give a
 PUMP_SECONDS = float(os.getenv("PUMP_SECONDS", "8") or 8)    # model pump has no float switch: fixed run time
 IGNORE_CLOCK = os.getenv("IGNORE_CLOCK", "false").lower() == "true"  # demo under a lamp at night: ignore plan hours
 ADMIN_KEY = os.getenv("ADMIN_KEY", "").strip()               # needed for admin changes from the web app
+
+# 0G Storage (Go CLI from github.com/0glabs/0g-storage-client)
+ZG_STORAGE_CLI = os.getenv("ZG_STORAGE_CLI", "0g-storage-client").strip()
+ZG_RPC = os.getenv("ZG_RPC", "https://evmrpc-testnet.0g.ai").strip()
+ZG_INDEXER = os.getenv("ZG_INDEXER", "https://indexer-storage-testnet-turbo.0g.ai").strip()
+ZG_PRIVATE_KEY = os.getenv("ZG_PRIVATE_KEY", "").strip()
