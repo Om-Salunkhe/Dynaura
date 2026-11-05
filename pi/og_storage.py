@@ -9,6 +9,7 @@ offline queue: when 0G or the internet is down, uploads wait and are retried wit
 they go out by themselves once it is back (the "reconnect" beat of the offline demo).
 Anything still waiting is picked up again after a restart.
 """
+import hashlib
 import json
 import logging
 import queue
@@ -21,6 +22,7 @@ import time
 from pathlib import Path
 
 import config
+import zg
 
 log = logging.getLogger("dynaura.0g-storage")
 EPISODES = Path(__file__).resolve().parent / "episodes"
@@ -38,6 +40,9 @@ class Uploader:
         # decision still reaches Arkiv; called again with the root when a retry gets it through.
         self.on_root = on_root
         self.registry = registry  # zg_registry.Registry, or None
+        self.snapshot = None  # callable -> what the building looked like (meters, relays, pump)
+        self._write_lock = threading.Lock()
+        self._last: tuple[int, str] | None = None  # (decision id, sha256) of the last episode file
         self.q: queue.Queue[int] = queue.Queue()
         self._lock = threading.Lock()
         self._pending: dict[int, str | None] = {}  # decision id -> record() tx that may still land
@@ -55,12 +60,38 @@ class Uploader:
         return bool(shutil.which(config.ZG_STORAGE_CLI)) and len(key) == 64
 
     def enqueue(self, decision_id: int, extra: dict | None = None) -> None:
+        """Write the episode file and queue it. The file holds the decision, its 0G proof (request ID,
+        provider, TEE check, latency), the building at that moment, and the hash of the episode before,
+        so the logs form a chain where a missing or edited one shows up."""
         d = self.store.decision(decision_id)
         if not d:
             return
-        path = EPISODES / f"decision-{decision_id}.json"
-        path.write_text(json.dumps({"dynaura_episode": 1, **d, **(extra or {})}, indent=2, default=str))
+        episode = {"dynaura_episode": 2, **d, "zg": zg.proof_for(d.get("request_id"))}
+        if self.snapshot:
+            try:
+                episode["building"] = self.snapshot()
+            except Exception as e:
+                log.warning("building snapshot for episode #%s failed: %s", decision_id, e)
+        with self._write_lock:
+            episode["prev"] = self._prev(decision_id)
+            episode.update(extra or {})
+            text = json.dumps(episode, indent=2, default=str)
+            (EPISODES / f"decision-{decision_id}.json").write_text(text)
+            self._last = (decision_id, hashlib.sha256(text.encode()).hexdigest())
         self.q.put(decision_id)
+
+    def _prev(self, decision_id: int) -> dict | None:
+        """The episode written before this one: its decision id, file sha256 and (once uploaded) root."""
+        if self._last is None or self._last[0] >= decision_id:
+            ids = sorted(int(f.stem.split("-")[1]) for f in EPISODES.glob("decision-*.json")
+                         if f.stem.split("-")[1].isdigit() and int(f.stem.split("-")[1]) < decision_id)
+            if not ids:
+                return None
+            body = (EPISODES / f"decision-{ids[-1]}.json").read_bytes()
+            self._last = (ids[-1], hashlib.sha256(body).hexdigest())
+        prev_id, digest = self._last
+        row = self.store.decision(prev_id) or {}
+        return {"decision_id": prev_id, "sha256": digest, "storage_root": row.get("storage_root")}
 
     def retry_now(self) -> dict:
         """Try the waiting uploads now instead of at the next backoff step (demo: after reconnecting)."""

@@ -61,6 +61,8 @@ async def lifespan(_: FastAPI):
     App.loop.tick()
     App.loop.start()
     App.uploader = Uploader(App.store, registry=Registry())
+    # Each episode log also records what the building looked like when Dyna decided
+    App.uploader.snapshot = lambda: {**App.loop.state, "runner": App.runner.status if App.runner else None}
     App.brain = Brain(App.hw, App.store, App.uploader)
     App.runner = JobRunner(App.hw, App.loop, App.brain)
     App.runner.start()

@@ -5,6 +5,8 @@ and succeeds once "online". A fake registry stands in for EpisodeRegistry.
 
 Run from pi/:  python tests/test_episode_queue.py
 """
+import hashlib
+import json
 import os
 import stat
 import sys
@@ -72,6 +74,7 @@ def main():
     reg = FakeRegistry()
     roots = []
     up = og_storage.Uploader(store, on_root=lambda did, root: roots.append((did, root)), registry=reg)
+    up.snapshot = lambda: {"flats": {"A": {"source": "grid"}}, "pump": {"on": False}}
 
     # 1. Offline: the CLI logs a root but fails. Nothing may be recorded as uploaded.
     did = store.add_decision("plan", "no-ai", "0G unreachable", {"reason": "offline"})
@@ -88,6 +91,14 @@ def main():
     assert wait_for(lambda: (did2, None) in roots), roots
     assert wait_for(lambda: up.status()["failures"] >= 2)
     assert roots.count((did, None)) == 1, roots
+
+    # Episode logs: the building snapshot, and a hash chain to the episode before
+    f1, f2 = (og_storage.EPISODES / f"decision-{i}.json" for i in (did, did2))
+    e1, e2 = json.loads(f1.read_text()), json.loads(f2.read_text())
+    assert e1["prev"] is None and e1["building"]["flats"]["A"]["source"] == "grid", e1
+    assert e2["prev"]["decision_id"] == did, e2["prev"]
+    assert e2["prev"]["sha256"] == hashlib.sha256(f1.read_bytes()).hexdigest(), "chain broken"
+    assert e2["zg"] is None  # no live 0G call in this test, so no proof to attach
 
     # 3. Back online: everything goes out by itself, in order, and lands on the registry.
     ONLINE.touch()
