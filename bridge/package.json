@@ -1,0 +1,15 @@
+{
+  "name": "dynaura-bridge",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Writes Dynaura records to Arkiv for the Pi",
+  "engines": { "node": ">=22.10" },
+  "scripts": {
+    "start": "node --env-file=../.env main.mjs"
+  },
+  "dependencies": {
+    "@arkiv-network/sdk": "1.0.1",
+    "viem": "2.57.16"
+  }
+}
