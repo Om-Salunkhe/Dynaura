@@ -10,12 +10,14 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 import config
-from hw import load_hardware
+from brain import Brain
+from hw import FLATS, load_hardware
+from jobs import JobRunner, PlanScheduler
 from meter import MeterLoop
 from signer import DeviceSigner
 from store import Store
@@ -29,6 +31,9 @@ class App:
     store = None
     signer = None
     loop = None
+    brain = None
+    runner = None
+    scheduler = None
 
 
 @asynccontextmanager
@@ -41,10 +46,17 @@ async def lifespan(_: FastAPI):
     App.loop = MeterLoop(App.hw, App.store, App.signer)
     App.loop.tick()
     App.loop.start()
+    App.brain = Brain(App.hw, App.store)
+    App.runner = JobRunner(App.hw, App.loop, App.brain)
+    App.runner.start()
+    App.scheduler = PlanScheduler(App.brain)
+    App.scheduler.start()
     log.info("Dynaura up: hw=%s device=%s", config.HW, App.signer.address)
     try:
         yield
     finally:
+        App.scheduler.stop()
+        App.runner.stop()
         App.loop.stop()
         App.loop.safe_stop("api shutting down")
         App.hw.close()
@@ -62,7 +74,7 @@ def health():
 
 @app.get("/api/state")
 def state():
-    return App.loop.state
+    return {**App.loop.state, "runner": App.runner.status}
 
 
 @app.get("/api/stream")
@@ -76,7 +88,7 @@ async def stream(request: Request):
             st = App.loop.state
             if st and st.get("ts") != last_ts:
                 last_ts = st["ts"]
-                yield f"data: {json.dumps(st)}\n\n"
+                yield f"data: {json.dumps({**st, 'runner': App.runner.status})}\n\n"
             await asyncio.sleep(0.5)
 
     return StreamingResponse(events(), media_type="text/event-stream",
@@ -86,6 +98,63 @@ async def stream(request: Request):
 @app.get("/api/summaries")
 def summaries(meter: str | None = None, since: int = 0, limit: int = 60):
     return App.store.summaries(meter=meter, since=since, limit=min(limit, 1440))
+
+
+
+def require_admin(key: str | None) -> None:
+    if not config.ADMIN_KEY or key != config.ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="admin key required (X-Admin-Key)")
+
+
+@app.get("/api/plan")
+def get_plan():
+    return {**App.brain.public(), "runner": App.runner.status}
+
+
+@app.post("/api/plan/run")
+def run_plan(which: str = "today", x_admin_key: str | None = Header(default=None)):
+    require_admin(x_admin_key)
+    try:
+        return App.brain.run_plan("tomorrow" if which == "tomorrow" else "today")
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"planning failed: {e}")
+
+
+@app.post("/api/admin/jobs")
+def edit_job(body: dict, x_admin_key: str | None = Header(default=None)):
+    """Admin moves a society job: {"id": "pool", "start": "11:30", "minutes": 60}"""
+    require_admin(x_admin_key)
+    plan = App.brain.plan
+    if not plan:
+        raise HTTPException(status_code=409, detail="no plan yet")
+    for j in plan["jobs"]:
+        if j["id"] == body.get("id"):
+            if body.get("start"):
+                j["start"] = str(body["start"])[:5]
+            if body.get("minutes"):
+                j["minutes"] = int(body["minutes"])
+            j["why"] = "Changed by committee admin"
+            plan["jobs"].sort(key=lambda x: x["start"])
+            return App.brain.public()
+    raise HTTPException(status_code=404, detail="job not in plan")
+
+
+@app.post("/api/moment/{name}")
+def moment(name: str, x_admin_key: str | None = Header(default=None)):
+    """Demo buttons: cloud, sun, dust, clean (SIM only), away-A/B/C, home-A/B/C, pump."""
+    require_admin(x_admin_key)
+    if name == "pump":
+        App.runner.run_pump_now()
+    elif name.startswith(("away-", "home-")) and name[-1] in FLATS and hasattr(App.hw, "set_away"):
+        App.hw.set_away(name[-1], name.startswith("away-"))
+    elif hasattr(App.hw, "set_moment"):
+        try:
+            App.hw.set_moment(name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        raise HTTPException(status_code=400, detail=f"moment {name!r} not available on real hardware")
+    return {"ok": True, "moment": name}
 
 
 if __name__ == "__main__":

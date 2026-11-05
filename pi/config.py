@@ -38,3 +38,10 @@ BUILDING_KWP = float(os.getenv("BUILDING_KWP", "2.0") or 2.0)
 ZG_ROUTER_URL = os.getenv("ZG_ROUTER_URL", "").strip()
 ZG_API_KEY = os.getenv("ZG_API_KEY", "").strip()
 ZG_MODEL = os.getenv("ZG_MODEL", "0gm-1.0-35b-a3b").strip()
+
+# Society job runner
+PLAN_HOUR = int(os.getenv("PLAN_HOUR", "20") or 20)          # make tomorrow's plan at 8 PM
+SOLAR_MIN_W = float(os.getenv("SOLAR_MIN_W", "0.3") or 0.3)  # panel must give at least this to switch flats to solar
+PUMP_SECONDS = float(os.getenv("PUMP_SECONDS", "8") or 8)    # model pump has no float switch: fixed run time
+IGNORE_CLOCK = os.getenv("IGNORE_CLOCK", "false").lower() == "true"  # demo under a lamp at night: ignore plan hours
+ADMIN_KEY = os.getenv("ADMIN_KEY", "").strip()               # needed for admin changes from the web app
