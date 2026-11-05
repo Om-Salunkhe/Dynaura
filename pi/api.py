@@ -156,6 +156,18 @@ def edit_job(body: dict, x_admin_key: str | None = Header(default=None)):
     raise HTTPException(status_code=404, detail="job not in plan")
 
 
+@app.post("/api/admin/maintenance")
+def add_maintenance(body: dict, x_admin_key: str | None = Header(default=None)):
+    """Admin adds a maintenance record: {"title": "...", "details": "..."} -> Arkiv"""
+    require_admin(x_admin_key)
+    if not App.arkiv:
+        raise HTTPException(status_code=503, detail="Arkiv is disabled")
+    try:
+        return App.arkiv.send_now("/maintenance", {"title": body.get("title"), "details": body.get("details")})
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Arkiv write failed: {e}")
+
+
 @app.post("/api/ask")
 def ask(body: dict):
     """Ask Dyna: {"question": "...", "flat": "A"}"""

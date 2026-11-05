@@ -1,6 +1,22 @@
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { panelWeek, timeline } from "../data/demo.js";
+import { fetchDecisions, fetchMaintenance, short, useArkiv } from "../lib/arkiv.js";
+
+const KIND_TITLE = { plan: "AI plan", ask: "Ask Dyna", dust: "Dust alert", clean: "Panel cleaned" };
+
+function fromArkiv(decisions, maintenance) {
+  const a = decisions.map((d) => ({
+    kind: d.mode === "no-ai" ? "alert" : d.kind === "plan" || d.kind === "ask" ? "ai" : d.kind === "dust" ? "alert" : "clean",
+    when: d.day,
+    title: d.mode === "no-ai" ? "No-AI mode" : KIND_TITLE[d.kind] || d.kind,
+    text: d.summary,
+    proof: d.requestId ? `0G ${short(d.requestId)}${d.storageRoot ? ` · storage ${short(d.storageRoot)}` : ""}` : "no 0G call",
+    key: d.key,
+  }));
+  const m = maintenance.map((x) => ({ kind: "clean", when: x.date, title: x.title, text: x.text, proof: x.arcTx ? `Arc ${short(x.arcTx)}` : "Arkiv record", key: x.key }));
+  return [...a, ...m].sort((x, y) => (x.when < y.when ? 1 : -1));
+}
 
 const KIND = {
   ai: { icon: "spark", tone: "bg-sun-soft text-sun-ink" },
@@ -10,9 +26,16 @@ const KIND = {
 };
 
 export default function History() {
+  const dec = useArkiv(() => fetchDecisions(15), null);
+  const mnt = useArkiv(() => fetchMaintenance(10), null);
+  const live = dec.live && mnt.live;
+  const items = live ? fromArkiv(dec.data, mnt.data) : timeline;
   return (
     <div className="flex flex-col gap-3">
-      <PageHeader kicker="Stored on Arkiv · every AI step has a 0G proof" title="History" />
+      <PageHeader
+        kicker={live ? "Read live from Arkiv · every AI step has a 0G proof" : "Demo data · Arkiv not connected"}
+        title="History"
+      />
 
       <section className="card flex flex-col gap-3 rounded-[26px]">
         <div className="flex items-baseline justify-between">
@@ -39,7 +62,8 @@ export default function History() {
       </section>
 
       <section className="card flex flex-col gap-1 rounded-[26px]">
-        {timeline.map((t, i) => {
+        {items.length === 0 && <span className="text-sm text-muted">No records on Arkiv yet.</span>}
+        {items.map((t, i) => {
           const k = KIND[t.kind];
           return (
             <div key={i} className="flex gap-3 py-2">
@@ -51,9 +75,9 @@ export default function History() {
                   {t.when} · {t.title}
                 </span>
                 <span className="text-sm font-bold">{t.text}</span>
-                <a href="#" className="mono text-[11px] font-bold text-link">
+                <span className="mono text-[11px] font-bold text-link" title={t.key ? `Arkiv entity ${t.key}` : undefined}>
                   {t.proof}
-                </a>
+                </span>
               </span>
             </div>
           );

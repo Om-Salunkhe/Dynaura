@@ -4,7 +4,7 @@ import { and, desc, eq } from "@arkiv-network/sdk/query"
 import { addr, dec, u64 } from "@arkiv-network/sdk/schema"
 import { hexToBytes, stringToBytes } from "viem"
 import { account, BUILDING, publicClient, route, walletClient } from "./bridge.mjs"
-import { DailyOutput, Decision, Heartbeat, Reading } from "./schemas.mjs"
+import { DailyOutput, Decision, Heartbeat, Maintenance, Reading } from "./schemas.mjs"
 
 // Decimals as plain strings ("0.004167"), never scientific notation
 export const d = (n, places = 6) => dec(Number(n || 0).toFixed(places).replace(/\.?0+$/, "") || "0")
@@ -137,4 +137,20 @@ route("GET", "/history", async (_, url) => {
     flats_wh: Number(e.flats_wh.value),
     solar_pct: Number(e.solar_pct.value),
   }))
+})
+
+// POST /maintenance  {date, title, details, arc_tx?}
+route("POST", "/maintenance", async (b) => {
+  const { entityKey, txHash } = await walletClient.createEntity(
+    Maintenance,
+    {
+      building: BUILDING,
+      date: String(b.date || new Date().toISOString().slice(0, 10)),
+      title: String(b.title || "Maintenance").slice(0, 100),
+      details: stringToBytes(String(b.details || "")),
+      ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
+    },
+    { expiration: days(180) },
+  )
+  return { key: entityKey, txHash }
 })

@@ -1,19 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PageHeader from "../components/PageHeader.jsx";
 import { admin } from "../data/demo.js";
+import { postJSON } from "../lib/api.js";
+import { fetchMaintenance, short, useArkiv } from "../lib/arkiv.js";
 
 export default function AdminTrading() {
   const [price, setPrice] = useState(admin.price);
   const [editing, setEditing] = useState(false);
+  const fromArkiv = useArkiv(() => fetchMaintenance(20), null);
   const [records, setRecords] = useState(admin.maintenance);
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    if (fromArkiv.live)
+      setRecords(fromArkiv.data.map((m) => ({ date: m.date, title: m.title, text: m.text, link: m.arcTx ? `Arc ${short(m.arcTx)}` : `Arkiv ${short(m.key)}` })));
+  }, [fromArkiv]);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ title: "", text: "" });
 
   const addRecord = (e) => {
     e.preventDefault();
     if (!draft.title.trim()) return;
-    const date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    setRecords((r) => [{ date, title: draft.title.trim(), text: draft.text.trim() || "Added by admin", link: "Arkiv (demo)" }, ...r]);
+    const date = new Date().toISOString().slice(0, 10);
+    const rec = { title: draft.title.trim(), details: draft.text.trim() || "Added by admin" };
+    postJSON("/api/admin/maintenance", rec, { admin: true })
+      .then((r) => setNote(`Saved on Arkiv · ${short(r.key)}`))
+      .catch(() => setNote("Pi or Arkiv not reachable: saved on this screen only"));
+    setRecords((r) => [{ date, title: rec.title, text: rec.details, link: "Arkiv" }, ...r]);
     setDraft({ title: "", text: "" });
     setAdding(false);
   };
@@ -67,7 +79,8 @@ export default function AdminTrading() {
         <div className="flex items-center justify-between pb-1">
           <span className="flex flex-col gap-0.5">
             <span className="text-base font-bold">Maintenance records</span>
-            <span className="text-xs text-muted">Kept on Arkiv</span>
+            <span className="text-xs text-muted">{fromArkiv.live ? "Read live from Arkiv" : "Kept on Arkiv · demo data"}</span>
+            {note && <span className="text-xs text-sun-ink">{note}</span>}
           </span>
           <button type="button" className="btn" onClick={() => setAdding((a) => !a)}>
             {adding ? "Cancel" : "Add record"}

@@ -45,6 +45,10 @@ class ArkivQueue:
             "_decision_id": d["id"],
         })
 
+    def send_now(self, path: str, body: dict) -> dict:
+        """Write and wait for the result (for admin actions that show the Arkiv key)."""
+        return self._send(path, dict(body))
+
     # ---- reads -----------------------------------------------------------
     def history(self, days: int = 7) -> list[dict]:
         r = httpx.get(f"{self.url}/history", params={"days": days}, timeout=15)
