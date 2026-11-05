@@ -1,9 +1,36 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import DemoBadge from "../components/DemoBadge.jsx";
 import Legend from "../components/Legend.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { admin } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
+import { ARKIV_READY, fetchHeartbeat, useArkiv } from "../lib/arkiv.js";
+
+/** The Pi renews one Arkiv entity every 30 s with a 2-minute lifetime. If it stops, the entity
+ *  expires and this card says "offline": no monitoring server, the expiry is the alarm. */
+function Heartbeat() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+  const hb = useArkiv(fetchHeartbeat, null, [tick]);
+  if (!ARKIV_READY) return null;
+  const online = hb.live && hb.data;
+  const ago = online ? Math.max(0, Math.round(Date.now() / 1000 - hb.data.updated)) : null;
+  return (
+    <section className="card flex items-center justify-between rounded-[22px] py-3 text-sm">
+      <span className="flex items-center gap-2 font-bold">
+        <span className={`h-2.5 w-2.5 rounded-full ${online ? "bg-sun" : "bg-bad"}`} />
+        {online ? "Building online" : hb.error ? "Arkiv not reachable" : "Building offline"}
+      </span>
+      <span className="text-xs text-muted">
+        {online ? `Arkiv heartbeat ${ago}s ago · ${hb.data.mode}` : hb.error ? "can't read the heartbeat" : "heartbeat expired on Arkiv"}
+      </span>
+    </section>
+  );
+}
 
 export default function AdminOverview() {
   const live = useLive();
@@ -23,6 +50,8 @@ export default function AdminOverview() {
         <Tile label="Sent to DISCOM" value={`${admin.discomKwh} kWh`} note="Net-metering credit" />
         <Tile label="Sold to shops" value={`${admin.p2pKwh} kWh`} note={`${admin.p2pUsdc} USDC on Arc`} />
       </div>
+
+      <Heartbeat />
 
       <section className="card flex items-center justify-between rounded-[22px] py-3">
         <span className="flex items-center gap-2 text-sm font-bold">
