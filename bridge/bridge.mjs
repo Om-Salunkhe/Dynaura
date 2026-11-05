@@ -16,12 +16,19 @@ if (!isHex(pk) || pk.length !== 66) {
   process.exit(1)
 }
 
-export const chain = rabdi({ accessKey: process.env.ARKIV_ACCESS_KEY ?? "" })
+// Rabdi makes a block every 2 s. viem assumes 12 s for a chain that doesn't say, and then polls
+// for receipts every 4 s; telling it 2 s halves the time a write takes to come back.
+export const chain = { ...rabdi({ accessKey: process.env.ARKIV_ACCESS_KEY ?? "" }), blockTime: 2000 }
 export const account = privateKeyToAccount(pk)
-// ARKIV_RPC_URL is optional (a local node); by default the Rabdi endpoint with the access key is used
-const transport = () => http(process.env.ARKIV_RPC_URL || undefined)
-export const publicClient = createPublicClient({ chain, transport: transport() })
-export const walletClient = createWalletClient({ chain, transport: transport(), account })
+// ARKIV_RPC_URL is only for a local node. rabdi() already puts the access key in its URL; a bare
+// Rabdi URL here would silently drop the key and land on the rate-limited public endpoint.
+const rpcUrl = (process.env.ARKIV_RPC_URL || "").trim()
+const customRpc = rpcUrl && !rpcUrl.includes("rpc.rabdi.db-chain.testnet.arkiv.network") ? rpcUrl : undefined
+if (rpcUrl && !customRpc) console.warn("ARKIV_RPC_URL points at Rabdi: ignored, using rabdi({ accessKey }) instead")
+if (!process.env.ARKIV_ACCESS_KEY) console.warn("No ARKIV_ACCESS_KEY: the public Rabdi endpoint is heavily rate limited")
+const transport = () => http(customRpc, { retryCount: 2, timeout: 20_000 })
+export const publicClient = createPublicClient({ chain, transport: transport(), pollingInterval: 1000 })
+export const walletClient = createWalletClient({ chain, transport: transport(), account, pollingInterval: 1000 })
 
 const routes = new Map() // "POST /readings" -> async (body, url) => result
 
