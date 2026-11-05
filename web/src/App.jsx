@@ -8,6 +8,7 @@ import AskDyna from "./pages/AskDyna.jsx";
 import Bill from "./pages/Bill.jsx";
 import Building from "./pages/Building.jsx";
 import CleanerJobs from "./pages/CleanerJobs.jsx";
+import Demo from "./pages/Demo.jsx";
 import History from "./pages/History.jsx";
 import Home from "./pages/Home.jsx";
 import PanelHealth from "./pages/PanelHealth.jsx";
@@ -39,6 +40,7 @@ function Routed() {
   return (
     <Routes>
       <Route path="/ask" element={<AskDyna />} />
+      <Route path="/demo" element={<Demo />} />
       <Route element={<Layout nav={NAV[who.role]} />}>
         <Route path="/" element={who.role === "resident" ? <Home /> : <Navigate to={HOME[who.role]} replace />} />
         <Route path="/society" element={<Society />} />
