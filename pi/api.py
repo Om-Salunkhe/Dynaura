@@ -24,6 +24,7 @@ from cleaning import CleaningWatch
 from hw import FLATS, load_hardware
 from jobs import JobRunner, PlanScheduler
 from meter import MeterLoop
+from sales import ShopSettler
 from og_storage import Uploader
 from signer import DeviceSigner
 from store import Store
@@ -44,6 +45,7 @@ class App:
     scheduler = None
     arc = None
     cleaning = None
+    sales = None
 
 
 @asynccontextmanager
@@ -75,6 +77,10 @@ async def lifespan(_: FastAPI):
     if App.arkiv:
         App.cleaning.on_job = on_cleaning_job
     App.cleaning.start()
+    App.sales = ShopSettler(App.arc, App.brain, App.cleaning)
+    if App.arkiv:
+        App.sales.on_sale = lambda sale: App.arkiv.post("/sale", sale)
+    App.sales.start()
     App.scheduler = PlanScheduler(App.brain)
     App.scheduler.start()
     log.info("Dynaura up: hw=%s device=%s", config.HW, App.signer.address)
@@ -85,6 +91,7 @@ async def lifespan(_: FastAPI):
             App.arkiv.stop()
         App.scheduler.stop()
         App.cleaning.stop()
+        App.sales.stop()
         App.runner.stop()
         App.loop.stop()
         App.loop.safe_stop("api shutting down")
@@ -204,7 +211,13 @@ def set_price(body: dict, x_admin_key: str | None = Header(default=None)):
     """Admin sets the shop price: {"price_usdc": 0.08}"""
     require_admin(x_admin_key)
     App.brain.price = max(0.0, float(body.get("price_usdc", config.SHOP_PRICE_USDC)))
-    return {"price_usdc": App.brain.price}
+    out = {"price_usdc": App.brain.price}
+    if App.arc.enabled and App.arc.shop:  # the on-chain price is what shops actually pay
+        try:
+            out["arc_tx"] = App.arc.set_price(App.brain.price)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"price saved on the Pi, Arc update failed: {e}")
+    return out
 
 
 @app.get("/api/cleaning")
@@ -224,6 +237,23 @@ def post_cleaning(body: dict, x_admin_key: str | None = Header(default=None)):
         raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Arc transaction failed: {e}")
+
+
+@app.get("/api/sales")
+def sales():
+    return App.sales.status
+
+
+@app.post("/api/admin/settle/{order_id}")
+def settle_now(order_id: int, x_admin_key: str | None = Header(default=None)):
+    """Settle a shop order now instead of waiting for the end of the solar window (demo)."""
+    require_admin(x_admin_key)
+    try:
+        return App.sales.settle(order_id)
+    except ArcUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Arc transaction failed: {e}")
 

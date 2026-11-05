@@ -123,3 +123,22 @@ class Arc:
 
     def refund_cleaning(self, job_id: int) -> str:
         return self.tx_hash(self.send(self.need(self.escrow).functions.refund(job_id)))
+
+    # ---- shop trade --------------------------------------------------------
+    def next_order_id(self) -> int:
+        return self.need(self.shop).functions.nextOrderId().call()
+
+    def order(self, order_id: int) -> dict:
+        o = self.need(self.shop).functions.orders(order_id).call()
+        return {"order_id": order_id, "shop": o[0], "deposit_usdc": from_units(o[1]), "want_wh": o[2],
+                "delivered_wh": o[3], "price_per_kwh": from_units(o[4]), "deadline": o[5],
+                "status": ORDER_STATUS[o[6]], "day": o[7]}
+
+    def settle_order(self, order_id: int, delivered_wh: int) -> tuple[float, float, str]:
+        shop = self.need(self.shop)
+        rcpt = self.send(shop.functions.settle(order_id, int(delivered_wh)))
+        ev = shop.events.OrderSettled().process_receipt(rcpt)[0]["args"]
+        return from_units(ev["paid"]), from_units(ev["refunded"]), self.tx_hash(rcpt)
+
+    def set_price(self, usdc_per_kwh: float) -> str:
+        return self.tx_hash(self.send(self.need(self.shop).functions.setPrice(to_units(usdc_per_kwh))))
