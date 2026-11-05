@@ -46,7 +46,9 @@ class JobRunner:
         if not plan or self.loop.stopped_safe:
             for f in FLATS:
                 self.hw.set_flat(f, "grid")
-            self.status = {"mode": "no-plan" if not plan else "safe-stop", "jobs": {}}
+            mode = "safe-stop" if self.loop.stopped_safe else (
+                "no-ai" if (self.brain.decision or {}).get("mode") == "no-ai" else "no-plan")
+            self.status = {"mode": mode, "jobs": {}}
             return self.status
 
         start, end = (_minutes(t) for t in plan["solar_window"])

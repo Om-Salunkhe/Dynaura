@@ -32,10 +32,15 @@ class Brain:
         ]
 
     def run_plan(self, which: str = "tomorrow") -> dict:
+        """Ask 0G for a plan. If 0G (or the forecast) fails, go to no-AI mode:
+        no decision is faked, every flat stays on grid, the pump stays off, and it is logged."""
         with self._lock:
-            forecast = forecast_day(which)
-            away = {f: self.hw.away(f) for f in FLATS}
-            plan, reply, prompt = planner.make_plan(forecast, self.history(), away)
+            try:
+                forecast = forecast_day(which)
+                away = {f: self.hw.away(f) for f in FLATS}
+                plan, reply, prompt = planner.make_plan(forecast, self.history(), away)
+            except Exception as e:
+                return self._no_ai(str(e))
             did = self.store.add_decision(
                 "plan", "ai", plan["summary"], plan,
                 request_id=reply.request_id, model=reply.model, tee=reply.tee, input=prompt,
@@ -46,6 +51,15 @@ class Brain:
             self.decision = self.store.latest("plan")
             log.info("plan #%s recorded (0G %s)", did, reply.request_id)
             return self.public()
+
+    def _no_ai(self, reason: str) -> dict:
+        log.warning("NO-AI MODE: %s", reason)
+        self.hw.safe_stop()
+        did = self.store.add_decision("plan", "no-ai", "0G unreachable: building runs on grid, no jobs moved",
+                                      {"reason": reason[:300]})
+        self.plan = None
+        self.decision = self.store.latest("plan")
+        return self.public()
 
     def public(self) -> dict:
         d = self.decision or {}
@@ -58,4 +72,5 @@ class Brain:
             "tee": d.get("tee"),
             "storage_root": d.get("storage_root"),
             "ts": d.get("ts"),
+            "reason": (d.get("output") or {}).get("reason") if d.get("mode") == "no-ai" else None,
         }

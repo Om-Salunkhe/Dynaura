@@ -119,10 +119,7 @@ def get_plan():
 @app.post("/api/plan/run")
 def run_plan(which: str = "today", x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
-    try:
-        return App.brain.run_plan("tomorrow" if which == "tomorrow" else "today")
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"planning failed: {e}")
+    return App.brain.run_plan("tomorrow" if which == "tomorrow" else "today")
 
 
 @app.post("/api/admin/jobs")
