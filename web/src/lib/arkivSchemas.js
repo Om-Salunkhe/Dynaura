@@ -63,6 +63,7 @@ export const Offer = defineSchema("dynaura.offer", {
 // A sale to a shop, settled on Arc. Lives ~6 months.
 export const Sale = defineSchema("dynaura.sale", {
   building: str().indexed(),
+  order_id: u64().indexed(), // id in the ShopTrade contract
   buyer: addr().indexed(),
   buyer_name: str(),
   kwh: dec(),
@@ -74,7 +75,7 @@ export const Sale = defineSchema("dynaura.sale", {
 export const CleaningJob = defineSchema("dynaura.cleaning_job", {
   building: str().indexed(),
   job_id: u64().indexed(), // id in the CleaningEscrow contract
-  status: str().indexed(), // open | done | refunded
+  status: str().indexed(), // open | accepted | paid | refunded
   fee_usdc: dec(),
   deadline: u64(),
   output_before: dec(), // % of expected output when posted

@@ -222,12 +222,13 @@ route("POST", "/cleaning_job", async (b) => {
   return { key: entityKey, txHash, patched: false }
 })
 
-// POST /sale  {order_id, buyer, kwh, usdc, arc_tx}: one settled ShopTrade order
+// POST /sale  {order_id, buyer, buyer_name?, kwh, usdc, arc_tx}: one settled ShopTrade order
 route("POST", "/sale", async (b) => {
   const { entityKey, txHash } = await walletClient.createEntity(
     Sale,
     {
       building: BUILDING,
+      order_id: u64(BigInt(b.order_id ?? 0)),
       buyer: addr(b.buyer),
       buyer_name: String(b.buyer_name || `Shop ${String(b.buyer).slice(0, 6)}…${String(b.buyer).slice(-4)}`),
       kwh: d(b.kwh, 3),
