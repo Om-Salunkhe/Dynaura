@@ -18,8 +18,10 @@ if (!isHex(pk) || pk.length !== 66) {
 
 export const chain = rabdi({ accessKey: process.env.ARKIV_ACCESS_KEY ?? "" })
 export const account = privateKeyToAccount(pk)
-export const publicClient = createPublicClient({ chain, transport: http() })
-export const walletClient = createWalletClient({ chain, transport: http(), account })
+// ARKIV_RPC_URL is optional (a local node); by default the Rabdi endpoint with the access key is used
+const transport = () => http(process.env.ARKIV_RPC_URL || undefined)
+export const publicClient = createPublicClient({ chain, transport: transport() })
+export const walletClient = createWalletClient({ chain, transport: transport(), account })
 
 const routes = new Map() // "POST /readings" -> async (body, url) => result
 

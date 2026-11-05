@@ -64,6 +64,7 @@ async def lifespan(_: FastAPI):
         App.brain.on_decision = lambda did: None if App.uploader.ready() else App.arkiv.decision(did)
         App.uploader.on_root = lambda did, root: App.arkiv.decision(did)
         App.brain.on_offer = lambda offer: App.arkiv.post("/offer", offer)
+        App.brain.arkiv = App.arkiv
         App.arkiv.start()
     App.scheduler = PlanScheduler(App.brain)
     App.scheduler.start()

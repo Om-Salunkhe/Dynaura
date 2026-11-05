@@ -20,6 +20,7 @@ class Brain:
         self.on_decision = None  # callback(decision_id), e.g. write to Arkiv
         self.on_offer = None     # callback(offer dict), e.g. publish to Arkiv for shops
         self.price = None        # USDC per kWh for shops (None = config default)
+        self.arkiv = None        # ArkivQueue, for reading history back
         self.plan: dict | None = None
         self.decision: dict | None = None
         self._lock = threading.Lock()
@@ -28,7 +29,18 @@ class Brain:
             self.plan, self.decision = last["output"], last
 
     def history(self) -> list[dict]:
-        """Last 7 days of totals. (Phase 4 swaps this for the Arkiv records.)"""
+        """Last 7 days of totals, read back from the building's Arkiv records
+        (so Arkiv is the planner's memory, not a write-only log). Local SQLite if Arkiv is down."""
+        if self.arkiv:
+            try:
+                rows = self.arkiv.history(7)
+                if rows:
+                    log.info("planner history: %d days from Arkiv", len(rows))
+                    return [{"day": d["day"], "panel_kwh": round(d["panel_wh"] / 1000, 4),
+                             "flats_kwh": round(d["flats_wh"] / 1000, 4), "solar_pct": d["solar_pct"],
+                             "source": "arkiv"} for d in sorted(rows, key=lambda r: r["day"])]
+            except Exception as e:
+                log.warning("Arkiv history unavailable, using local data: %s", e)
         return [
             {"day": d["day"], "panel_kwh": d["panel_wh"] / 1000, "flats_kwh": d["flats_wh"] / 1000, "solar_pct": d["solar_pct"]}
             for d in self.store.daily(7)
