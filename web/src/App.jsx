@@ -1,15 +1,34 @@
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import Layout from "./components/Layout.jsx";
 import { useTheme } from "./lib/theme.js";
+import Bill from "./pages/Bill.jsx";
+import Building from "./pages/Building.jsx";
+import History from "./pages/History.jsx";
+import Home from "./pages/Home.jsx";
+import Society from "./pages/Society.jsx";
+
+const RESIDENT_NAV = [
+  { to: "/", label: "Home", icon: "home" },
+  { to: "/society", label: "Society", icon: "society" },
+  { to: "/building", label: "Building", icon: "bolt" },
+  { to: "/bill", label: "Bill", icon: "bill" },
+  { to: "/history", label: "History", icon: "clock" },
+];
 
 export default function App() {
-  const [theme, toggle] = useTheme();
+  useTheme();
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-3 p-5">
-      <h1 className="h-title">Dynaura</h1>
-      <section className="card">
-        <p className="label">Theme</p>
-        <p className="text-lg font-bold">{theme === "dark" ? "Black glass" : "Light glass"}</p>
-        <button className="btn mt-3" onClick={toggle}>Switch theme</button>
-      </section>
-    </main>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout nav={RESIDENT_NAV} />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/society" element={<Society />} />
+          <Route path="/building" element={<Building />} />
+          <Route path="/bill" element={<Bill />} />
+          <Route path="/history" element={<History />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
