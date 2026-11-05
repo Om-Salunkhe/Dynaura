@@ -26,7 +26,7 @@ Pawan ran several Claude Code sessions in parallel, each in its own git worktree
 | `dy-arkiv` | `pawan/arkiv` | [`dy-arkiv.md`](dy-arkiv.md) |
 | `dy-arc` | `pawan/arc` | [`dy-arc.md`](dy-arc.md) |
 | `dy-web` | `pawan/web` | [`dy-web.md`](dy-web.md) |
-| `dy-0g` | TBD | [`dy-0g.md`](dy-0g.md) |
+| `dy-0g` | `pawan/zerog` | [`dy-0g.md`](dy-0g.md) |
 | `dy-demo` | `pawan/demo` | [`dy-demo.md`](dy-demo.md) |
 
-**Specs and prompts.** ETHGlobal asks spec-driven teams to commit their spec files, prompts and plans. The session briefs and the decisions log will be copied into [`specs/`](specs/) before submission, with local paths removed.
+**Specs and prompts.** ETHGlobal asks spec-driven teams to commit their spec files, prompts and plans. The session briefs, the decisions log and each session's prompt are in [`specs/`](specs/).
