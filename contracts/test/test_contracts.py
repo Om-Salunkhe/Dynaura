@@ -112,7 +112,25 @@ def test_shop():
     print("shop ok")
 
 
+def test_billing():
+    b = deploy("SolarBilling", usdc.address, oracle, society)
+    h = b"\x07" * 32
+    tx(b.functions.postBill("A", "2026-11", resident, 3_420_000, 41_000, 19_000, h), oracle)
+    reverts(b.functions.postBill("A", "2026-11", resident, 1, 1, 1, h), oracle, selector("AlreadyPosted()"))
+    reverts(b.functions.postBill("B", "2026-11", resident, 1, 1, 1, h), stranger, selector("NotOracle()"))
+    assert b.functions.billOf(b.functions.key("A", "2026-11").call()).call() == 1
+    reverts(b.functions.pay(1), stranger, selector("NotResident()"))
+    tx(usdc.functions.approve(b.address, 10 * USDC), resident)
+    t0 = bal(society)
+    tx(b.functions.pay(1), resident)
+    assert bal(society) - t0 == 3_420_000
+    reverts(b.functions.pay(1), resident, selector("AlreadyPaid()"))
+    reverts(b.functions.pay(9), resident, selector("NoBill()"))
+    print("billing ok")
+
+
 if __name__ == "__main__":
     test_escrow()
     test_shop()
+    test_billing()
     print("all contract tests passed")

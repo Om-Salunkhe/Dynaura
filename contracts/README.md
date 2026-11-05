@@ -6,10 +6,11 @@ Solidity contracts for Arc. They are written here, then **pasted into Arc Studio
 |---|---|
 | `CleaningEscrow.sol` | Dusty panel → fee locked in USDC → cleaner accepts → the meter releases it when output is back above 90%, or the society gets a refund after the deadline |
 | `ShopTrade.sol` | A nearby shop prepays for spare noon solar → after the window the meter settles: society is paid per Wh delivered, the shop gets the rest back in the same tx |
+| `SolarBilling.sol` | Each month the meter posts every flat's bill (split by its own meter, with the hash of the signed readings) → the resident pays in USDC straight to the society treasury |
 
 USDC on Arc testnet is the ERC-20 at `0x3600000000000000000000000000000000000000` (6 decimals). Every amount in these contracts is in those 6-decimal units (`2000000` = 2 USDC).
 
-The **oracle** is the Pi's wallet (`ARC_PRIVATE_KEY` in `.env`): it is the only address allowed to release a fee or settle a sale, and only from what its own meters measured.
+The **oracle** is the Pi's wallet (`ARC_PRIVATE_KEY` in `.env`): it is the only address allowed to release a fee, settle a sale or post a bill, and only from what its own meters measured.
 
 ## Check locally (optional)
 
