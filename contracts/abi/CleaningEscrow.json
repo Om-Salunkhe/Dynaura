@@ -10,6 +10,11 @@
     "internalType": "address",
     "name": "oracle_",
     "type": "address"
+   },
+   {
+    "internalType": "address",
+    "name": "owner_",
+    "type": "address"
    }
   ],
   "stateMutability": "nonpayable",
@@ -17,7 +22,38 @@
  },
  {
   "inputs": [],
+  "name": "AlreadyLinked",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "BadAmount",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint16",
+    "name": "outputPct",
+    "type": "uint16"
+   }
+  ],
+  "name": "BadOutput",
+  "type": "error"
+ },
+ {
+  "inputs": [],
   "name": "BadStatus",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NoJob",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NotAllowed",
   "type": "error"
  },
  {
@@ -33,12 +69,55 @@
  },
  {
   "inputs": [],
-  "name": "NotOracle",
+  "name": "NotCleaner",
   "type": "error"
  },
  {
   "inputs": [],
-  "name": "NotOwner",
+  "name": "NotOracle",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "owner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnableInvalidOwner",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "account",
+    "type": "address"
+   }
+  ],
+  "name": "OwnableUnauthorizedAccount",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "ReentrancyGuardReentrantCall",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "RequestIdTooLong",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "token",
+    "type": "address"
+   }
+  ],
+  "name": "SafeERC20FailedOperation",
   "type": "error"
  },
  {
@@ -53,8 +132,58 @@
  },
  {
   "inputs": [],
-  "name": "TransferFailed",
+  "name": "ZeroAddress",
   "type": "error"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "bool",
+    "name": "paidCleaner",
+    "type": "bool"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "to",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "fee",
+    "type": "uint256"
+   }
+  ],
+  "name": "DisputeResolved",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "bytes32",
+    "name": "episodeRoot",
+    "type": "bytes32"
+   }
+  ],
+  "name": "EpisodeLinked",
+  "type": "event"
  },
  {
   "anonymous": false,
@@ -95,6 +224,56 @@
     "internalType": "uint256",
     "name": "fee",
     "type": "uint256"
+   }
+  ],
+  "name": "JobCancelled",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "cleaner",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "string",
+    "name": "reason",
+    "type": "string"
+   }
+  ],
+  "name": "JobDisputed",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "payer",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "fee",
+    "type": "uint256"
    },
    {
     "indexed": false,
@@ -107,6 +286,12 @@
     "internalType": "uint16",
     "name": "outputBefore",
     "type": "uint16"
+   },
+   {
+    "indexed": false,
+    "internalType": "string",
+    "name": "ogRequestId",
+    "type": "string"
    }
   ],
   "name": "JobOpened",
@@ -178,7 +363,7 @@
   "anonymous": false,
   "inputs": [
    {
-    "indexed": false,
+    "indexed": true,
     "internalType": "address",
     "name": "oracle",
     "type": "address"
@@ -186,6 +371,51 @@
   ],
   "name": "OracleChanged",
   "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferred",
+  "type": "event"
+ },
+ {
+  "inputs": [],
+  "name": "DISPUTE_WINDOW",
+  "outputs": [
+   {
+    "internalType": "uint64",
+    "name": "",
+    "type": "uint64"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "MAX_REQUEST_ID_BYTES",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
  },
  {
   "inputs": [],
@@ -209,6 +439,37 @@
    }
   ],
   "name": "accept",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   }
+  ],
+  "name": "cancel",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "internalType": "string",
+    "name": "reason",
+    "type": "string"
+   }
+  ],
+  "name": "dispute",
   "outputs": [],
   "stateMutability": "nonpayable",
   "type": "function"
@@ -262,9 +523,37 @@
     "internalType": "bytes32",
     "name": "proof",
     "type": "bytes32"
+   },
+   {
+    "internalType": "bytes32",
+    "name": "episodeRoot",
+    "type": "bytes32"
+   },
+   {
+    "internalType": "string",
+    "name": "ogRequestId",
+    "type": "string"
    }
   ],
   "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "internalType": "bytes32",
+    "name": "episodeRoot",
+    "type": "bytes32"
+   }
+  ],
+  "name": "linkEpisode",
+  "outputs": [],
+  "stateMutability": "nonpayable",
   "type": "function"
  },
  {
@@ -296,6 +585,11 @@
     "internalType": "uint16",
     "name": "outputBefore",
     "type": "uint16"
+   },
+   {
+    "internalType": "string",
+    "name": "ogRequestId",
+    "type": "string"
    }
   ],
   "name": "openJob",
@@ -372,6 +666,31 @@
   "type": "function"
  },
  {
+  "inputs": [],
+  "name": "renounceOwnership",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "internalType": "bool",
+    "name": "payCleaner",
+    "type": "bool"
+   }
+  ],
+  "name": "resolve",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
   "inputs": [
    {
     "internalType": "address",
@@ -380,6 +699,32 @@
    }
   ],
   "name": "setOracle",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "totalLocked",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "transferOwnership",
   "outputs": [],
   "stateMutability": "nonpayable",
   "type": "function"

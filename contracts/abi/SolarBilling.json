@@ -15,6 +15,16 @@
     "internalType": "address",
     "name": "treasury_",
     "type": "address"
+   },
+   {
+    "internalType": "address",
+    "name": "gridPayee_",
+    "type": "address"
+   },
+   {
+    "internalType": "address",
+    "name": "owner_",
+    "type": "address"
    }
   ],
   "stateMutability": "nonpayable",
@@ -32,6 +42,11 @@
  },
  {
   "inputs": [],
+  "name": "BadLabel",
+  "type": "error"
+ },
+ {
+  "inputs": [],
   "name": "NoBill",
   "type": "error"
  },
@@ -42,17 +57,50 @@
  },
  {
   "inputs": [],
-  "name": "NotOwner",
-  "type": "error"
- },
- {
-  "inputs": [],
   "name": "NotResident",
   "type": "error"
  },
  {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "owner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnableInvalidOwner",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "account",
+    "type": "address"
+   }
+  ],
+  "name": "OwnableUnauthorizedAccount",
+  "type": "error"
+ },
+ {
   "inputs": [],
-  "name": "TransferFailed",
+  "name": "ReentrancyGuardReentrantCall",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "token",
+    "type": "address"
+   }
+  ],
+  "name": "SafeERC20FailedOperation",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "ZeroAddress",
   "type": "error"
  },
  {
@@ -74,6 +122,18 @@
     "indexed": false,
     "internalType": "uint256",
     "name": "amount",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "solarAmount",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "gridAmount",
     "type": "uint256"
    }
   ],
@@ -134,6 +194,77 @@
   ],
   "name": "BillPosted",
   "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "gridPayee",
+    "type": "address"
+   }
+  ],
+  "name": "GridPayeeChanged",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "oracle",
+    "type": "address"
+   }
+  ],
+  "name": "OracleChanged",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferred",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "treasury",
+    "type": "address"
+   }
+  ],
+  "name": "TreasuryChanged",
+  "type": "event"
+ },
+ {
+  "inputs": [],
+  "name": "MAX_LABEL_BYTES",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
  },
  {
   "inputs": [
@@ -207,6 +338,29 @@
    {
     "internalType": "address",
     "name": "paidBy",
+    "type": "address"
+   },
+   {
+    "internalType": "uint96",
+    "name": "solarAmount",
+    "type": "uint96"
+   },
+   {
+    "internalType": "uint96",
+    "name": "gridAmount",
+    "type": "uint96"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "gridPayee",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
     "type": "address"
    }
   ],
@@ -308,7 +462,12 @@
    },
    {
     "internalType": "uint96",
-    "name": "amount",
+    "name": "solarAmount",
+    "type": "uint96"
+   },
+   {
+    "internalType": "uint96",
+    "name": "gridAmount",
     "type": "uint96"
    },
    {
@@ -339,6 +498,26 @@
   "type": "function"
  },
  {
+  "inputs": [],
+  "name": "renounceOwnership",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "gridPayee_",
+    "type": "address"
+   }
+  ],
+  "name": "setGridPayee",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
   "inputs": [
    {
     "internalType": "address",
@@ -347,6 +526,32 @@
    }
   ],
   "name": "setOracle",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "treasury_",
+    "type": "address"
+   }
+  ],
+  "name": "setTreasury",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "transferOwnership",
   "outputs": [],
   "stateMutability": "nonpayable",
   "type": "function"

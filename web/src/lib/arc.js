@@ -1,7 +1,7 @@
 // Arc testnet from the browser: the resident, cleaner or shop signs with their own wallet
 // (MetaMask or any injected wallet). USDC is the money and the gas.
 import { useSyncExternalStore } from "react";
-import { createPublicClient, createWalletClient, custom, http, maxUint256, parseAbi } from "viem";
+import { createPublicClient, createWalletClient, custom, http, parseAbi } from "viem";
 import { arcTestnet } from "viem/chains";
 
 const RPC = import.meta.env.VITE_ARC_RPC_URL || "https://rpc.testnet.arc.io";
@@ -23,8 +23,19 @@ export const ABI = {
   ]),
   escrow: parseAbi([
     "function accept(uint256 jobId)",
+    "function dispute(uint256 jobId, string reason)",
+    "function cancel(uint256 jobId)",
     "function refund(uint256 jobId)",
-    "function jobs(uint256) view returns (address payer, address cleaner, uint96 fee, uint64 deadline, uint16 outputBefore, uint16 outputAfter, uint8 status, bytes32 proof)",
+    "function nextJobId() view returns (uint256)",
+    "function jobs(uint256) view returns (address payer, address cleaner, uint96 fee, uint64 deadline, uint16 outputBefore, uint16 outputAfter, uint8 status, bytes32 proof, bytes32 episodeRoot, string ogRequestId)",
+    "event JobOpened(uint256 indexed jobId, address indexed payer, uint256 fee, uint64 deadline, uint16 outputBefore, string ogRequestId)",
+    "event JobAccepted(uint256 indexed jobId, address indexed cleaner)",
+    "event JobPaid(uint256 indexed jobId, address indexed cleaner, uint256 fee, uint16 outputAfter, bytes32 proof)",
+    "event JobRefunded(uint256 indexed jobId, address indexed payer, uint256 fee)",
+    "event JobCancelled(uint256 indexed jobId, address indexed payer, uint256 fee)",
+    "event JobDisputed(uint256 indexed jobId, address indexed cleaner, string reason)",
+    "event DisputeResolved(uint256 indexed jobId, bool paidCleaner, address indexed to, uint256 fee)",
+    "event EpisodeLinked(uint256 indexed jobId, bytes32 episodeRoot)",
   ]),
   shop: parseAbi([
     "function pricePerKwh() view returns (uint64)",
@@ -35,10 +46,13 @@ export const ABI = {
   billing: parseAbi([
     "function key(string flat, string month) pure returns (bytes32)",
     "function billOf(bytes32) view returns (uint256)",
-    "function bills(uint256) view returns (string flat, string month, address resident, uint96 amount, uint32 solarWh, uint32 gridWh, bytes32 readingsHash, bool paid, address paidBy)",
+    "function bills(uint256) view returns (string flat, string month, address resident, uint96 amount, uint32 solarWh, uint32 gridWh, bytes32 readingsHash, bool paid, address paidBy, uint96 solarAmount, uint96 gridAmount)",
     "function pay(uint256 billId)",
   ]),
 };
+
+// CleaningEscrow.Status index -> name
+export const JOB_STATUS = ["none", "open", "accepted", "paid", "refunded", "cancelled", "disputed"];
 
 export const publicClient = createPublicClient({ chain: arcTestnet, transport: http(RPC) });
 
@@ -116,14 +130,16 @@ export async function write(contract, functionName, args) {
   return hash;
 }
 
-/** Approve `spender` for at least `units` of USDC (one approval, then never again). */
+/** Approve `spender` for exactly `units` of USDC, unless it already has that much.
+ *  Exact (not unlimited) approvals: if a price changes between the read and the transaction,
+ *  the contract can't pull more than the user saw, so the call fails instead. */
 export async function ensureAllowance(spender, units) {
   const owner = wallet.address || (await connect());
   if (!owner) throw new Error(wallet.error || "Connect a wallet first");
   const have = await publicClient.readContract({ address: ADDR.usdc, abi: ABI.usdc, functionName: "allowance", args: [owner, ADDR[spender]] });
   if (have >= units) return null;
   const hash = await walletClient().writeContract({
-    account: owner, chain: arcTestnet, address: ADDR.usdc, abi: ABI.usdc, functionName: "approve", args: [ADDR[spender], maxUint256],
+    account: owner, chain: arcTestnet, address: ADDR.usdc, abi: ABI.usdc, functionName: "approve", args: [ADDR[spender], units],
   });
   await publicClient.waitForTransactionReceipt({ hash });
   return hash;

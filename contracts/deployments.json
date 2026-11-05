@@ -4,10 +4,15 @@
   "rpc": "https://rpc.testnet.arc.io",
   "explorer": "https://explorer.testnet.arc.io",
   "studioProject": "",
+  "deployedBy": "Arc Studio",
   "usdc": "0x3600000000000000000000000000000000000000",
-  "oracle": "",
-  "treasury": "",
-  "CleaningEscrow": "",
-  "ShopTrade": "",
-  "SolarBilling": ""
+  "oracle": "0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf",
+  "owner": "0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf",
+  "treasury": "0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf",
+  "gridPayee": "0x69E52f183FE1D423Da95619986a648194cbFF140",
+  "pricePerKwh": 80000,
+  "CleaningEscrow": { "address": "", "deployTx": "" },
+  "ShopTrade": { "address": "", "deployTx": "" },
+  "SolarBilling": { "address": "", "deployTx": "" },
+  "demoTxs": {}
 }
