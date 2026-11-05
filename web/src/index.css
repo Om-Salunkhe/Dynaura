@@ -1,3 +1,106 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Option B: light glass (default) */
+:root {
+  --bg-1: #c9dfe7;
+  --bg-2: #e3eef0;
+  --bg-3: #f3f6f5;
+  --card: rgba(255, 255, 255, 0.72);
+  --card-solid: #ffffff;
+  --inner: #f1f5f6;
+  --line: #e4ecee;
+  --ink: #111418;
+  --ink-2: #3c454c;
+  --muted: #5b6670;
+  --idle: #d5dee1;
+  --sun: #f2a23a;
+  --sun-ink: #b86e00;
+  --sun-soft: rgba(242, 162, 58, 0.14);
+  --grid: #6e9bff;
+  --good: #1e7a46;
+  --bad: #b42318;
+  --link: #2f5bc4;
+  --btn: #111418;
+  --btn-ink: #ffffff;
+  --nav: #ffffff;
+  --shadow: 0 14px 34px rgba(30, 50, 60, 0.1);
+  color-scheme: light;
+}
+
+/* Option C: black glass (dark mode) */
+:root[data-theme="dark"] {
+  --bg-1: #050506;
+  --bg-2: #0e0e10;
+  --bg-3: #161618;
+  --card: rgba(255, 255, 255, 0.06);
+  --card-solid: #1c1c1f;
+  --inner: rgba(255, 255, 255, 0.05);
+  --line: rgba(255, 255, 255, 0.12);
+  --ink: #f4f4f5;
+  --ink-2: #d4d4d8;
+  --muted: #a1a1aa;
+  --idle: rgba(255, 255, 255, 0.14);
+  --sun: #f2a23a;
+  --sun-ink: #f7b455;
+  --sun-soft: rgba(242, 162, 58, 0.14);
+  --grid: #6e9bff;
+  --good: #4ade80;
+  --bad: #f87171;
+  --link: #8fb0ff;
+  --btn: #f2f5f6;
+  --btn-ink: #0a0a0b;
+  --nav: rgba(28, 28, 31, 0.94);
+  --shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+html {
+  background: var(--bg-3);
+}
+
+body {
+  margin: 0;
+  font-family: Urbanist, Inter, system-ui, sans-serif;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 38%, var(--bg-3) 100%) fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+@layer components {
+  .card {
+    @apply rounded-[24px] border border-line bg-card p-4 backdrop-blur-xl;
+  }
+  .inner {
+    @apply rounded-2xl bg-inner;
+  }
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-btn px-4 text-[13px] font-extrabold text-btn-ink transition active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-line bg-inner px-4 text-[13px] font-semibold text-ink;
+  }
+  .chip {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-2 text-[13px] font-bold;
+  }
+  .label {
+    @apply text-xs text-muted;
+  }
+  .h-title {
+    @apply text-[26px] font-extrabold tracking-[-0.5px];
+  }
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+}
