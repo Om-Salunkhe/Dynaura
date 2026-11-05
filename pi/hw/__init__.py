@@ -6,7 +6,8 @@ def load_hardware(kind: str) -> Hardware:
     kind = (kind or "sim").lower()
     if kind == "sim":
         from .sim import SimHardware
-        return SimHardware()
+        from config import SIM_SPEED, SIM_START
+        return SimHardware(speed=SIM_SPEED, start=SIM_START)
     if kind == "real":
         from .real import RealHardware  # written by Devang
         return RealHardware()
