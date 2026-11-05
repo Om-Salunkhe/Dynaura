@@ -1,0 +1,15 @@
+# Arkiv bridge (Node). Only listens on 127.0.0.1.
+[Unit]
+Description=Dynaura Arkiv bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/Dynaura/bridge
+ExecStart=/usr/bin/node --env-file=/home/pi/Dynaura/.env main.mjs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

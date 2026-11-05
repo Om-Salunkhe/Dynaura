@@ -1,0 +1,19 @@
+# Pi API (meters, relays, 0G planner, Arc, Arkiv queue).
+# Install: see deploy/README.md. Paths assume user "pi" and the repo in /home/pi/Dynaura.
+[Unit]
+Description=Dynaura Pi API
+After=network-online.target dynaura-bridge.service
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/Dynaura/pi
+ExecStart=/home/pi/Dynaura/pi/.venv/bin/python api.py
+Restart=always
+RestartSec=3
+# On stop, api.py puts every flat on grid and turns the pump off before exiting
+KillSignal=SIGINT
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
