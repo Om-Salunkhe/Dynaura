@@ -49,7 +49,10 @@ export default function AdminTrading() {
                 className="w-14 bg-transparent text-right font-bold outline-none"
                 value={price}
                 onChange={(e) => setPrice(Number(e.target.value))}
-                onBlur={() => setEditing(false)}
+                onBlur={() => {
+                  setEditing(false);
+                  postJSON("/api/admin/price", { price_usdc: price }, { admin: true }).catch(() => {});
+                }}
                 autoFocus
               />
               / kWh

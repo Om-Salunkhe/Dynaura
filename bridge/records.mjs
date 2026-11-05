@@ -4,7 +4,7 @@ import { and, desc, eq } from "@arkiv-network/sdk/query"
 import { addr, dec, u64 } from "@arkiv-network/sdk/schema"
 import { hexToBytes, stringToBytes } from "viem"
 import { account, BUILDING, publicClient, route, walletClient } from "./bridge.mjs"
-import { DailyOutput, Decision, Heartbeat, Maintenance, Reading } from "./schemas.mjs"
+import { DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading } from "./schemas.mjs"
 
 // Decimals as plain strings ("0.004167"), never scientific notation
 export const d = (n, places = 6) => dec(Number(n || 0).toFixed(places).replace(/\.?0+$/, "") || "0")
@@ -151,6 +151,25 @@ route("POST", "/maintenance", async (b) => {
       ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
     },
     { expiration: days(180) },
+  )
+  return { key: entityKey, txHash }
+})
+
+// POST /offer  {day, kwh, price_usdc, window_end (unix s), request_id}
+// The offer expires when the solar window closes: shops simply stop seeing it.
+route("POST", "/offer", async (b) => {
+  const secondsLeft = Math.max(120, Number(b.window_end) - Math.floor(Date.now() / 1000))
+  const { entityKey, txHash } = await walletClient.createEntity(
+    Offer,
+    {
+      building: BUILDING,
+      day: String(b.day),
+      kwh: d(b.kwh, 3),
+      price_usdc: d(b.price_usdc, 4),
+      window_end: u64(BigInt(Math.floor(Number(b.window_end)))),
+      ...(b.request_id ? { request_id: String(b.request_id).slice(0, 120) } : {}),
+    },
+    { expiration: ExpirationTime.fromMinutes(Math.ceil(secondsLeft / 60)) },
   )
   return { key: entityKey, txHash }
 })

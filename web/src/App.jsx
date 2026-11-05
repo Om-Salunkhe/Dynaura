@@ -11,6 +11,7 @@ import CleanerJobs from "./pages/CleanerJobs.jsx";
 import History from "./pages/History.jsx";
 import Home from "./pages/Home.jsx";
 import PanelHealth from "./pages/PanelHealth.jsx";
+import ShopOffers from "./pages/ShopOffers.jsx";
 import Society from "./pages/Society.jsx";
 
 const NAV = {
@@ -28,9 +29,10 @@ const NAV = {
     { to: "/admin/panel", label: "Panel", icon: "panel" },
   ],
   cleaner: [{ to: "/jobs", label: "Jobs", icon: "broom" }],
+  shop: [{ to: "/shop", label: "Offers", icon: "trade" }],
 };
 
-const HOME = { resident: "/", admin: "/admin", cleaner: "/jobs" };
+const HOME = { resident: "/", admin: "/admin", cleaner: "/jobs", shop: "/shop" };
 
 function Routed() {
   const [who] = useRole();
@@ -47,6 +49,7 @@ function Routed() {
         <Route path="/admin/trading" element={<AdminTrading />} />
         <Route path="/admin/panel" element={<PanelHealth />} />
         <Route path="/jobs" element={<CleanerJobs />} />
+        <Route path="/shop" element={<ShopOffers />} />
         <Route path="*" element={<Navigate to={HOME[who.role]} replace />} />
       </Route>
     </Routes>

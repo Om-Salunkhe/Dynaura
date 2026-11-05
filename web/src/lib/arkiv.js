@@ -100,3 +100,23 @@ export function useArkiv(fn, fallback, deps = []) {
 }
 
 export const short = (h) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : "");
+
+/** Live offers of spare solar. Expired ones (solar window closed) are simply not returned. */
+export async function fetchOffers() {
+  const { Offer } = await import("./arkivSchemas.js");
+  const page = await arkiv()
+    .select({ $key: true, day: true, kwh: true, price_usdc: true, window_end: true, request_id: true, $expiresAt: true })
+    .from(Offer)
+    .where(eq("building", BUILDING))
+    .ownedBy(OWNER)
+    .limit(20)
+    .fetch();
+  return page.entities.map((e) => ({
+    key: e.$key,
+    day: e.day.value,
+    kwh: Number(e.kwh.value),
+    price: Number(e.price_usdc.value),
+    windowEnd: Number(e.window_end.value),
+    requestId: e.request_id?.value,
+  }));
+}

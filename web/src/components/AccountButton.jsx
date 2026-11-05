@@ -10,6 +10,7 @@ const ROLES = [
   { role: "resident", flat: "C", label: "Resident · Flat C", home: "/" },
   { role: "admin", label: "Committee admin", home: "/admin" },
   { role: "cleaner", label: "Cleaner · Ravi", home: "/jobs" },
+  { role: "shop", label: "Shop · Corner grocery", home: "/shop" },
 ];
 
 /** Round button in the header: switch role (demo login) and theme. */
@@ -19,7 +20,7 @@ export default function AccountButton() {
   const [theme, toggleTheme] = useTheme();
   const go = useNavigate();
 
-  const current = who.role === "resident" ? FLATS[who.flat].name : who.role === "admin" ? "Admin" : "Cleaner";
+  const current = who.role === "resident" ? FLATS[who.flat].name : { admin: "Admin", cleaner: "Cleaner", shop: "Shop" }[who.role];
 
   return (
     <div className="relative">

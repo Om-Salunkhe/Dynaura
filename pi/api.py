@@ -63,6 +63,7 @@ async def lifespan(_: FastAPI):
         # or straight away when 0G Storage is not set up.
         App.brain.on_decision = lambda did: None if App.uploader.ready() else App.arkiv.decision(did)
         App.uploader.on_root = lambda did, root: App.arkiv.decision(did)
+        App.brain.on_offer = lambda offer: App.arkiv.post("/offer", offer)
         App.arkiv.start()
     App.scheduler = PlanScheduler(App.brain)
     App.scheduler.start()
@@ -166,6 +167,14 @@ def add_maintenance(body: dict, x_admin_key: str | None = Header(default=None)):
         return App.arkiv.send_now("/maintenance", {"title": body.get("title"), "details": body.get("details")})
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Arkiv write failed: {e}")
+
+
+@app.post("/api/admin/price")
+def set_price(body: dict, x_admin_key: str | None = Header(default=None)):
+    """Admin sets the shop price: {"price_usdc": 0.08}"""
+    require_admin(x_admin_key)
+    App.brain.price = max(0.0, float(body.get("price_usdc", config.SHOP_PRICE_USDC)))
+    return {"price_usdc": App.brain.price}
 
 
 @app.post("/api/ask")

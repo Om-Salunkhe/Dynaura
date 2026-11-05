@@ -18,6 +18,8 @@ class Brain:
         self.store = store
         self.uploader = uploader
         self.on_decision = None  # callback(decision_id), e.g. write to Arkiv
+        self.on_offer = None     # callback(offer dict), e.g. publish to Arkiv for shops
+        self.price = None        # USDC per kWh for shops (None = config default)
         self.plan: dict | None = None
         self.decision: dict | None = None
         self._lock = threading.Lock()
@@ -51,8 +53,18 @@ class Brain:
             self.notify(did)
             self.plan = plan
             self.decision = self.store.latest("plan")
+            self._publish_offer(plan, reply.request_id)
             log.info("plan #%s recorded (0G %s)", did, reply.request_id)
             return self.public()
+
+    def _publish_offer(self, plan: dict, request_id: str | None) -> None:
+        kwh = plan.get("shop_offer_kwh") or 0
+        if kwh <= 0 or not self.on_offer:
+            return
+        import config
+        end = datetime.strptime(f"{plan['date']} {plan['solar_window'][1]}", "%Y-%m-%d %H:%M")
+        self.on_offer({"day": plan["date"], "kwh": kwh, "price_usdc": self.price or config.SHOP_PRICE_USDC,
+                       "window_end": int(end.timestamp()), "request_id": request_id})
 
     def _no_ai(self, reason: str) -> dict:
         log.warning("NO-AI MODE: %s", reason)

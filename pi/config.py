@@ -55,3 +55,6 @@ ZG_PRIVATE_KEY = os.getenv("ZG_PRIVATE_KEY", "").strip()
 # Arkiv bridge (bridge/bridge.mjs)
 ARKIV_BRIDGE_URL = os.getenv("ARKIV_BRIDGE_URL", "http://127.0.0.1:5100").strip()
 ARKIV_ENABLED = os.getenv("ARKIV_ENABLED", "true").lower() == "true"
+
+# Price for spare solar sold to nearby shops (USDC per kWh); the admin can change it in the app
+SHOP_PRICE_USDC = float(os.getenv("SHOP_PRICE_USDC", "0.08") or 0.08)
