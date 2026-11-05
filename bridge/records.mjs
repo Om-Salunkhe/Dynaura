@@ -1,14 +1,21 @@
 // The routes the Pi calls. Each one writes Arkiv entities owned by the building wallet.
+// Every write goes through write() (one queue, explicit nonce, reconcile, never resend blindly).
 import { ExpirationTime } from "@arkiv-network/sdk"
-import { and, desc, eq } from "@arkiv-network/sdk/query"
+import { and, desc, eq, lte } from "@arkiv-network/sdk/query"
 import { addr, dec, u64 } from "@arkiv-network/sdk/schema"
 import { hexToBytes, stringToBytes } from "viem"
-import { account, BUILDING, publicClient, route, walletClient } from "./bridge.mjs"
+import { account, addHealth, BUILDING, publicClient, read, route, walletClient, write } from "./bridge.mjs"
 import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale } from "./schemas.mjs"
 
 // Decimals as plain strings ("0.004167"), never scientific notation
 export const d = (n, places = 6) => dec(Number(n || 0).toFixed(places).replace(/\.?0+$/, "") || "0")
 export const days = (n) => ExpirationTime.fromDays(n)
+const nowS = () => Math.floor(Date.now() / 1000)
+/** Expire at a wall-clock time (unix seconds), but never sooner than `min` from now. */
+const until = (unixS, min = ExpirationTime.fromMinutes(2)) => ExpirationTime.atDate(new Date(unixS * 1000), { atLeast: min })
+
+/** Only entities this wallet created and still owns are ours, whatever their tags say. */
+const ours = (q) => q.createdBy(account.address).ownedBy(account.address)
 
 // POST /readings  {"summaries": [{minute, meter, avg_w, wh, solar_wh, samples, signer, sig}, ...]}
 // One transaction per minute for all meters (a batch is all-or-nothing).
@@ -30,14 +37,29 @@ route("POST", "/readings", async (body) => {
     },
     expiration: days(7),
   }))
-  const r = await walletClient.executeBatch({ creates })
+  const r = await write("readings", (tx) => walletClient.executeBatch({ creates }, tx), { ops: creates.length })
   return { created: r.createdEntities.length, txHash: r.txHash, keys: r.createdEntities }
 })
 
 // POST /heartbeat  {mode, flats: {A: "solar", ...}, pump: true, solar_w, used_w}
 // One entity, patched and extended to "2 more minutes" each time. If the Pi stops, it expires
 // and the app shows "Building offline": no cron job, no server, the expiry is the alarm.
+// A patch never moves the expiry (checked live), so the renewal is patch + extend in one tx.
 let heartbeatKey = null
+let heartbeatLookedUp = false
+let heartbeatRenewedAt = 0
+
+async function findHeartbeat() {
+  const page = await read(() =>
+    ours(publicClient.select({ $key: true }).from(Heartbeat).where(eq("building", BUILDING)))
+      .orderBy(desc("updated"))
+      .limit(1)
+      .fetch(),
+  )
+  return page.entities[0]?.$key ?? null
+}
+
+const gone = (e) => /expired|no entity/i.test(String(e?.message || e))
 
 route("POST", "/heartbeat", async (b) => {
   const values = {
@@ -46,91 +68,108 @@ route("POST", "/heartbeat", async (b) => {
     pump: b.pump ? "on" : "off",
     solar_w: d(b.solar_w, 4),
     used_w: d(b.used_w, 4),
-    updated: u64(BigInt(Math.floor(Date.now() / 1000))),
+    updated: u64(BigInt(nowS())),
   }
   const ttl = ExpirationTime.fromMinutes(2)
-  if (heartbeatKey) {
-    try {
-      const r = await walletClient.executeBatch({
-        patches: [{ schema: Heartbeat, entityKey: heartbeatKey, set: values }],
-        extensions: [{ entityKey: heartbeatKey, expiration: ttl }],
-      })
-      return { key: heartbeatKey, txHash: r.txHash, renewed: true }
-    } catch (e) {
-      console.warn("heartbeat renew failed, creating a new one:", e?.shortMessage || e?.message)
-      heartbeatKey = null // expired (Pi was off > 2 min) or never existed: start a new one
-    }
-  }
-  const { entityKey, txHash } = await walletClient.createEntity(
-    Heartbeat,
-    { building: BUILDING, ...values },
-    { expiration: ttl },
+  return write(
+    "heartbeat",
+    async (tx) => {
+      // After a restart, pick up the heartbeat that is still alive instead of starting a second one.
+      if (!heartbeatKey && !heartbeatLookedUp) {
+        heartbeatLookedUp = true
+        heartbeatKey = await findHeartbeat()
+      }
+      // Writes skip the gas estimate (see writer.mjs), so nothing would stop a patch on an expired
+      // heartbeat before it is mined. If the last renewal is old, check the entity is still there.
+      if (heartbeatKey && Date.now() - heartbeatRenewedAt > 100_000) {
+        const alive = await read(() => publicClient.getEntity(heartbeatKey)).then(() => true, (e) => (e?.name === "NoEntityFoundError" ? false : Promise.reject(e)))
+        if (!alive) heartbeatKey = null
+      }
+      if (heartbeatKey) {
+        try {
+          const r = await walletClient.executeBatch(
+            { patches: [{ schema: Heartbeat, entityKey: heartbeatKey, set: values }], extensions: [{ entityKey: heartbeatKey, expiration: ttl }] },
+            tx,
+          )
+          heartbeatRenewedAt = Date.now()
+          return { key: heartbeatKey, txHash: r.txHash, renewed: true }
+        } catch (e) {
+          // Only a heartbeat that is really gone (Pi was off > 2 min) is replaced. Any other error
+          // (rate limit, network) must not start a second heartbeat next to the live one.
+          if (!gone(e)) throw e
+          console.warn("heartbeat expired, starting a new one")
+          heartbeatKey = null
+          if (e?.txHash) throw e // a reverted tx used this nonce; the next heartbeat creates it
+        }
+      }
+      const r = await walletClient.createEntity(Heartbeat, { building: BUILDING, ...values }, { expiration: ttl }, tx)
+      heartbeatKey = r.entityKey
+      heartbeatRenewedAt = Date.now()
+      return { key: r.entityKey, txHash: r.txHash, renewed: false }
+    },
+    { coalesce: "heartbeat", ops: 2 },
   )
-  heartbeatKey = entityKey
-  return { key: entityKey, txHash, renewed: false }
+})
+
+addHealth(async (block) => {
+  if (!heartbeatKey) return { heartbeat: null }
+  const e = await read(() => publicClient.getEntity(heartbeatKey)).catch(() => null)
+  return { heartbeat: { key: heartbeatKey, alive: Boolean(e), expires_in_s: e ? Number(e.$expiresAt - block) * 2 : 0 } }
 })
 
 // POST /decision  {decision_id, kind, mode, request_id, model, storage_root, summary, day}
 route("POST", "/decision", async (b) => {
-  const { entityKey, txHash } = await walletClient.createEntity(
-    Decision,
-    {
-      building: BUILDING,
-      kind: String(b.kind),
-      mode: String(b.mode),
-      decision_id: u64(BigInt(b.decision_id)),
-      day: String(b.day),
-      ...(b.request_id ? { request_id: String(b.request_id).slice(0, 120) } : {}),
-      ...(b.model ? { model: String(b.model).slice(0, 120) } : {}),
-      ...(b.storage_root ? { storage_root: String(b.storage_root) } : {}),
-      summary: stringToBytes(String(b.summary || "")),
-    },
-    { expiration: days(30) },
-  )
-  return { key: entityKey, txHash }
+  const values = {
+    building: BUILDING,
+    kind: String(b.kind),
+    mode: String(b.mode),
+    decision_id: u64(BigInt(b.decision_id)),
+    day: String(b.day),
+    ...(b.request_id ? { request_id: String(b.request_id).slice(0, 120) } : {}),
+    ...(b.model ? { model: String(b.model).slice(0, 120) } : {}),
+    ...(b.storage_root ? { storage_root: String(b.storage_root) } : {}),
+    summary: stringToBytes(String(b.summary || "")),
+  }
+  const r = await write("decision", (tx) => walletClient.createEntity(Decision, values, { expiration: days(30) }, tx))
+  return { key: r.entityKey, txHash: r.txHash }
 })
 
 // POST /daily  {day, panel_wh, flats_wh, solar_pct}: one entity per day, patched as the day goes on
 const dailyKeys = new Map()
 
 route("POST", "/daily", async (b) => {
+  const day = String(b.day)
   const values = { panel_wh: d(b.panel_wh), flats_wh: d(b.flats_wh), solar_pct: d(b.solar_pct, 1) }
-  let k = dailyKeys.get(b.day)
-  if (!k) {
-    const found = await publicClient
-      .select({ $key: true })
-      .from(DailyOutput)
-      .where(and(eq("building", BUILDING), eq("day", String(b.day))))
-      .ownedBy(account.address)
-      .limit(1)
-      .fetch()
-    k = found.entities[0]?.$key
-  }
-  if (k) {
-    const r = await walletClient.patchEntity(DailyOutput, k, { set: values })
-    dailyKeys.set(b.day, k)
-    return { key: k, txHash: r.txHash, patched: true }
-  }
-  const { entityKey, txHash } = await walletClient.createEntity(
-    DailyOutput,
-    { building: BUILDING, day: String(b.day), ...values },
-    { expiration: days(180) },
-  )
-  dailyKeys.set(b.day, entityKey)
-  return { key: entityKey, txHash, patched: false }
+  return write("daily", async (tx) => {
+    let k = dailyKeys.get(day)
+    if (!k) {
+      const found = await read(() =>
+        ours(publicClient.select({ $key: true }).from(DailyOutput).where(and(eq("building", BUILDING), eq("day", day))))
+          .limit(1)
+          .fetch(),
+      )
+      k = found.entities[0]?.$key
+    }
+    if (k) {
+      const r = await walletClient.patchEntity(DailyOutput, k, { set: values }, tx)
+      dailyKeys.set(day, k)
+      return { key: k, txHash: r.txHash, patched: true }
+    }
+    const r = await walletClient.createEntity(DailyOutput, { building: BUILDING, day, ...values }, { expiration: days(180) }, tx)
+    dailyKeys.set(day, r.entityKey)
+    return { key: r.entityKey, txHash: r.txHash, patched: false }
+  })
 })
 
 // GET /history?days=7  -> the building's daily totals, newest first (read by Dyna's planner)
 route("GET", "/history", async (_, url) => {
-  const n = Math.min(Number(url.searchParams.get("days") || 7), 60)
-  const page = await publicClient
-    .select({ day: true, panel_wh: true, flats_wh: true, solar_pct: true })
-    .from(DailyOutput)
-    .where(eq("building", BUILDING))
-    .ownedBy(account.address)
-    .orderBy(desc("day"))
-    .limit(n)
-    .fetch()
+  const n = Math.min(Math.max(Number(url.searchParams.get("days") || 7), 1), 60)
+  const page = await read(() =>
+    ours(publicClient.select({ day: true, panel_wh: true, flats_wh: true, solar_pct: true }).from(DailyOutput).where(eq("building", BUILDING)))
+      .orderBy(desc("day"))
+      .limit(n)
+      .fetch(),
+  )
   return page.entities.map((e) => ({
     day: e.day.value,
     panel_wh: Number(e.panel_wh.value),
@@ -141,119 +180,139 @@ route("GET", "/history", async (_, url) => {
 
 // POST /maintenance  {date, title, details, arc_tx?}
 route("POST", "/maintenance", async (b) => {
-  const { entityKey, txHash } = await walletClient.createEntity(
-    Maintenance,
-    {
-      building: BUILDING,
-      date: String(b.date || new Date().toISOString().slice(0, 10)),
-      title: String(b.title || "Maintenance").slice(0, 100),
-      details: stringToBytes(String(b.details || "")),
-      ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
-    },
-    { expiration: days(180) },
-  )
-  return { key: entityKey, txHash }
+  const values = {
+    building: BUILDING,
+    date: String(b.date || new Date().toISOString().slice(0, 10)),
+    at: u64(BigInt(nowS())),
+    title: String(b.title || "Maintenance").slice(0, 100),
+    details: stringToBytes(String(b.details || "")),
+    ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
+  }
+  const r = await write("maintenance", (tx) => walletClient.createEntity(Maintenance, values, { expiration: days(180) }, tx))
+  return { key: r.entityKey, txHash: r.txHash }
 })
 
 // POST /offer  {day, kwh, price_usdc, window_end (unix s), request_id}
-// The offer expires when the solar window closes: shops simply stop seeing it.
+// The offer expires exactly when the solar window closes: shops simply stop seeing it.
 route("POST", "/offer", async (b) => {
-  const secondsLeft = Math.max(120, Number(b.window_end) - Math.floor(Date.now() / 1000))
-  const { entityKey, txHash } = await walletClient.createEntity(
-    Offer,
-    {
-      building: BUILDING,
-      day: String(b.day),
-      kwh: d(b.kwh, 3),
-      price_usdc: d(b.price_usdc, 4),
-      window_end: u64(BigInt(Math.floor(Number(b.window_end)))),
-      ...(b.request_id ? { request_id: String(b.request_id).slice(0, 120) } : {}),
-    },
-    { expiration: ExpirationTime.fromMinutes(Math.ceil(secondsLeft / 60)) },
-  )
-  return { key: entityKey, txHash }
+  const windowEnd = Math.floor(Number(b.window_end))
+  const values = {
+    building: BUILDING,
+    day: String(b.day),
+    kwh: d(b.kwh, 3),
+    price_usdc: d(b.price_usdc, 4),
+    window_end: u64(BigInt(windowEnd)),
+    ...(b.request_id ? { request_id: String(b.request_id).slice(0, 120) } : {}),
+  }
+  const r = await write("offer", (tx) => walletClient.createEntity(Offer, values, { expiration: until(windowEnd) }, tx))
+  return { key: r.entityKey, txHash: r.txHash, expiresAt: r.expiresAt }
 })
 
 // POST /cleaning_job  {job_id, status, fee_usdc, deadline, output_before, output_after?, arc_tx?}
-// Created when the escrow opens, patched as it is accepted / paid / refunded.
-// Lives until a day after the deadline; the lasting record is the Maintenance entry.
+// Created when the escrow opens, patched as it is accepted / paid / refunded. It lives until a
+// day after the deadline (the escrow refunds at the deadline); the lasting record is Maintenance.
 const jobKeys = new Map()
 
 route("POST", "/cleaning_job", async (b) => {
+  const id = String(b.job_id)
   const set = {
     status: String(b.status),
     ...(b.output_after != null ? { output_after: d(b.output_after, 1) } : {}),
     ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
   }
-  let k = jobKeys.get(String(b.job_id))
-  if (!k) {
-    try {
-      const found = await publicClient
-        .select({ $key: true })
-        .from(CleaningJob)
-        .where(and(eq("building", BUILDING), eq("job_id", u64(BigInt(b.job_id)))))
-        .ownedBy(account.address)
-        .limit(1)
-        .fetch()
+  return write(`cleaning_job ${id} ${set.status}`, async (tx) => {
+    let k = jobKeys.get(id)
+    if (!k) {
+      const found = await read(() =>
+        ours(publicClient.select({ $key: true }).from(CleaningJob).where(and(eq("building", BUILDING), eq("job_id", u64(BigInt(b.job_id))))))
+          .limit(1)
+          .fetch(),
+      )
       k = found.entities[0]?.$key
-    } catch (e) {
-      console.warn("cleaning job lookup failed, creating a new one:", e?.shortMessage || e?.message)
     }
-  }
-  if (k) {
-    const r = await walletClient.patchEntity(CleaningJob, k, { set })
-    jobKeys.set(String(b.job_id), k)
-    return { key: k, txHash: r.txHash, patched: true }
-  }
-  const secondsLeft = Math.max(0, Number(b.deadline) - Math.floor(Date.now() / 1000))
-  const { entityKey, txHash } = await walletClient.createEntity(
-    CleaningJob,
-    {
-      building: BUILDING,
-      job_id: u64(BigInt(b.job_id)),
-      fee_usdc: d(b.fee_usdc),
-      deadline: u64(BigInt(Math.floor(Number(b.deadline)))),
-      output_before: d(b.output_before, 1),
-      ...set,
-    },
-    { expiration: ExpirationTime.fromMinutes(Math.ceil(secondsLeft / 60) + 24 * 60) },
-  )
-  jobKeys.set(String(b.job_id), entityKey)
-  return { key: entityKey, txHash, patched: false }
+    if (k) {
+      const r = await walletClient.patchEntity(CleaningJob, k, { set }, tx)
+      jobKeys.set(id, k)
+      return { key: k, txHash: r.txHash, patched: true }
+    }
+    const deadline = Math.floor(Number(b.deadline))
+    const r = await walletClient.createEntity(
+      CleaningJob,
+      {
+        building: BUILDING,
+        job_id: u64(BigInt(b.job_id)),
+        fee_usdc: d(b.fee_usdc),
+        deadline: u64(BigInt(deadline)),
+        output_before: d(b.output_before, 1),
+        ...set,
+      },
+      { expiration: until(deadline + 24 * 3600, ExpirationTime.fromHours(1)) },
+      tx,
+    )
+    jobKeys.set(id, r.entityKey)
+    return { key: r.entityKey, txHash: r.txHash, patched: false }
+  })
 })
 
 // POST /sale  {order_id, buyer, buyer_name?, kwh, usdc, arc_tx}: one settled ShopTrade order
 route("POST", "/sale", async (b) => {
-  const { entityKey, txHash } = await walletClient.createEntity(
-    Sale,
-    {
-      building: BUILDING,
-      order_id: u64(BigInt(b.order_id ?? 0)),
-      buyer: addr(b.buyer),
-      buyer_name: String(b.buyer_name || `Shop ${String(b.buyer).slice(0, 6)}…${String(b.buyer).slice(-4)}`),
-      kwh: d(b.kwh, 3),
-      usdc: d(b.usdc),
-      arc_tx: String(b.arc_tx || ""),
-    },
-    { expiration: days(180) },
-  )
-  return { key: entityKey, txHash }
+  const values = {
+    building: BUILDING,
+    order_id: u64(BigInt(b.order_id ?? 0)),
+    buyer: addr(b.buyer),
+    buyer_name: String(b.buyer_name || `Shop ${String(b.buyer).slice(0, 6)}…${String(b.buyer).slice(-4)}`).slice(0, 60),
+    kwh: d(b.kwh, 3),
+    usdc: d(b.usdc),
+    arc_tx: String(b.arc_tx || ""),
+  }
+  const r = await write("sale", (tx) => walletClient.createEntity(Sale, values, { expiration: days(180) }, tx))
+  return { key: r.entityKey, txHash: r.txHash }
 })
 
 // POST /bill  {flat, month, kwh, solar_pct, usdc, arc_tx}: a monthly bill posted on Arc
 route("POST", "/bill", async (b) => {
-  const { entityKey, txHash } = await walletClient.createEntity(
-    Bill,
-    {
-      building: BUILDING,
-      flat: String(b.flat),
-      month: String(b.month),
-      kwh: d(b.kwh, 3),
-      solar_pct: d(b.solar_pct, 1),
-      usdc: d(b.usdc),
-      ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
-    },
-    { expiration: days(180) },
-  )
-  return { key: entityKey, txHash }
+  const values = {
+    building: BUILDING,
+    flat: String(b.flat),
+    month: String(b.month),
+    kwh: d(b.kwh, 3),
+    solar_pct: d(b.solar_pct, 1),
+    usdc: d(b.usdc),
+    ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
+  }
+  const r = await write("bill", (tx) => walletClient.createEntity(Bill, values, { expiration: days(180) }, tx))
+  return { key: r.entityKey, txHash: r.txHash }
 })
+
+// ---- keeper: the records worth keeping stay alive while the building runs ------------------
+// Arkiv caps a lifetime at ~182 days, so the long-lived records (maintenance, bills, sales,
+// daily totals) are extended to the maximum again once they get within 30 days of expiring.
+// If the building stops paying for them, they lapse: storage has an owner and a cost.
+const KEEP = [Maintenance, Bill, Sale, DailyOutput]
+const KEEP_MARGIN_BLOCKS = BigInt(Number(process.env.ARKIV_KEEP_MARGIN_DAYS || 30)) * 24n * 1800n // days of 2 s blocks
+let keeperLast = null
+
+export async function runKeeper() {
+  const head = await read(() => publicClient.getBlockNumber({ cacheTime: 0 }))
+  let extended = 0
+  for (const schema of KEEP) {
+    const page = await read(() =>
+      ours(publicClient.select({ $key: true }).from(schema).where(and(eq("building", BUILDING), lte("$expiresAt", u64(head + KEEP_MARGIN_BLOCKS)))))
+        .limit(20)
+        .fetch(),
+    )
+    if (!page.entities.length) continue
+    const extensions = page.entities.map((e) => ({ entityKey: e.$key, expiration: ExpirationTime.max() }))
+    await write(`keeper ${schema.name}`, (tx) => walletClient.executeBatch({ extensions }, tx), { ops: extensions.length })
+    extended += extensions.length
+  }
+  keeperLast = { at: new Date().toISOString(), extended }
+  return keeperLast
+}
+
+route("POST", "/keeper", () => runKeeper())
+addHealth(async () => ({ keeper: keeperLast }))
+
+const KEEPER_EVERY_MS = 6 * 3600 * 1000
+setTimeout(() => runKeeper().catch((e) => console.warn("keeper failed:", e?.message)), 60_000)
+setInterval(() => runKeeper().catch((e) => console.warn("keeper failed:", e?.message)), KEEPER_EVERY_MS).unref()

@@ -151,6 +151,25 @@ for (const flat of ["A", "B", "C"]) {
   await step(`write bill flat ${flat}`, () => post("/bill", { flat, month, kwh: 41.5, solar_pct: 72, usdc: 0.62, arc_tx: "0x" + "44".repeat(32) }))
 }
 
+// ---- the queue: posts that arrive together are written one by one, never on the same nonce --
+await step("3 writes posted at once all land (serialized queue)", async () => {
+  const rs = await Promise.all([
+    post("/maintenance", { date: today, title: "Inverter check (smoke)", details: "Concurrent write 1" }),
+    post("/maintenance", { date: today, title: "Wiring check (smoke)", details: "Concurrent write 2" }),
+    post("/decision", { decision_id: decisionId + 1, kind: "ask", mode: "ai", day: today, summary: "Concurrent write 3" }),
+  ])
+  expect(new Set(rs.map((r) => r.txHash)).size === 3, "three distinct transactions")
+  return { note: rs.map((r) => r.txHash.slice(0, 8)).join(" ") }
+})
+await step("heartbeats posted at once share one write (coalesced)", async () => {
+  const hb = (pump) => post("/heartbeat", { mode: "plan", flats: { A: "solar", B: "grid", C: "grid" }, pump, solar_w: 1, used_w: 1 })
+  const rs = await Promise.all([hb(false), hb(true), hb(false), hb(true)])
+  const txs = new Set(rs.map((r) => r.txHash))
+  expect(rs.every((r) => r.key === hb1?.key), "same heartbeat entity")
+  expect(txs.size < rs.length, `${txs.size} txs for ${rs.length} heartbeats`)
+  return { note: `${rs.length} posts -> ${txs.size} txs` }
+})
+
 // ---- reads, exactly as the screens make them ----------------------------------------------
 await step("read decisions (web: History, Home)", async () => {
   const rows = await reads.decisions(ctx, 5)
@@ -211,7 +230,7 @@ await step("trust: a stranger's entity with our tags is ignored", async () => {
 })
 
 // ---- summary -----------------------------------------------------------------------------
-const isWrite = (r) => r.step.startsWith("write") || r.step.startsWith("renew") || r.step.includes("->")
+const isWrite = (r) => r.step.startsWith("write") || r.step.startsWith("renew") || r.step.includes("-> ")
 const writes = results.filter((r) => r.ok && isWrite(r))
 const readsDone = results.filter((r) => r.ok && r.step.startsWith("read"))
 const avg = (xs) => (xs.length ? Math.round(xs.reduce((a, r) => a + r.ms, 0) / xs.length) : 0)

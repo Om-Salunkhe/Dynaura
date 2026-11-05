@@ -88,12 +88,19 @@ export function maintenance(ctx, limit = 20) {
   return withBackoff(async () => {
     const page = await scoped(
       ctx,
-      ctx.client.select({ $key: true, date: true, title: true, details: true, arc_tx: true }).from(Maintenance).where(eq("building", ctx.building)),
+      ctx.client.select({ $key: true, date: true, at: true, title: true, details: true, arc_tx: true }).from(Maintenance).where(eq("building", ctx.building)),
     )
-      .orderBy(desc("date"))
+      .orderBy(desc("at"))
       .limit(limit)
       .fetch();
-    return page.entities.map((e) => ({ key: e.$key, date: e.date.value, title: e.title.value, text: text(e.details.value), arcTx: e.arc_tx?.value }));
+    return page.entities.map((e) => ({
+      key: e.$key,
+      date: e.date.value,
+      at: e.at ? Number(e.at.value) : null,
+      title: e.title.value,
+      text: text(e.details.value),
+      arcTx: e.arc_tx?.value,
+    }));
   });
 }
 

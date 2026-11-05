@@ -86,7 +86,8 @@ export const CleaningJob = defineSchema("dynaura.cleaning_job", {
 // Maintenance history of the solar asset. Lives ~6 months (extend).
 export const Maintenance = defineSchema("dynaura.maintenance", {
   building: str().indexed(),
-  date: str().indexed(),
+  date: str().indexed(), // YYYY-MM-DD
+  at: u64().optional(), // unix seconds: orders several visits on one day (sortable, not indexed)
   title: str(),
   details: bytes(),
   arc_tx: str().optional(),
