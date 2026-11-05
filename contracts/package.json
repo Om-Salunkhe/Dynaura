@@ -1,0 +1,11 @@
+{
+  "name": "dynaura-contracts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "solc": "0.8.26"
+  }
+}

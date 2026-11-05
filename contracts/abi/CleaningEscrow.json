@@ -1,0 +1,400 @@
+[
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "usdc_",
+    "type": "address"
+   },
+   {
+    "internalType": "address",
+    "name": "oracle_",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "nonpayable",
+  "type": "constructor"
+ },
+ {
+  "inputs": [],
+  "name": "BadStatus",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint16",
+    "name": "outputPct",
+    "type": "uint16"
+   }
+  ],
+  "name": "NotClean",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NotOracle",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NotOwner",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "TooEarly",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "TooLate",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "TransferFailed",
+  "type": "error"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "cleaner",
+    "type": "address"
+   }
+  ],
+  "name": "JobAccepted",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "payer",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "fee",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint64",
+    "name": "deadline",
+    "type": "uint64"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint16",
+    "name": "outputBefore",
+    "type": "uint16"
+   }
+  ],
+  "name": "JobOpened",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "cleaner",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "fee",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint16",
+    "name": "outputAfter",
+    "type": "uint16"
+   },
+   {
+    "indexed": false,
+    "internalType": "bytes32",
+    "name": "proof",
+    "type": "bytes32"
+   }
+  ],
+  "name": "JobPaid",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "payer",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "fee",
+    "type": "uint256"
+   }
+  ],
+  "name": "JobRefunded",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": false,
+    "internalType": "address",
+    "name": "oracle",
+    "type": "address"
+   }
+  ],
+  "name": "OracleChanged",
+  "type": "event"
+ },
+ {
+  "inputs": [],
+  "name": "RELEASE_PCT",
+  "outputs": [
+   {
+    "internalType": "uint16",
+    "name": "",
+    "type": "uint16"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   }
+  ],
+  "name": "accept",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "name": "jobs",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "payer",
+    "type": "address"
+   },
+   {
+    "internalType": "address",
+    "name": "cleaner",
+    "type": "address"
+   },
+   {
+    "internalType": "uint96",
+    "name": "fee",
+    "type": "uint96"
+   },
+   {
+    "internalType": "uint64",
+    "name": "deadline",
+    "type": "uint64"
+   },
+   {
+    "internalType": "uint16",
+    "name": "outputBefore",
+    "type": "uint16"
+   },
+   {
+    "internalType": "uint16",
+    "name": "outputAfter",
+    "type": "uint16"
+   },
+   {
+    "internalType": "enum CleaningEscrow.Status",
+    "name": "status",
+    "type": "uint8"
+   },
+   {
+    "internalType": "bytes32",
+    "name": "proof",
+    "type": "bytes32"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "nextJobId",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint96",
+    "name": "fee",
+    "type": "uint96"
+   },
+   {
+    "internalType": "uint64",
+    "name": "deadline",
+    "type": "uint64"
+   },
+   {
+    "internalType": "uint16",
+    "name": "outputBefore",
+    "type": "uint16"
+   }
+  ],
+  "name": "openJob",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "oracle",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "owner",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   }
+  ],
+  "name": "refund",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "internalType": "uint16",
+    "name": "outputAfter",
+    "type": "uint16"
+   },
+   {
+    "internalType": "bytes32",
+    "name": "proof",
+    "type": "bytes32"
+   }
+  ],
+  "name": "release",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "oracle_",
+    "type": "address"
+   }
+  ],
+  "name": "setOracle",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "usdc",
+  "outputs": [
+   {
+    "internalType": "contract IERC20",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ }
+]
