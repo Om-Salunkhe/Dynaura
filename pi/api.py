@@ -3,12 +3,15 @@
 Run from the pi/ folder:  python api.py
 Then open http://<pi>:8000/api/state
 """
+import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 import config
 from hw import load_hardware
@@ -53,6 +56,24 @@ def health():
 @app.get("/api/state")
 def state():
     return App.loop.state
+
+
+@app.get("/api/stream")
+async def stream(request: Request):
+    """Server-Sent Events: the live state once a second.
+    In the browser: new EventSource("http://<pi>:8000/api/stream")"""
+
+    async def events():
+        last_ts = None
+        while not await request.is_disconnected():
+            st = App.loop.state
+            if st and st.get("ts") != last_ts:
+                last_ts = st["ts"]
+                yield f"data: {json.dumps(st)}\n\n"
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/api/summaries")
