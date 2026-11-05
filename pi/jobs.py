@@ -113,11 +113,19 @@ class PlanScheduler:
         if not self.brain.plan or self.brain.plan.get("date") != today:
             self._try("today")
         last_day = None
+        stale_day = None
         while not self._stop.wait(60):
             now = datetime.now()
             if now.hour == config.PLAN_HOUR and last_day != now.date():
                 last_day = now.date()
                 self._try("tomorrow")
+            # Past midnight with no plan for today (yesterday's evening plan never ran): ask 0G for
+            # today once, instead of running yesterday's plan again.
+            plan = self.brain.plan
+            today = now.strftime("%Y-%m-%d")
+            if plan and plan.get("date", today) < today and stale_day != today:
+                stale_day = today
+                self._try("today")
 
     def start(self) -> None:
         threading.Thread(target=self._run, name="plan-scheduler", daemon=True).start()
