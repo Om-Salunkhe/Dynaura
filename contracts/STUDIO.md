@@ -28,23 +28,26 @@ Checked against the live RPC and https://docs.arc.io:
 | Gas | The minimum base fee is **20 gwei**. A transaction with `maxFeePerGas` under 20 gwei is *silently dropped*. |
 | Faucet | https://faucet.circle.com gives 20 USDC per address every 2 hours. It needs a reCAPTCHA and no account. |
 
-## Our flow (the prompts are in `studio/`)
+## Our flow (the prompts are in `studio/`, the steps in `studio/run.sh`)
 
-1. `studio/01-build-and-test.md` generates CleaningEscrow, ShopTrade and SolarBilling from our spec (with our drafts as read-only context), writes the Foundry tests and runs them. It does not deploy.
-2. We pull the result, review it against our checklist (SafeERC20, `nonReentrant`, the oracle = the Pi wallet, no `payable`, 6-decimal USDC) and run the tests locally. Any fix goes **back through Studio** (round-trip `--file`), so the deployed code is the code in Studio.
-3. `studio/02-deploy.md` deploys all three to Arc testnet with the constructor arguments and reads them back.
-4. `studio/03-console.md` has Studio build a small escrow console as the app's frontend in the Studio project, connected to the deployed contract. Our main app (`web/`) uses the same addresses.
-
-The commands, from `contracts/`:
+1. **`build`:** `01-build-and-test.md` has Studio write CleaningEscrow, ShopTrade and SolarBilling from our spec, using the first drafts as read-only context. It writes Foundry tests and runs them, without deploying.
+2. **`accept`:** our own 50 Foundry tests (`test/*.t.sol`), written independently from the same spec, go into the Studio workspace as acceptance tests (`01b-acceptance.md`). Studio must make every suite pass without weakening any check.
+3. **`pull`:** Studio's contracts and tests come back to `studio/out/pulled` and are diffed against `src/`. We review them (SafeERC20, `nonReentrant`, the oracle = the Pi wallet, no `payable`, 6-decimal USDC). Any fix goes **back through Studio**, so the code Studio deploys is the code in `src/`.
+4. **`deploy`:** `02-deploy.md` deploys all three to Arc testnet with the constructor arguments and reads them back.
+5. **`console`:** `03-console.md` has Studio build a small escrow console as the app's own frontend, connected to the deployed contract. Our main app (`web/`) uses the same addresses.
+6. `scripts/e2e.py` then runs the escrow and a split bill on Arc testnet against those addresses and saves the transaction links.
 
 ```bash
-arc-studio run --prompt-file studio/01-build-and-test.md --session dynaura --output json \
-  --file CleaningEscrow.sol --file ShopTrade.sol --file SolarBilling.sol
-arc-studio pull --session dynaura --out studio/out --paths "contracts/**" "test/**"
-arc-studio run --prompt-file studio/02-deploy.md --session dynaura --output json
-arc-studio deployments --session dynaura --json
-arc-studio run --prompt-file studio/03-console.md --session dynaura --output json
+contracts/studio/run.sh whoami
+contracts/studio/run.sh build      # 5-20 min per turn; don't interrupt it (that cancels the turn)
+contracts/studio/run.sh accept
+contracts/studio/run.sh pull
+contracts/studio/run.sh deploy
+contracts/studio/run.sh console
+contracts/studio/run.sh status     # deployments + app URL
 ```
+
+Each turn's result document goes to `studio/out/<step>.json`, which is ignored by git.
 
 ## Human steps (Pawan, about 5 minutes in the browser)
 
