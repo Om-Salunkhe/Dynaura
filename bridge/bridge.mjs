@@ -3,8 +3,10 @@
 import { createServer } from "node:http"
 import { createPublicClient, createWalletClient } from "@arkiv-network/sdk"
 import { rabdi } from "@arkiv-network/sdk/chains"
-import { http, isHex } from "viem"
+import { formatEther, http, isHex } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
+import { withBackoff } from "./retry.mjs"
+import { createWriter } from "./writer.mjs"
 
 const PORT = Number(process.env.ARKIV_BRIDGE_PORT || 5100)
 const BUILDING = process.env.BUILDING_ID || "sunrise-apartments"
@@ -30,23 +32,62 @@ const transport = () => http(customRpc, { retryCount: 2, timeout: 20_000 })
 export const publicClient = createPublicClient({ chain, transport: transport(), pollingInterval: 1000 })
 export const walletClient = createWalletClient({ chain, transport: transport(), account, pollingInterval: 1000 })
 
+// Every write goes through this one queue (see writer.mjs); reads back off on 429s.
+const writer = createWriter({ publicClient, address: account.address })
+export const write = writer.enqueue
+export const read = withBackoff
+
 const routes = new Map() // "POST /readings" -> async (body, url) => result
 
 export function route(method, path, fn) {
   routes.set(`${method} ${path}`, fn)
 }
 
+// Extra lines for /health from the record routes (e.g. the heartbeat entity)
+const healthParts = []
+export const addHealth = (fn) => healthParts.push(fn)
+
+const LOW_TGLM = 0.05
+
 route("GET", "/health", async () => {
-  const block = await publicClient.getBlockNumber()
-  const balance = await publicClient.getBalance({ address: account.address })
-  return { ok: true, building: BUILDING, wallet: account.address, chain: chain.id, block: block.toString(), tGLM: balance.toString() }
+  const [block, balance] = await Promise.all([
+    read(() => publicClient.getBlockNumber({ cacheTime: 0 })),
+    read(() => publicClient.getBalance({ address: account.address })),
+  ])
+  const writes = writer.stats()
+  const warnings = []
+  if (Number(formatEther(balance)) < LOW_TGLM) warnings.push(`wallet low: ${formatEther(balance)} tGLM, top up at hub.arkiv.network/faucet`)
+  if (writes.uncertain.length) warnings.push(`${writes.uncertain.length} write(s) with unknown outcome, not resent: check them on the explorer`)
+  if (writes.queued > writes.max_queue * 0.8) warnings.push(`write queue almost full (${writes.queued}/${writes.max_queue})`)
+  if (writes.in_flight?.for_s > 90) warnings.push(`write "${writes.in_flight.label}" in flight for ${writes.in_flight.for_s}s`)
+  const extra = Object.assign({}, ...(await Promise.all(healthParts.map((f) => f(block).catch((e) => ({ health_error: String(e?.message || e) }))))))
+  return {
+    ok: warnings.length === 0,
+    building: BUILDING,
+    wallet: account.address,
+    chain: chain.id,
+    block: block.toString(),
+    tGLM: formatEther(balance),
+    explorer: `https://rabdi.explorer.arkiv.network/address/${account.address}`,
+    warnings,
+    writes,
+    ...extra,
+  }
 })
 
 async function readBody(req) {
   const chunks = []
-  for await (const c of req) chunks.push(c)
-  const raw = Buffer.concat(chunks).toString() || "{}"
-  return JSON.parse(raw)
+  let size = 0
+  for await (const c of req) {
+    size += c.length
+    if (size > 1_000_000) throw Object.assign(new Error("body over 1 MB"), { status: 413 })
+    chunks.push(c)
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString() || "{}")
+  } catch {
+    throw Object.assign(new Error("body is not JSON"), { status: 400 })
+  }
 }
 
 const json = (v) => JSON.stringify(v, (_, x) => (typeof x === "bigint" ? x.toString() : x))
@@ -64,8 +105,11 @@ const server = createServer(async (req, res) => {
     const out = await fn(body, url)
     res.writeHead(200).end(json(out))
   } catch (e) {
-    console.error(`${req.method} ${url.pathname} failed:`, e?.shortMessage || e?.message || e)
-    res.writeHead(500).end(json({ error: String(e?.shortMessage || e?.message || e) }))
+    const error = String(e?.shortMessage || e?.message || e).split("\n")[0]
+    console.error(`${req.method} ${url.pathname} failed:`, error)
+    // 503 = queue full (try later), 502 = sent but outcome unknown (do NOT resend), 500 = failed
+    const status = typeof e?.status === "number" && e.status >= 400 && e.status < 600 ? e.status : 500
+    res.writeHead(status).end(json({ error, ...(e?.txHash ? { txHash: e.txHash } : {}) }))
   }
 })
 

@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node --env-file=../.env main.mjs",
-    "smoke": "node --env-file-if-exists=../.env smoke.mjs"
+    "smoke": "node --env-file-if-exists=../.env smoke.mjs",
+    "test": "node --test writer.test.mjs"
   },
   "dependencies": {
     "@arkiv-network/sdk": "1.0.1",
