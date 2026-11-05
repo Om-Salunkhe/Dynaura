@@ -4,6 +4,7 @@ Run from the pi/ folder:  python api.py
 Then open http://<pi>:8000/api/state
 """
 import asyncio
+import atexit
 import json
 import logging
 from contextlib import asynccontextmanager
@@ -33,15 +34,21 @@ class App:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     App.hw = load_hardware(config.HW)
+    App.hw.safe_stop()                  # start from a known state: everything on grid
+    atexit.register(App.hw.safe_stop)   # last line of defence if the process dies
     App.store = Store(config.DB_PATH)
     App.signer = DeviceSigner(config.DEVICE_PRIVATE_KEY)
     App.loop = MeterLoop(App.hw, App.store, App.signer)
     App.loop.tick()
     App.loop.start()
     log.info("Dynaura up: hw=%s device=%s", config.HW, App.signer.address)
-    yield
-    App.loop.stop()
-    App.store.close()
+    try:
+        yield
+    finally:
+        App.loop.stop()
+        App.loop.safe_stop("api shutting down")
+        App.hw.close()
+        App.store.close()
 
 
 app = FastAPI(title="Dynaura Pi API", lifespan=lifespan)

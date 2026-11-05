@@ -11,6 +11,8 @@ from store import Store
 
 log = logging.getLogger("dynaura.meter")
 
+MAX_FAILURES = 3  # this many failed reads in a row -> safe stop
+
 
 class MeterLoop:
     def __init__(self, hw: Hardware, store: Store, signer: DeviceSigner | None = None, interval: float = 1.0):
@@ -23,6 +25,8 @@ class MeterLoop:
         self._acc: dict[str, dict] = {}
         self._summary_listeners: list[Callable[[list[dict]], None]] = []
         self._stop = threading.Event()
+        self.failures = 0
+        self.stopped_safe = False
         self._thread: threading.Thread | None = None
 
     # ---- listeners (Arkiv queue, 0G planner hook in later phases) -------
@@ -92,12 +96,29 @@ class MeterLoop:
                 log.exception("summary listener failed")
         return out
 
+    def safe_stop(self, reason: str) -> None:
+        """All flats to grid, pump off. Never raises."""
+        try:
+            self.hw.safe_stop()
+        except Exception:
+            log.exception("safe_stop itself failed")
+        self.stopped_safe = True
+        self.state = {**self.state, "safe_stop": {"active": True, "reason": reason, "ts": time.time()}}
+        log.warning("SAFE STOP: %s", reason)
+
     # ---- thread ----------------------------------------------------------
     def _run(self) -> None:
         last_prune = 0.0
         while not self._stop.is_set():
             started = time.monotonic()
-            self.tick()
+            try:
+                self.tick()
+                self.failures = 0
+            except Exception:
+                self.failures += 1
+                log.exception("meter read failed (%d in a row)", self.failures)
+                if self.failures >= MAX_FAILURES and not self.stopped_safe:
+                    self.safe_stop("meter read failed")
             if time.time() - last_prune > 3600:
                 self.store.prune()
                 last_prune = time.time()
