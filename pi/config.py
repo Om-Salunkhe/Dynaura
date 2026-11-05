@@ -51,6 +51,9 @@ ZG_STORAGE_CLI = os.getenv("ZG_STORAGE_CLI", "0g-storage-client").strip()
 ZG_RPC = os.getenv("ZG_RPC", "https://evmrpc-testnet.0g.ai").strip()
 ZG_INDEXER = os.getenv("ZG_INDEXER", "https://indexer-storage-testnet-turbo.0g.ai").strip()
 ZG_PRIVATE_KEY = os.getenv("ZG_PRIVATE_KEY", "").strip()
+# EpisodeRegistry on 0G Chain (zerog/deployments.json). The ZG_PRIVATE_KEY wallet must be its device.
+ZG_REGISTRY = os.getenv("ZG_REGISTRY", "").strip()
+ZG_CHAIN_ID = int(os.getenv("ZG_CHAIN_ID", "16602") or 16602)
 
 # Arkiv bridge (bridge/bridge.mjs)
 ARKIV_BRIDGE_URL = os.getenv("ARKIV_BRIDGE_URL", "http://127.0.0.1:5100").strip()

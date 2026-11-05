@@ -56,6 +56,11 @@ class Store:
         self._lock = threading.Lock()
         with self._lock:
             self._db.executescript(SCHEMA)
+            # 0G Chain index of each episode (EpisodeRegistry), added to existing databases too
+            cols = {r[1] for r in self._db.execute("PRAGMA table_info(decisions)")}
+            for col, kind in (("episode_n", "INTEGER"), ("episode_tx", "TEXT")):
+                if col not in cols:
+                    self._db.execute(f"ALTER TABLE decisions ADD COLUMN {col} {kind}")
             self._db.commit()
 
     def add_readings(self, ts: float, rows: list[tuple[str, float, float, float, str | None]]) -> None:
@@ -102,7 +107,7 @@ class Store:
             return cur.lastrowid
 
     def set_decision(self, decision_id: int, **fields) -> None:
-        allowed = {"storage_root", "arkiv_key", "summary"}
+        allowed = {"storage_root", "arkiv_key", "summary", "episode_n", "episode_tx"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if not sets:
             return
@@ -130,6 +135,11 @@ class Store:
         args.append(limit)
         with self._lock:
             return [self._decision(r) for r in self._db.execute(q, args)]
+
+    def decision(self, decision_id: int) -> dict | None:
+        with self._lock:
+            row = self._db.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchone()
+        return self._decision(row) if row else None
 
     def latest(self, kind: str) -> dict | None:
         rows = self.decisions(kind, 1)
