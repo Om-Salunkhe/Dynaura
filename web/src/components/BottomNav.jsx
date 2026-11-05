@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import Icon from "./Icon.jsx";
 
 export default function BottomNav({ items }) {
+  if (items.length < 2) return null;
   return (
     <nav
       aria-label="Main"
@@ -12,7 +13,7 @@ export default function BottomNav({ items }) {
         <NavLink
           key={it.to}
           to={it.to}
-          end={it.to === "/"}
+          end={it.end ?? it.to === "/"}
           className={({ isActive }) =>
             `flex flex-col items-center justify-center gap-[3px] rounded-[18px] text-[11px] font-semibold ${
               isActive ? "bg-btn text-btn-ink shadow-lg" : "text-muted hover:text-ink"
