@@ -6,3 +6,4 @@ An AI coding session (Claude Code) helped with the Arc side. Everything it produ
 |---|---|---|
 | Fri 01:00 | Researched Arc Studio from the official sources (studio.arc.io, its llms.txt, the `@circle-fin/arc-studio-cli` package, docs.arc.io) and the Arc testnet facts (checked against the live RPC). Wrote `contracts/STUDIO.md`. | Pawan signs in to Studio, authorizes the CLI and uses the faucet |
 | Fri 01:00 | Drafted the Arc Studio prompts in `contracts/studio/` that describe our three contracts, so Studio generates, tests and deploys them | Team reviews the spec |
+| Fri 01:30 | Wrote the v2 reference contracts (`src/`) and 50 Foundry tests, including fuzzing, to check Studio's output against. Added an exact-amount USDC approval to `web/src/lib/arc.js`. Tested a proposed `pi/arc.py` patch against the v2 contracts on a local anvil chain. | Om reviews and applies the `pi/` patch; the final contract code comes from Arc Studio |
