@@ -15,7 +15,7 @@ Last updated: Fri 6 Nov, 01:25 IST. Decisions taken so far are in `docs/OPEN-QUE
 
 | # | Requirement | Where / evidence | Owner | Status |
 |---|---|---|---|---|
-| E1 | Submit on the ETHGlobal form before **Sat 09:00 IST**: name, short description, "how it's made", and the 3 partners (0G, Arc, Arkiv) | Text drafts go in `docs/submission/` | Pawan (form), dy-demo (texts) | todo |
+| E1 | Submit on the ETHGlobal form before **Sat 09:00 IST**: name, short description, "how it's made", and the 3 partners (0G, Arc, Arkiv) | Drafts in `docs/submission/ETHGLOBAL.md` (⟨bracketed⟩ parts wait on Q1/Q3/Studio) | Pawan (form), dy-demo (texts) | partial |
 | E2 | Choose the **Finalist + Partner prizes** path. It means a live **4 min demo + 3 min Q&A** in a judging room, 09:30–12:30 | Script: `docs/DEMO-SCRIPT.md` | Pawan | todo |
 | E3 | Demo video **2–4 min** (uploads outside that range are rejected), ≥720p. No speed-ups, no AI voice-over, no phone-filmed screen, no music-plus-captions instead of talking. Intro under 20 s, at most 4 bullets per slide | Script: `docs/VIDEO-SCRIPT.md`. **0G caps its video at 3 min, so aim for 2:30–2:55** | Pawan (record), dy-demo (script) | todo |
 | E4 | Public GitHub repo with an open-source licence | `Om-Salunkhe/Dynaura` is public; `LICENSE` is MIT | Om | done |
@@ -43,7 +43,7 @@ $5,000: 1st $2,500, 2nd $1,500, and **$1,000 for the best build on real hardware
 
 | # | Requirement | Where / evidence | Owner | Status |
 |---|---|---|---|---|
-| G6 | Project name and short description | `docs/submission/` | dy-demo | todo |
+| G6 | Project name and short description | `docs/submission/ETHGLOBAL.md` | dy-demo | done |
 | G7 | Public GitHub repo with **README + setup instructions** | Root `README.md` (SIM quick-start tested), `deploy/README.md` | dy-demo | partial |
 | G8 | Demo video **under 3 min** and a **live demo link** | Video ≤ 2:55. Live link: the Vercel app (Q22) | Pawan, dy-web | todo |
 | G9 | **Contract deployment addresses** | Arc contracts (`contracts/deployments.json`, empty now) and `EpisodeRegistry` on 0G Galileo (decided: build it, Q3) | dy-arc, dy-0g | todo |
@@ -64,7 +64,7 @@ Every Arc prize requires **Arc Studio as the starting point**. Recommended bount
 | A5 | Video + presentation covering the core functions and the use of **Arc Studio and Circle's developer tools**, with detailed docs | Video + README Arc section | dy-demo, Pawan | todo |
 | A6 | Link to the GitHub repo | Submission form | Pawan | todo |
 | A7 | Contracts **deployed** on Arc testnet (chain 5042002), addresses + explorer links | `contracts/deployments.json`, `.env`, `web/.env` | dy-arc | todo |
-| A8 | **State which bounty** in the submission text | `docs/submission/` | Pawan, dy-demo | todo |
+| A8 | **State which bounty** in the submission text | `docs/submission/ETHGLOBAL.md` names it (needs Pawan's OK, Q17) | Pawan, dy-demo | partial |
 | A9 | Bonus: contracts **reusable by other builders** | Say so in the README: `CleaningEscrow` is a generic "pay when a device proves the job is done" escrow | dy-demo | todo |
 
 ## 4. Arkiv: "Build on Arkiv (from scratch)"
