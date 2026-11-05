@@ -7,7 +7,7 @@ Partners (3 slots): **0G**, **Arc**, **Arkiv**. ENS is display only and not ente
 **Status:** `done` · `partial` · `todo` · `check` (claimed, not yet verified on the real setup) · `blocked`.
 **Owners:** Om (Pi core), Devang (hardware), Pawan (human: accounts, forms, recording), and the AI sessions `dy-arc`, `dy-arkiv`, `dy-web` and `dy-demo`. The **manager** merges into `main`.
 
-Last updated: Fri 6 Nov, 01:10 IST.
+Last updated: Fri 6 Nov, 01:25 IST. Decisions taken so far are in `docs/OPEN-QUESTIONS.md` (top).
 
 ---
 
@@ -23,7 +23,7 @@ Last updated: Fri 6 Nov, 01:10 IST.
 | E6 | Everything written after **Thu 21:00 IST** (from scratch). Public libraries and starter kits are fine | First commit: Thu 21:42 IST | everyone | check |
 | E7 | **AI-usage notes**: where and how AI was used. If we work from specs, the spec files, prompts and plans must be in the repo | `docs/ai-usage/` (one file per session + a team summary) | dy-demo (+ each session keeps its own log) | todo |
 | E8 | The team can explain every design decision in Q&A (projects built "entirely by AI" can be ruled out) | Q&A prep sheet in `docs/DEMO-SCRIPT.md` | Om, Devang, Pawan | todo |
-| E9 | README a judge can follow: problem, how it works, setup, live links, team | Root `README.md` | dy-demo | todo |
+| E9 | README a judge can follow: problem, how it works, setup, live links, team | Root `README.md`: drafted. SIM quick-start tested on a clean copy. Links, addresses, proofs and handles are still TBD | dy-demo | partial |
 
 ## 2. 0G: "Physical AI: Agents with a Body" (from scratch)
 
@@ -33,7 +33,7 @@ $5,000: 1st $2,500, 2nd $1,500, and **$1,000 for the best build on real hardware
 
 | # | Requirement | Where / evidence | Owner | Status |
 |---|---|---|---|---|
-| G1 | A **0G call inside the decision loop** (decision model) | `pi/planner.py` → `pi/zg.py` (0G Compute Router, `verify_tee`). **The hero dust step does not call 0G yet**, see OPEN-QUESTIONS Q1 | Om | partial |
+| G1 | A **0G call inside the decision loop** (decision model) | `pi/planner.py` → `pi/zg.py` (0G Compute Router, `verify_tee`). **The hero dust step does not call 0G yet**; Om adds the `panel_dirty` check (Q1, decided) | Om | partial |
 | G2 | An **episode log on 0G Storage** with a **request ID per decision** | `pi/og_storage.py` uploads one JSON per decision with the Go CLI. Needs the CLI on the Pi and a funded `ZG_PRIVATE_KEY`. Failed uploads are not retried (Q4) | Om | partial |
 | G3 | A **replayable simulation** or a **live hardware demo at the 0G booth** | SIM mode exists (`DYNAURA_HW=sim`). `pi/hw/real.py` is still a stub (Q12). Book a booth slot | Devang (hardware), Pawan (booth slot) | partial |
 | G4 | A **safe stop** if 0G is unreachable. A fallback that fakes the decision disqualifies | `pi/brain.py` `_no_ai`: all flats to grid, pump off, logged as `no-ai`, uploaded and written to Arkiv. Has to be shown live (Q5) | Om | check |
@@ -44,9 +44,9 @@ $5,000: 1st $2,500, 2nd $1,500, and **$1,000 for the best build on real hardware
 | # | Requirement | Where / evidence | Owner | Status |
 |---|---|---|---|---|
 | G6 | Project name and short description | `docs/submission/` | dy-demo | todo |
-| G7 | Public GitHub repo with **README + setup instructions** | Root `README.md`, `deploy/README.md` | dy-demo | todo |
+| G7 | Public GitHub repo with **README + setup instructions** | Root `README.md` (SIM quick-start tested), `deploy/README.md` | dy-demo | partial |
 | G8 | Demo video **under 3 min** and a **live demo link** | Video ≤ 2:55. Live link: the Vercel app (Q22) | Pawan, dy-web | todo |
-| G9 | **Contract deployment addresses** | Arc contracts (`contracts/deployments.json`, empty now). A 0G Chain contract only if we build `EpisodeRegistry` (Q3) | dy-arc | todo |
+| G9 | **Contract deployment addresses** | Arc contracts (`contracts/deployments.json`, empty now) and `EpisodeRegistry` on 0G Galileo (decided: build it, Q3) | dy-arc, dy-0g | todo |
 | G10 | Team names and contacts (**Telegram and X**) | README "Team" section | Pawan (collect handles) | todo |
 | G11 | README table: **0G request ID → 0G Storage root** for real decisions (plan, dust check, no-AI, Ask Dyna), with explorer links | Export from `GET /api/decisions` after a real run | dy-demo (after Om's live run) | todo |
 | G12 | Optional extra track "Build with 0G PC": one sentence on **what breaks if 0G is removed** | README 0G section | dy-demo | todo |
@@ -60,7 +60,7 @@ Every Arc prize requires **Arc Studio as the starting point**. Recommended bount
 | A1 | **Built in Arc Studio**: include the **Studio project URL** | `contracts/deployments.json` → `studioProject` (empty). The contracts were written locally (Q16) | dy-arc, Pawan (Studio account) | todo |
 | A2 | **Show Studio in the demo** (video and live) | Video shot 6 in `docs/VIDEO-SCRIPT.md` | Pawan, dy-demo | todo |
 | A3 | **Functional MVP**: a working frontend **and** backend | `web/` (React) + `pi/` (FastAPI) + contracts on Arc testnet | Om, dy-web | partial |
-| A4 | **Architecture diagram** | `docs/architecture.md` is ASCII. Needs an image in the README | dy-demo | todo |
+| A4 | **Architecture diagram** | Mermaid diagram in the README (GitHub renders it); ASCII in `docs/architecture.md` | dy-demo | done |
 | A5 | Video + presentation covering the core functions and the use of **Arc Studio and Circle's developer tools**, with detailed docs | Video + README Arc section | dy-demo, Pawan | todo |
 | A6 | Link to the GitHub repo | Submission form | Pawan | todo |
 | A7 | Contracts **deployed** on Arc testnet (chain 5042002), addresses + explorer links | `contracts/deployments.json`, `.env`, `web/.env` | dy-arc | todo |

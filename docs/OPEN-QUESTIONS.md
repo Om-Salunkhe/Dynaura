@@ -4,6 +4,19 @@ Each item is a decision for Om and Pawan. It compares the planning docs (the 0G,
 
 Priority: **P0** changes the hero demo or a prize requirement. **P1** is visible to judges. **P2** is docs only.
 
+## Decided so far (Pawan, Fri 01:15 IST)
+
+| # | Decision | Owner |
+|---|---|---|
+| Q1 | 0G confirms `panel_dirty` before an escrow opens | Om |
+| Q2 | Link the 0G request ID and Storage root into the cleaning record | `dy-0g` coordinates; `dy-arkiv` adds the Arkiv fields, `dy-arc` the escrow fields (or Om) |
+| Q3 | **Build** `EpisodeRegistry` on 0G Galileo | `dy-0g` |
+| Q11 | Shorten the hero timing for the demo | the team |
+| Q12 | Real-hardware dust calibration | Devang, Om |
+| Q22 | Fix the Vercel app: Pi URL set at runtime, a mixed-content banner, a visible connection state, and `VITE_ADMIN_KEY` out of the bundle (the admin types the key at runtime) | `dy-web` |
+
+Still open: everything else in the table below.
+
 | # | Question | Pri | Recommended answer | Decides | Effort |
 |---|---|---|---|---|---|
 | Q1 | Who flags the dirty panel, 0G or the meter? | P0 | Meter triggers, **0G confirms** before any money moves | Om | ~1 h |
@@ -105,7 +118,7 @@ Priority: **P0** changes the hero demo or a prize requirement. **P1** is visible
 ### Q22. The Vercel app can't reach the Pi
 - **Plan:** "the laptop dashboard runs locally because the https host can't read the http Pi."
 - **Code:** `web/vercel.json` deploys to Vercel, and `VITE_API_URL` is plain http (`localhost:8000` or `dynaura.local:8000`). From an https page the browser blocks those calls, and the app **silently shows demo data** (`web/src/lib/api.js:34-80`). Also, `VITE_ADMIN_KEY` is built into the public bundle.
-- **Recommended:** the live demo runs the web app **on the laptop** (`npm run dev` or `vite preview` on http://localhost) pointing at the Pi's LAN IP. The public Vercel link shows the Arkiv and Arc reads (those work over https) plus clearly labelled demo data for the Pi parts. **Don't set `VITE_ADMIN_KEY` on Vercel.** (A cloudflared https tunnel to the Pi would also work, but it adds a network dependency on stage.)
+- **Recommended:** the live demo runs the web app **on the laptop** (`npm run dev` or `vite preview` on http://localhost) pointing at the Pi's LAN IP. The public Vercel link shows the Arkiv and Arc reads (those work over https) plus clearly labelled demo data for the Pi parts. **Don't set `VITE_ADMIN_KEY` on Vercel.** (`deploy/README.md` §4 describes a cloudflared https tunnel to the Pi. It works, but it adds a network dependency on stage, and with the admin key in the bundle it opens the admin routes to the internet.)
 - **Owners:** dy-web, Pawan.
 
 ## P1: visible to judges
