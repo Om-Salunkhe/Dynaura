@@ -29,7 +29,10 @@ export default function PanelHealth() {
   const hero = useHero(live);
   const pct = hero.pct != null ? Math.round(hero.pct) : null;
   const dusty = pct != null && pct < hero.dustPct;
-  const [kicker, tone, text] = HEADLINE[hero.stage] || HEADLINE.clean;
+  const [kicker, tone, text] =
+    hero.stage === "dusty" && !hero.flagged
+      ? ["OUTPUT LOW", "text-bad", `Under ${hero.dustPct}%. The meter checks for a minute before Dyna flags panel_dirty.`]
+      : HEADLINE[hero.stage] || HEADLINE.clean;
   const ring = hero.stage === "paid" ? "--good" : dusty ? "--bad" : "--sun";
   const j = hero.job;
 
@@ -80,7 +83,7 @@ export default function PanelHealth() {
         <div className="card flex flex-col gap-0.5 rounded-[20px] p-3.5">
           <span className="text-xs text-muted">Actual now</span>
           <span className={`text-xl font-extrabold ${dusty ? "text-bad" : ""}`}>{hero.actualW != null ? `${hero.actualW.toFixed(2)} W` : "–"}</span>
-          <span className="text-[11px] text-muted">from the panel meter</span>
+          <span className="text-[11px] text-muted">{hero.idle ? "no flat is drawing from it" : "from the panel meter"}</span>
         </div>
       </div>
 

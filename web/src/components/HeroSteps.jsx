@@ -21,7 +21,7 @@ export default function HeroSteps({ hero, size = "md" }) {
     {
       at: 2,
       title: "panel_dirty → escrow opens",
-      text: j ? `${j.fee.toFixed(2)} USDC locked on Arc` : "Dyna flags it, the Pi locks the fee",
+      text: j ? `${j.fee.toFixed(2)} USDC locked on Arc` : i === 1 && !hero.flagged ? "Checking for a minute first…" : "Dyna flags it, the Pi locks the fee",
       proofs: j && [
         ["arc", j.openTx, "Arc tx"],
         ["og", hero.og?.open, "0G proof"],

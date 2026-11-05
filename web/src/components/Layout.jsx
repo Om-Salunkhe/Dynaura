@@ -2,7 +2,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { useLive } from "../lib/api.js";
 import BottomNav from "./BottomNav.jsx";
 import { ConnectionDialog, MixedContentBanner } from "./Connection.jsx";
-import OfflineBanner, { isOffline } from "./OfflineBanner.jsx";
+import OfflineBanner, { SafeStopBanner, isOffline } from "./OfflineBanner.jsx";
 import Sidebar from "./Sidebar.jsx";
 
 // Dashboards use the full desktop width; the other pages stay a readable column.
@@ -17,6 +17,7 @@ export default function Layout({ nav }) {
       <main className={`mx-auto w-full max-w-md ${WIDE.has(pathname) ? "lg:max-w-none" : "lg:max-w-3xl"}`}>
         <MixedContentBanner />
         {isOffline(live) && <OfflineBanner />}
+        <SafeStopBanner live={live} />
         <Outlet />
       </main>
       <BottomNav items={nav} />

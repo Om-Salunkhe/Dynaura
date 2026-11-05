@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 import { ConnectionDialog, ConnectionPill, MixedContentBanner } from "../components/Connection.jsx";
 import HeroSteps from "../components/HeroSteps.jsx";
 import Icon from "../components/Icon.jsx";
-import OfflineBanner, { isOffline } from "../components/OfflineBanner.jsx";
+import OfflineBanner, { SafeStopBanner, isOffline } from "../components/OfflineBanner.jsx";
 import Proof from "../components/Proof.jsx";
 import { admin as demoAdmin, plan as demoPlan } from "../data/demo.js";
 import { planToView } from "../data/society.js";
@@ -113,7 +113,8 @@ export default function Demo() {
       </header>
 
       <MixedContentBanner />
-      {offline && moment.key !== "offline" && <OfflineBanner />}
+      {offline && moment.key !== "offline" && <OfflineBanner size="strip" />}
+      <SafeStopBanner live={live} />
 
       <main className="flex flex-1 flex-col">
         {moment.key === "morning" && <Morning connected={connected} offline={offline} live={live} />}
@@ -176,7 +177,24 @@ function Morning({ connected, offline, live }) {
   const tee = hasPlan ? teeLabel(api.tee) : "TEE verified";
   const reqId = hasPlan ? api.request_id : view.requestId;
 
-  if (offline) return <OfflineBanner size="xl" />;
+  if (connected && !hasPlan) {
+    // live, but no AI plan: say so; never show the demo plan as if it were real
+    return (
+      <section className="grid flex-1 grid-cols-[1.1fr_1fr] gap-8">
+        <div className="card flex flex-col justify-center gap-8 rounded-[40px] p-10">
+          <Kicker n={1}>MORNING PLAN</Kicker>
+          <span className="text-5xl font-extrabold leading-tight">{offline ? "No plan today: 0G can't be reached." : "No 0G plan yet today."}</span>
+          <span className="text-2xl text-muted">
+            {offline ? "Dyna won't guess. Until 0G answers, every flat stays on grid." : "Press the button and the Pi asks 0G Compute for today's plan."}
+          </span>
+        </div>
+        <div className="card flex flex-col justify-center gap-4 rounded-[40px] p-10">
+          <span className="text-3xl font-extrabold">Jobs wait for a plan</span>
+          <span className="text-2xl text-muted">Pumps and chargers only move into the sun when Dyna has a plan with a 0G proof behind it.</span>
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="grid flex-1 grid-cols-[1.1fr_1fr] gap-8">
       <div className="card flex flex-col justify-between gap-8 rounded-[40px] p-10">
@@ -299,7 +317,13 @@ function Noon({ live, scene, offline, hero }) {
       <div className="card flex flex-col gap-8 rounded-[40px] p-10">
         <Kicker n={2}>NOON ROUTING</Kicker>
         <span className="text-5xl font-extrabold leading-tight">
-          {away.length ? `Flat ${away.join(", ")} is away. Its share of the sun goes to the neighbours.` : "Everyone is home. The sun is split by what each flat uses."}
+          {!onSolar.length
+            ? offline
+              ? "No AI, no solar switching: every flat is on grid."
+              : "No flat is on solar right now."
+            : away.length
+              ? `Flat ${away.join(", ")} is away. Its share of the sun goes to the neighbours.`
+              : "Everyone is home. The sun is split by what each flat uses."}
         </span>
         <span className="flex flex-col gap-2">
           <span className="text-2xl text-muted">Flats on solar right now</span>

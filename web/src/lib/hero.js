@@ -54,8 +54,8 @@ function fromLive(c, live, done) {
   if (job) {
     stage = job.status; // open | accepted
     if (job.status === "accepted" && (done[job.job_id] || (c.pct != null && c.pct >= c.clean_pct))) stage = "cleaning";
-  } else if (c.state === "dusty") {
-    stage = "dusty";
+  } else if (c.state === "dusty" || (c.pct != null && c.pct < c.dust_pct)) {
+    stage = "dusty"; // under the line; the Pi confirms for a minute before it says "dusty"
   } else if (last) {
     stage = last.status === "paid" ? "paid" : "refunded";
     j = last;
@@ -67,7 +67,7 @@ function fromLive(c, live, done) {
     dustPct: c.dust_pct,
     cleanPct: c.clean_pct,
     fee: j?.fee_usdc ?? c.fee_usdc,
-    flagged: stage !== "clean",
+    flagged: stage !== "clean" && !(stage === "dusty" && c.state !== "dusty"),
     arc: c.arc,
     error: c.error,
     actualW: live.meters?.panel?.w ?? live.solar_w ?? null,
@@ -104,7 +104,10 @@ export function useHero(live) {
   if (c && h.job) h.og = { open: roots[`${h.job.id}:open`], paid: roots[`${h.job.id}:paid`] };
   if (demo && h.job) h.og = { open: "0xdemo-root-open", paid: h.stage === "paid" ? "0xdemo-root-paid" : null };
   if (h.pct != null && h.actualW == null) h.actualW = +(2.1 * (h.pct / 100)).toFixed(2);
-  h.expectedW = h.pct ? +(h.actualW / (h.pct / 100)).toFixed(2) : null;
+  // The panel meter only reads while a flat draws from it: no load, no watts to compare
+  if (h.live && (h.actualW ?? 0) < 0.01) h.actualW = null;
+  h.expectedW = h.pct && h.actualW != null ? +(h.actualW / (h.pct / 100)).toFixed(2) : null;
+  h.idle = h.live && h.actualW == null;
 
   h.actions = demo
     ? heroActions
