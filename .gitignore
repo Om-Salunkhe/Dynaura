@@ -36,3 +36,10 @@ build/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Keys and local data (Dynaura)
+*.key
+.device_key
+*.db
+*.db-journal
+*.sqlite
