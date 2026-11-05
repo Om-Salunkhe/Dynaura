@@ -142,3 +142,20 @@ class Arc:
 
     def set_price(self, usdc_per_kwh: float) -> str:
         return self.tx_hash(self.send(self.need(self.shop).functions.setPrice(to_units(usdc_per_kwh))))
+
+    # ---- solar billing -----------------------------------------------------
+    def bill_id(self, flat: str, month: str) -> int:
+        b = self.need(self.billing)
+        return b.functions.billOf(b.functions.key(flat, month).call()).call()
+
+    def bill(self, bill_id: int) -> dict:
+        x = self.need(self.billing).functions.bills(bill_id).call()
+        return {"bill_id": bill_id, "flat": x[0], "month": x[1], "resident": x[2], "usdc": from_units(x[3]),
+                "solar_wh": x[4], "grid_wh": x[5], "readings_hash": "0x" + x[6].hex(), "paid": x[7], "paid_by": x[8]}
+
+    def post_bill(self, flat: str, month: str, resident: str | None, usdc: float, solar_wh: int, grid_wh: int,
+                  readings_hash: bytes) -> tuple[int, str]:
+        b = self.need(self.billing)
+        resident = Web3.to_checksum_address(resident) if resident else "0x" + "00" * 20
+        rcpt = self.send(b.functions.postBill(flat, month, resident, to_units(usdc), int(solar_wh), int(grid_wh), readings_hash))
+        return b.events.BillPosted().process_receipt(rcpt)[0]["args"]["billId"], self.tx_hash(rcpt)

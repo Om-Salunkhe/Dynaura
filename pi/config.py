@@ -76,3 +76,10 @@ CLEAN_PCT = float(os.getenv("CLEAN_PCT", "90") or 90)
 CLEAN_FEE_USDC = float(os.getenv("CLEAN_FEE_USDC", "2") or 2)
 CLEAN_DEADLINE_MIN = int(os.getenv("CLEAN_DEADLINE_MIN", "60") or 60)
 CLEAN_AUTO = os.getenv("CLEAN_AUTO", "true").lower() == "true"  # open the escrow by itself when dusty
+
+# Monthly bills (SolarBilling). 1 Wh on the model = BILL_SCALE/1000 kWh in the real building.
+BILL_SCALE = float(os.getenv("BILL_SCALE", "1000") or 1000)
+SOLAR_RATE_USDC = float(os.getenv("SOLAR_RATE_USDC", "0.008") or 0.008)  # per kWh of the building's solar
+GRID_RATE_USDC = float(os.getenv("GRID_RATE_USDC", "0.02") or 0.02)      # per kWh of grid power
+# Optional: only this wallet may pay a flat's bill. "A=0x..,B=0x..". Empty = anyone may pay for the flat.
+FLAT_WALLETS = dict(x.split("=", 1) for x in os.getenv("FLAT_WALLETS", "").replace(" ", "").split(",") if "=" in x)

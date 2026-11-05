@@ -4,7 +4,7 @@ import { and, desc, eq } from "@arkiv-network/sdk/query"
 import { addr, dec, u64 } from "@arkiv-network/sdk/schema"
 import { hexToBytes, stringToBytes } from "viem"
 import { account, BUILDING, publicClient, route, walletClient } from "./bridge.mjs"
-import { CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale } from "./schemas.mjs"
+import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale } from "./schemas.mjs"
 
 // Decimals as plain strings ("0.004167"), never scientific notation
 export const d = (n, places = 6) => dec(Number(n || 0).toFixed(places).replace(/\.?0+$/, "") || "0")
@@ -233,6 +233,24 @@ route("POST", "/sale", async (b) => {
       kwh: d(b.kwh, 3),
       usdc: d(b.usdc),
       arc_tx: String(b.arc_tx || ""),
+    },
+    { expiration: days(180) },
+  )
+  return { key: entityKey, txHash }
+})
+
+// POST /bill  {flat, month, kwh, solar_pct, usdc, arc_tx}: a monthly bill posted on Arc
+route("POST", "/bill", async (b) => {
+  const { entityKey, txHash } = await walletClient.createEntity(
+    Bill,
+    {
+      building: BUILDING,
+      flat: String(b.flat),
+      month: String(b.month),
+      kwh: d(b.kwh, 3),
+      solar_pct: d(b.solar_pct, 1),
+      usdc: d(b.usdc),
+      ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
     },
     { expiration: days(180) },
   )

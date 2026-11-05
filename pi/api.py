@@ -14,6 +14,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+import billing
 import config
 import dyna
 import zg
@@ -252,6 +253,35 @@ def settle_now(order_id: int, x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     try:
         return App.sales.settle(order_id)
+    except ArcUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Arc transaction failed: {e}")
+
+
+@app.get("/api/bill")
+def get_bill(flat: str = "A", month: str | None = None):
+    """This month's bill for one flat, and whether it is posted / paid on Arc."""
+    if flat not in FLATS:
+        raise HTTPException(status_code=400, detail="flat must be A, B or C")
+    b = billing.compute(App.store, flat, month)
+    try:
+        return billing.with_chain(App.arc, b)
+    except Exception as e:
+        return {**billing.public(b), "arc_error": str(e)[:200]}
+
+
+@app.post("/api/admin/bills")
+def post_bills(body: dict | None = None, x_admin_key: str | None = Header(default=None)):
+    """Post every flat's bill on Arc: {"month": "2026-11"} (default this month)"""
+    require_admin(x_admin_key)
+
+    def to_arkiv(row):
+        if App.arkiv:
+            App.arkiv.post("/bill", {"flat": row["flat"], "month": row["month"], "kwh": row["solar_kwh"] + row["grid_kwh"],
+                                     "solar_pct": row["solar_pct"], "usdc": row["usdc"], "arc_tx": row["arc_tx"]})
+    try:
+        return billing.post_all(App.store, App.arc, (body or {}).get("month"), on_bill=to_arkiv)
     except ArcUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
