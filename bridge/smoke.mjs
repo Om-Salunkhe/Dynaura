@@ -19,7 +19,8 @@ async function step(name, fn) {
     const out = await fn()
     const ms = Math.round(performance.now() - t0)
     results.push({ step: name, ms, ok: true })
-    console.log(`ok   ${String(ms).padStart(6)} ms  ${name}${out?.note ? `  (${out.note})` : ""}`)
+    const note = out?.note ?? out?.txHash
+    console.log(`ok   ${String(ms).padStart(6)} ms  ${name}${note ? `  (${note})` : ""}`)
     return out
   } catch (e) {
     const ms = Math.round(performance.now() - t0)
@@ -147,9 +148,18 @@ const mnt = await step("write maintenance record", () =>
   post("/maintenance", { date: today, title: "Panel cleaned (smoke)", details: "Output 52% -> 94%. Paid 2.00 USDC from Arc escrow.", arc_tx: "0x" + "22".repeat(32) }),
 )
 const sale = await step("write shop sale", () => post("/sale", { order_id: run, buyer: shop, buyer_name: "Smoke Kirana", kwh: 0.3, usdc: 0.024, arc_tx: "0x" + "33".repeat(32) }))
+const billKeys = []
 for (const flat of ["A", "B", "C"]) {
-  await step(`write bill flat ${flat}`, () => post("/bill", { flat, month, kwh: 41.5, solar_pct: 72, usdc: 0.62, arc_tx: "0x" + "44".repeat(32) }))
+  const b = await step(`write bill flat ${flat}`, () => post("/bill", { flat, month, kwh: 41.5, solar_pct: 72, usdc: 0.62, arc_tx: "0x" + "44".repeat(32) }))
+  billKeys.push(b?.key)
 }
+await step("bills, sales, readings, decisions are sealed (readonly); the heartbeat is not", async () => {
+  const sealed = await Promise.all([billKeys[0], sale?.key, rd?.keys?.[0], dec?.key].map((k) => ctx.client.getEntity(k)))
+  expect(sealed.every((e) => e.$creationFlags?.readonly === true), "readonly flag on fact records")
+  const hb = await ctx.client.getEntity(hb1.key)
+  expect(hb.$creationFlags?.readonly === false, "heartbeat must stay patchable")
+  return { note: "4 sealed, heartbeat patchable" }
+})
 
 // ---- the queue: posts that arrive together are written one by one, never on the same nonce --
 await step("3 writes posted at once all land (serialized queue)", async () => {

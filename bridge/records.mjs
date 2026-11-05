@@ -14,6 +14,11 @@ const nowS = () => Math.floor(Date.now() / 1000)
 /** Expire at a wall-clock time (unix seconds), but never sooner than `min` from now. */
 const until = (unixS, min = ExpirationTime.fromMinutes(2)) => ExpirationTime.atDate(new Date(unixS * 1000), { atLeast: min })
 
+/** Records that are facts once written (a bill, a sale, a signed reading, a decision) are created
+ *  readonly: Arkiv refuses any later change to their contents, even from the building wallet.
+ *  Their expiry can still be extended (the keeper does), and the owner can still delete them. */
+const SEALED = { readonly: true }
+
 /** Only entities this wallet created and still owns are ours, whatever their tags say. */
 const ours = (q) => q.createdBy(account.address).ownedBy(account.address)
 
@@ -36,6 +41,7 @@ route("POST", "/readings", async (body) => {
       sig: hexToBytes(s.sig),
     },
     expiration: days(7),
+    flags: SEALED,
   }))
   const r = await write("readings", (tx) => walletClient.executeBatch({ creates }, tx), { ops: creates.length })
   return { created: r.createdEntities.length, txHash: r.txHash, keys: r.createdEntities }
@@ -130,7 +136,7 @@ route("POST", "/decision", async (b) => {
     ...(b.storage_root ? { storage_root: String(b.storage_root) } : {}),
     summary: stringToBytes(String(b.summary || "")),
   }
-  const r = await write("decision", (tx) => walletClient.createEntity(Decision, values, { expiration: days(30) }, tx))
+  const r = await write("decision", (tx) => walletClient.createEntity(Decision, values, { expiration: days(30), flags: SEALED }, tx))
   return { key: r.entityKey, txHash: r.txHash }
 })
 
@@ -188,7 +194,7 @@ route("POST", "/maintenance", async (b) => {
     details: stringToBytes(String(b.details || "")),
     ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
   }
-  const r = await write("maintenance", (tx) => walletClient.createEntity(Maintenance, values, { expiration: days(180) }, tx))
+  const r = await write("maintenance", (tx) => walletClient.createEntity(Maintenance, values, { expiration: days(180), flags: SEALED }, tx))
   return { key: r.entityKey, txHash: r.txHash }
 })
 
@@ -204,7 +210,7 @@ route("POST", "/offer", async (b) => {
     window_end: u64(BigInt(windowEnd)),
     ...(b.request_id ? { request_id: String(b.request_id).slice(0, 120) } : {}),
   }
-  const r = await write("offer", (tx) => walletClient.createEntity(Offer, values, { expiration: until(windowEnd) }, tx))
+  const r = await write("offer", (tx) => walletClient.createEntity(Offer, values, { expiration: until(windowEnd), flags: SEALED }, tx))
   return { key: r.entityKey, txHash: r.txHash, expiresAt: r.expiresAt }
 })
 
@@ -265,7 +271,7 @@ route("POST", "/sale", async (b) => {
     usdc: d(b.usdc),
     arc_tx: String(b.arc_tx || ""),
   }
-  const r = await write("sale", (tx) => walletClient.createEntity(Sale, values, { expiration: days(180) }, tx))
+  const r = await write("sale", (tx) => walletClient.createEntity(Sale, values, { expiration: days(180), flags: SEALED }, tx))
   return { key: r.entityKey, txHash: r.txHash }
 })
 
@@ -280,7 +286,7 @@ route("POST", "/bill", async (b) => {
     usdc: d(b.usdc),
     ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
   }
-  const r = await write("bill", (tx) => walletClient.createEntity(Bill, values, { expiration: days(180) }, tx))
+  const r = await write("bill", (tx) => walletClient.createEntity(Bill, values, { expiration: days(180), flags: SEALED }, tx))
   return { key: r.entityKey, txHash: r.txHash }
 })
 
