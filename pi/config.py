@@ -83,6 +83,7 @@ CLEAN_PCT = float(os.getenv("CLEAN_PCT", "90") or 90)
 CLEAN_FEE_USDC = float(os.getenv("CLEAN_FEE_USDC", "2") or 2)
 CLEAN_DEADLINE_MIN = int(os.getenv("CLEAN_DEADLINE_MIN", "60") or 60)
 CLEAN_AUTO = os.getenv("CLEAN_AUTO", "true").lower() == "true"  # open the escrow by itself when dusty
+DUST_RECHECK_S = float(os.getenv("DUST_RECHECK_S", "120") or 120)  # wait before asking 0G about the dust again
 
 # Monthly bills (SolarBilling). 1 Wh on the model = BILL_SCALE/1000 kWh in the real building.
 BILL_SCALE = float(os.getenv("BILL_SCALE", "1000") or 1000)

@@ -36,6 +36,14 @@ class CleaningWatch:
         self.job: dict | None = None      # the escrow we are watching
         self.history: list[dict] = []     # finished jobs this run
         self.on_job = None                # callback(job dict) -> Arkiv
+        # ---- HOOK (Om): 0G confirms the dust before any money moves -------------------------
+        # Set to a function(level_pct) -> (panel_dirty: bool, decision_id: int) that makes ONE
+        # 0G call (zg.chat), records it as a decision (kind "dust", mode "ai") and returns.
+        # It must raise (e.g. zg.ZGUnavailable) when 0G gives no usable answer: then no escrow
+        # opens, and the function itself should have logged a "no-ai" decision.
+        # None = today's behaviour: the meter alone opens the escrow.
+        self.confirm_dirty = None
+        self._ask_after = 0.0             # no new 0G dust check before this time
         self.error: str | None = None
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -79,8 +87,22 @@ class CleaningWatch:
     def _act(self, lvl: float | None) -> None:
         job = self.job
         if job is None:
+            if lvl is not None and lvl >= config.DUST_PCT:
+                self._ask_after = 0.0  # clean again: the next dust gets a fresh 0G check
             if lvl is not None and lvl < config.DUST_PCT and config.CLEAN_AUTO and self.arc.enabled and self.arc.escrow:
-                self.open_job(config.CLEAN_FEE_USDC, config.CLEAN_DEADLINE_MIN, lvl)
+                og_decision = None
+                if self.confirm_dirty is not None:
+                    if time.time() < self._ask_after:
+                        return
+                    self._ask_after = time.time() + config.DUST_RECHECK_S
+                    try:
+                        dirty, og_decision = self.confirm_dirty(lvl)
+                    except Exception as e:
+                        raise RuntimeError(f"0G could not confirm the dust, no money moved: {e}") from e
+                    if not dirty:
+                        log.info("panel at %.0f%%, but 0G says it is not dirty (decision #%s)", lvl, og_decision)
+                        return
+                self.open_job(config.CLEAN_FEE_USDC, config.CLEAN_DEADLINE_MIN, lvl, og_decision=og_decision)
             return
         now = time.time()
         if now - self._last_poll > 15 or job["status"] == "open":
@@ -99,7 +121,8 @@ class CleaningWatch:
             job.update(status="refunded", refund_tx=tx)
             self._finish(f"Nobody cleaned before the deadline: {job['fee_usdc']:.2f} USDC back to the society")
 
-    def open_job(self, fee_usdc: float, deadline_min: int, lvl: float | None = None) -> dict:
+    def open_job(self, fee_usdc: float, deadline_min: int, lvl: float | None = None,
+                 og_decision: int | None = None) -> dict:
         """Lock the fee in CleaningEscrow (also called by the admin from the Panel health page)."""
         if self.job:
             raise ValueError(f"cleaning job #{self.job['job_id']} is already {self.job['status']}")
@@ -107,7 +130,8 @@ class CleaningWatch:
         deadline = int(time.time() + deadline_min * 60)
         job_id, tx = self.arc.open_cleaning(fee_usdc, deadline, lvl)
         self.job = {"job_id": job_id, "status": "open", "fee_usdc": float(fee_usdc), "deadline": deadline,
-                    "output_before": lvl, "output_after": None, "open_tx": tx, "cleaner": None}
+                    "output_before": lvl, "output_after": None, "open_tx": tx, "cleaner": None,
+                    "og_decision_id": og_decision}  # the 0G dust check that let the money move
         self._save(f"Panel at {lvl:.0f}% of clean: {fee_usdc:.2f} USDC locked on Arc for a cleaner")
         return self.job
 

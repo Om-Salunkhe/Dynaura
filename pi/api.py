@@ -106,8 +106,11 @@ async def lifespan(_: FastAPI):
 def on_cleaning_job(job: dict) -> None:
     """Every escrow change goes to Arkiv; a paid job also becomes a maintenance record."""
     tx = job.get("release_tx") or job.get("refund_tx") or job.get("open_tx")
+    # The 0G dust check behind this job (once the confirm hook is on): its request ID and episode root
+    og = App.store.decision(job["og_decision_id"]) if job.get("og_decision_id") else None
     App.arkiv.post("/cleaning_job", {**{k: job.get(k) for k in
-                   ("job_id", "status", "fee_usdc", "deadline", "output_before", "output_after")}, "arc_tx": tx})
+                   ("job_id", "status", "fee_usdc", "deadline", "output_before", "output_after")}, "arc_tx": tx,
+                   "og_request_id": (og or {}).get("request_id"), "og_storage_root": (og or {}).get("storage_root")})
     if job["status"] == "paid":
         App.arkiv.post("/maintenance", {
             "title": "Panel cleaned",
