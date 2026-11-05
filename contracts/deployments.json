@@ -1,0 +1,13 @@
+{
+  "network": "Arc testnet",
+  "chainId": 5042002,
+  "rpc": "https://rpc.testnet.arc.io",
+  "explorer": "https://explorer.testnet.arc.io",
+  "studioProject": "",
+  "usdc": "0x3600000000000000000000000000000000000000",
+  "oracle": "",
+  "treasury": "",
+  "CleaningEscrow": "",
+  "ShopTrade": "",
+  "SolarBilling": ""
+}
