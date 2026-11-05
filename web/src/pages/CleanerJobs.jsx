@@ -10,7 +10,7 @@ import { stageIndex, useHero } from "../lib/hero.js";
 
 const STEPS = [
   ["Accept the job", "From your own wallet, on Arc"],
-  ["Clean the panel, tap Mark done", "The meter watches the output"],
+  ["Clean the panel, tap Mark done", "The meter checks the panel, not your word"],
   ["Back at 90%+ for a minute", "USDC is yours. Nobody presses approve."],
 ];
 
@@ -178,9 +178,9 @@ function JobCard({ hero, onChain, me }) {
 
       {hero.stage === "accepted" && mine && (
         <>
-          <span className="text-sm text-ink-2">Clean the panel. When you're done, tap Mark done and the meter takes over.</span>
+          <span className="text-sm text-ink-2">Clean the panel, then tap Mark done. Your tap doesn't release the money: the meter has to see it.</span>
           <button type="button" className="btn min-h-[56px] text-base" onClick={hero.actions.done}>
-            Mark done
+            Mark done · let the meter check
           </button>
         </>
       )}
@@ -196,7 +196,7 @@ function JobCard({ hero, onChain, me }) {
             <span className="absolute inset-y-0 w-1 bg-good" style={{ left: `${hero.cleanPct}%` }} title={`Pays at ${hero.cleanPct}%`} />
           </div>
           <span className="text-xs text-muted">
-            Pays {j.fee.toFixed(2)} USDC automatically once the panel holds {hero.cleanPct}%+ for a minute.
+            The contract pays on meter proof, not on your word: {j.fee.toFixed(2)} USDC is released automatically once the panel holds {hero.cleanPct}%+ for a minute.
           </span>
         </div>
       )}

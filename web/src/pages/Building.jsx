@@ -1,7 +1,8 @@
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { today } from "../data/demo.js";
-import { useLive } from "../lib/api.js";
+import { shortId, useLive } from "../lib/api.js";
+import { routingStory, usePlan } from "../lib/plan.js";
 import { FLATS, useRole } from "../lib/role.jsx";
 
 const FLOORS = ["C", "B", "A"]; // top to bottom
@@ -13,7 +14,7 @@ export default function Building() {
   const mine = who.role === "resident" ? who.flat : null;
   const day = today[mine ?? "A"];
   const away = FLOORS.filter((f) => live.flats?.[f]?.away);
-  const sharedTo = FLOORS.filter((f) => !live.flats?.[f]?.away && live.flats?.[f]?.source === "solar");
+  const story = routingStory(live, usePlan(!live.demo));
 
   return (
     <div className="flex flex-col gap-3">
@@ -64,17 +65,19 @@ export default function Building() {
         </section>
       )}
 
-      {away.length > 0 && sharedTo.length > 0 && (
+      {(away.length > 0 || story.reason) && (
         <section className="card flex items-start gap-3 rounded-[26px]">
           <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-sun-soft text-sun-ink">
             <Icon name="sun" />
           </span>
           <span className="flex flex-col gap-0.5">
-            <span className="text-sm font-bold">
-              {away.map((f) => FLATS[f].name).join(", ")} is away. Its spare sun went to{" "}
-              {sharedTo.map((f) => FLATS[f].name).join(" and ")}.
-            </span>
-            <span className="text-xs text-muted">The away flat earns credit on this month's bill</span>
+            <span className="text-sm font-bold">{story.text}</span>
+            {story.reason && (
+              <span className="text-xs text-ink-2">
+                Dyna: “{story.reason}”{story.requestId ? <span className="mono text-muted"> · 0G {shortId(story.requestId)}</span> : null}
+              </span>
+            )}
+            {away.length > 0 && <span className="text-xs text-muted">The away flat earns credit on this month's bill</span>}
           </span>
         </section>
       )}

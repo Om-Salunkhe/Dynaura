@@ -12,6 +12,7 @@ import { admin as demoAdmin, plan as demoPlan } from "../data/demo.js";
 import { planToView } from "../data/society.js";
 import { getJSON, postJSON, shortId, useLive } from "../lib/api.js";
 import { useHero } from "../lib/hero.js";
+import { routingStory, usePlan } from "../lib/plan.js";
 import { MOMENTS, setScene, useScene } from "../lib/scene.js";
 import { FLATS } from "../lib/role.jsx";
 
@@ -158,18 +159,7 @@ const teeLabel = (tee) => {
 
 // ---- 1 · Morning plan ------------------------------------------------------
 function Morning({ connected, offline, live }) {
-  const [api, setApi] = useState(null);
-  useEffect(() => {
-    if (!connected) return undefined;
-    let alive = true;
-    const load = () => getJSON("/api/plan").then((d) => alive && setApi(d)).catch(() => {});
-    load();
-    const t = setInterval(load, 5000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, [connected]);
+  const api = usePlan(connected, 5000);
 
   const hasPlan = api?.plan && api.mode === "ai";
   const view = hasPlan ? planToView(api, live.runner?.jobs) : demoPlan;
@@ -311,21 +301,21 @@ function Building({ b, caption }) {
 // ---- 2 · Noon routing -------------------------------------------------------
 function Noon({ live, scene, offline, hero }) {
   const b = demoBuilding(live, scene, hero, offline);
-  const away = Object.entries(b.flats).filter(([, s]) => s.away).map(([f]) => f);
   const onSolar = Object.entries(b.flats).filter(([, s]) => s.source === "solar").map(([f]) => f);
+  const story = routingStory(live, usePlan(!live.demo));
   return (
     <section className="grid flex-1 grid-cols-[1fr_1.2fr] gap-8">
       <div className="card flex flex-col gap-8 rounded-[40px] p-7 2xl:p-10">
         <Kicker n={2}>NOON ROUTING</Kicker>
         <span className="text-4xl font-extrabold leading-tight 2xl:text-5xl">
-          {!onSolar.length
-            ? offline
-              ? "No AI, no solar switching: every flat is on grid."
-              : "No flat is on solar right now."
-            : away.length
-              ? `Flat ${away.join(", ")} is away. Its share of the sun goes to the neighbours.`
-              : "Everyone is home. The sun is split by what each flat uses."}
+          {offline && !onSolar.length ? "No AI, no solar switching: every flat is on grid." : story.text}
         </span>
+        {story.reason && (
+          <span className="flex flex-col gap-2 rounded-3xl bg-sun-soft px-6 py-4">
+            <span className="text-xl font-extrabold tracking-wider text-sun-ink">DYNA'S REASON · 0G {shortId(story.requestId)}</span>
+            <span className="text-2xl">“{story.reason}”</span>
+          </span>
+        )}
         <span className="flex flex-col gap-2">
           <span className="text-2xl text-muted">Flats on solar right now</span>
           <span className={big}>{onSolar.length ? onSolar.join(" + ") : "none"}</span>

@@ -42,13 +42,17 @@ export default function HeroSteps({ hero, size = "md" }) {
           : i === 4 && pct != null
             ? `Now ${pct}% · checking`
             : i === 3
-              ? "Waiting for the paper to come off"
+              ? "The cleaner taps done; the meter decides"
               : "The paper comes off",
     },
     {
       at: 5,
       title: refunded ? "Refunded to the society" : "USDC released, automatically",
-      text: refunded ? "Nobody cleaned before the deadline" : j?.outputAfter != null ? `Back at ${Math.round(j.outputAfter)}% · no one pressed approve` : "No one presses approve",
+      text: refunded
+        ? "Nobody cleaned before the deadline"
+        : j?.outputAfter != null
+          ? `Back at ${Math.round(j.outputAfter)}% · paid on meter proof, not anyone's word`
+          : "Paid on meter proof, not anyone's word",
       proofs: (j?.releaseTx || j?.refundTx) && [
         ["arc", j.releaseTx || j.refundTx, "Arc tx"],
         ["og", hero.og?.paid, "0G proof"],

@@ -113,12 +113,14 @@ export function useHero(live) {
     ? heroActions
     : {
         accept: null, // live accept is a wallet transaction (CleanerJobs)
+        // "Mark done" is not a chain tx and pays nothing: it only switches this screen to the live
+        // meter. The Pi samples the panel every 5 s and releases the escrow itself once output
+        // holds the clean line for a minute (meter proof, not the cleaner's word).
         done: () => {
           if (!h.job) return;
           const next = { ...doneJobs(), [h.job.id]: Date.now() };
           localStorage.setItem(DONE_KEY, JSON.stringify(next));
           setDone(next);
-          postJSON("/api/moment/clean", {}, { admin: true }).catch(() => {}); // SIM only; real panel = paper off
         },
         dust: () => postJSON("/api/moment/dust", {}, { admin: true }),
         reset: () => postJSON("/api/moment/clean", {}, { admin: true }),
