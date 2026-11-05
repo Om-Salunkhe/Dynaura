@@ -38,6 +38,10 @@ BUILDING_KWP = float(os.getenv("BUILDING_KWP", "2.0") or 2.0)
 ZG_ROUTER_URL = os.getenv("ZG_ROUTER_URL", "").strip()
 ZG_API_KEY = os.getenv("ZG_API_KEY", "").strip()
 ZG_MODEL = os.getenv("ZG_MODEL", "0gm-1.0-35b-a3b").strip()
+# Longest wait for an answer (connecting gives up after 5 s), and no automatic retry: if 0G fails,
+# the building goes to its safe stop instead of waiting. Tune ZG_TIMEOUT_S to the measured latency.
+ZG_TIMEOUT_S = float(os.getenv("ZG_TIMEOUT_S", "30") or 30)
+ZG_MAX_RETRIES = int(os.getenv("ZG_MAX_RETRIES", "0") or 0)
 
 # Society job runner
 PLAN_HOUR = int(os.getenv("PLAN_HOUR", "20") or 20)          # make tomorrow's plan at 8 PM
