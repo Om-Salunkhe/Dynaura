@@ -33,3 +33,8 @@ LON = float(os.getenv("LON", "72.88") or 72.88)
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Kolkata")
 # Real rooftop size the demo stands for, used to show building-scale kWh in the app
 BUILDING_KWP = float(os.getenv("BUILDING_KWP", "2.0") or 2.0)
+
+# 0G Compute Router (OpenAI-compatible). Testnet: https://router-api-testnet.integratenetwork.work/v1
+ZG_ROUTER_URL = os.getenv("ZG_ROUTER_URL", "").strip()
+ZG_API_KEY = os.getenv("ZG_API_KEY", "").strip()
+ZG_MODEL = os.getenv("ZG_MODEL", "0gm-1.0-35b-a3b").strip()
