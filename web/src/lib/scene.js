@@ -47,6 +47,8 @@ export function setScene(patch) {
   emit();
 }
 
+export const getScene = () => scene;
+
 export function useScene() {
   return useSyncExternalStore(
     (f) => (subs.add(f), () => subs.delete(f)),

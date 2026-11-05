@@ -1,4 +1,3 @@
-import DemoBadge from "../components/DemoBadge.jsx";
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { today } from "../data/demo.js";
@@ -21,7 +20,6 @@ export default function Building() {
       <PageHeader
         kicker={live.demo ? "Demo data · Pi not connected" : `Signed by the meter · ${ago ?? "–"} s ago`}
         title="Building"
-        right={<DemoBadge demo={live.demo} />}
       />
 
       <section className="card flex flex-col gap-2 rounded-[26px]">

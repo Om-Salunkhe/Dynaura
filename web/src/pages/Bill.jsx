@@ -4,7 +4,8 @@ import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import WalletButton from "../components/WalletButton.jsx";
 import { bill as demoBill } from "../data/demo.js";
-import { ADMIN_KEY, postJSON, usePi } from "../lib/api.js";
+import { postJSON, usePi } from "../lib/api.js";
+import { useConnection } from "../lib/connection.js";
 import { ARC_READY, ensureAllowance, errText, txUrl, write } from "../lib/arc.js";
 import { FLATS, useRole } from "../lib/role.jsx";
 
@@ -14,6 +15,7 @@ export default function Bill() {
   const [who] = useRole();
   const flat = FLATS[who.flat];
   const pi = usePi(`/api/bill?flat=${who.flat}`, null);
+  const { adminKey } = useConnection();
   const live = !pi.demo && pi.data;
   const [demoPaid, setDemoPaid] = useState(false);
   const [busy, setBusy] = useState(null);
@@ -99,7 +101,7 @@ export default function Bill() {
         {live && !pi.data.bill_id ? (
           <>
             <span className="text-center text-sm text-muted">This bill is not on Arc yet. The committee posts all three flats' bills together.</span>
-            {ADMIN_KEY && pi.data.arc && (
+            {adminKey && pi.data.arc && (
               <button type="button" className="btn min-h-[52px] text-[15px]" onClick={postBills} disabled={busy === "post"}>
                 {busy === "post" ? "Posting on Arc…" : `Post ${b.month} bills on Arc (admin)`}
               </button>

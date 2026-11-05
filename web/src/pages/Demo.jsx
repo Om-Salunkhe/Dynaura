@@ -3,6 +3,7 @@
 // With the Pi reachable, actions call its API; without it, the shared demo scene plays the story.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { ConnectionDialog, ConnectionPill, MixedContentBanner } from "../components/Connection.jsx";
 import HeroSteps from "../components/HeroSteps.jsx";
 import Icon from "../components/Icon.jsx";
 import OfflineBanner, { isOffline } from "../components/OfflineBanner.jsx";
@@ -23,7 +24,7 @@ export default function Demo() {
   const [controls, setControls] = useState(true);
   const [note, setNote] = useState(null);
   const connected = !live.demo;
-  const offline = isOffline(live, scene);
+  const offline = isOffline(live);
   const idx = Math.max(0, MOMENTS.findIndex((m) => m.key === scene.moment));
   const moment = MOMENTS[idx];
 
@@ -108,12 +109,10 @@ export default function Demo() {
             </button>
           ))}
         </nav>
-        <span className={`chip px-5 py-3 text-lg ${connected ? "bg-sun-soft text-sun-ink" : "bg-inner text-muted"}`}>
-          <span className={`h-3 w-3 rounded-full ${connected ? "animate-pulse bg-sun" : "bg-idle"}`} />
-          {connected ? "Live from the Pi" : "Demo data"}
-        </span>
+        <ConnectionPill size="xl" />
       </header>
 
+      <MixedContentBanner />
       {offline && moment.key !== "offline" && <OfflineBanner />}
 
       <main className="flex flex-1 flex-col">
@@ -135,6 +134,7 @@ export default function Demo() {
           <span className="ml-auto text-base text-muted">1–5 moments · ← → · Space next · H hide</span>
         </footer>
       )}
+      <ConnectionDialog />
     </div>
   );
 }

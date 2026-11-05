@@ -1,7 +1,7 @@
 import Icon from "./Icon.jsx";
 
-/** Is Dyna (0G) unreachable? Live: the Pi's runner is in no-AI mode. Demo: the scene says so. */
-export const isOffline = (live, scene) => (live.demo ? !!scene?.offline : live.runner?.mode === "no-ai");
+/** Is Dyna (0G) unreachable? The Pi's runner is in no-AI mode (the demo scene sets the same flag). */
+export const isOffline = (live) => live.runner?.mode === "no-ai";
 
 /** The honesty state: what the building does when 0G can't be reached. */
 export default function OfflineBanner({ size = "md" }) {
