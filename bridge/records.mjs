@@ -1,9 +1,10 @@
 // The routes the Pi calls. Each one writes Arkiv entities owned by the building wallet.
 import { ExpirationTime } from "@arkiv-network/sdk"
+import { and, desc, eq } from "@arkiv-network/sdk/query"
 import { addr, dec, u64 } from "@arkiv-network/sdk/schema"
-import { hexToBytes } from "viem"
-import { BUILDING, route, walletClient } from "./bridge.mjs"
-import { Heartbeat, Reading } from "./schemas.mjs"
+import { hexToBytes, stringToBytes } from "viem"
+import { account, BUILDING, publicClient, route, walletClient } from "./bridge.mjs"
+import { DailyOutput, Decision, Heartbeat, Reading } from "./schemas.mjs"
 
 // Decimals as plain strings ("0.004167"), never scientific notation
 export const d = (n, places = 6) => dec(Number(n || 0).toFixed(places).replace(/\.?0+$/, "") || "0")
@@ -67,4 +68,73 @@ route("POST", "/heartbeat", async (b) => {
   )
   heartbeatKey = entityKey
   return { key: entityKey, txHash, renewed: false }
+})
+
+// POST /decision  {decision_id, kind, mode, request_id, model, storage_root, summary, day}
+route("POST", "/decision", async (b) => {
+  const { entityKey, txHash } = await walletClient.createEntity(
+    Decision,
+    {
+      building: BUILDING,
+      kind: String(b.kind),
+      mode: String(b.mode),
+      decision_id: u64(BigInt(b.decision_id)),
+      day: String(b.day),
+      ...(b.request_id ? { request_id: String(b.request_id).slice(0, 120) } : {}),
+      ...(b.model ? { model: String(b.model).slice(0, 120) } : {}),
+      ...(b.storage_root ? { storage_root: String(b.storage_root) } : {}),
+      summary: stringToBytes(String(b.summary || "")),
+    },
+    { expiration: days(30) },
+  )
+  return { key: entityKey, txHash }
+})
+
+// POST /daily  {day, panel_wh, flats_wh, solar_pct}: one entity per day, patched as the day goes on
+const dailyKeys = new Map()
+
+route("POST", "/daily", async (b) => {
+  const values = { panel_wh: d(b.panel_wh), flats_wh: d(b.flats_wh), solar_pct: d(b.solar_pct, 1) }
+  let k = dailyKeys.get(b.day)
+  if (!k) {
+    const found = await publicClient
+      .select({ $key: true })
+      .from(DailyOutput)
+      .where(and(eq("building", BUILDING), eq("day", String(b.day))))
+      .ownedBy(account.address)
+      .limit(1)
+      .fetch()
+    k = found.entities[0]?.$key
+  }
+  if (k) {
+    const r = await walletClient.patchEntity(DailyOutput, k, { set: values })
+    dailyKeys.set(b.day, k)
+    return { key: k, txHash: r.txHash, patched: true }
+  }
+  const { entityKey, txHash } = await walletClient.createEntity(
+    DailyOutput,
+    { building: BUILDING, day: String(b.day), ...values },
+    { expiration: days(180) },
+  )
+  dailyKeys.set(b.day, entityKey)
+  return { key: entityKey, txHash, patched: false }
+})
+
+// GET /history?days=7  -> the building's daily totals, newest first (read by Dyna's planner)
+route("GET", "/history", async (_, url) => {
+  const n = Math.min(Number(url.searchParams.get("days") || 7), 60)
+  const page = await publicClient
+    .select({ day: true, panel_wh: true, flats_wh: true, solar_pct: true })
+    .from(DailyOutput)
+    .where(eq("building", BUILDING))
+    .ownedBy(account.address)
+    .orderBy(desc("day"))
+    .limit(n)
+    .fetch()
+  return page.entities.map((e) => ({
+    day: e.day.value,
+    panel_wh: Number(e.panel_wh.value),
+    flats_wh: Number(e.flats_wh.value),
+    solar_pct: Number(e.solar_pct.value),
+  }))
 })

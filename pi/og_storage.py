@@ -23,7 +23,7 @@ ROOT_RE = re.compile(r"root\s*[=:]\s*(0x[0-9a-fA-F]{64})")
 class Uploader:
     def __init__(self, store, on_root=None):
         self.store = store
-        self.on_root = on_root  # callback(decision_id, root), e.g. write to Arkiv
+        self.on_root = on_root  # callback(decision_id, root or None when the upload failed)
         self.q: queue.Queue[int] = queue.Queue()
         EPISODES.mkdir(exist_ok=True)
         threading.Thread(target=self._run, name="0g-storage", daemon=True).start()
@@ -64,3 +64,5 @@ class Uploader:
                     self.on_root(did, root)
             except Exception as e:
                 log.warning("0G Storage upload of #%s failed: %s", did, e)
+                if self.on_root:
+                    self.on_root(did, None)

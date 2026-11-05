@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 import config
 import dyna
 import zg
+from arkiv import ArkivQueue
 from brain import Brain
 from hw import FLATS, load_hardware
 from jobs import JobRunner, PlanScheduler
@@ -37,6 +38,7 @@ class App:
     brain = None
     runner = None
     uploader = None
+    arkiv = None
     scheduler = None
 
 
@@ -54,12 +56,22 @@ async def lifespan(_: FastAPI):
     App.brain = Brain(App.hw, App.store, App.uploader)
     App.runner = JobRunner(App.hw, App.loop, App.brain)
     App.runner.start()
+    if config.ARKIV_ENABLED:
+        App.arkiv = ArkivQueue(App.store, App.loop, App.runner)
+        App.loop.on_summary(App.arkiv.on_summaries)
+        # Each decision goes to Arkiv once: after its 0G Storage upload (with the root),
+        # or straight away when 0G Storage is not set up.
+        App.brain.on_decision = lambda did: None if App.uploader.ready() else App.arkiv.decision(did)
+        App.uploader.on_root = lambda did, root: App.arkiv.decision(did)
+        App.arkiv.start()
     App.scheduler = PlanScheduler(App.brain)
     App.scheduler.start()
     log.info("Dynaura up: hw=%s device=%s", config.HW, App.signer.address)
     try:
         yield
     finally:
+        if App.arkiv:
+            App.arkiv.stop()
         App.scheduler.stop()
         App.runner.stop()
         App.loop.stop()
@@ -74,7 +86,10 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "hw": config.HW, "device": App.signer.address}
+    arkiv = {"enabled": bool(App.arkiv), "ok": App.arkiv.ok if App.arkiv else None,
+             "error": App.arkiv.last_error if App.arkiv else None}
+    return {"ok": True, "hw": config.HW, "device": App.signer.address, "arkiv": arkiv,
+            "zg_storage_ready": App.uploader.ready() if App.uploader else False}
 
 
 @app.get("/api/state")
@@ -151,6 +166,7 @@ def ask(body: dict):
     try:
         out = dyna.ask(App.store, App.brain, flat, question)
         App.uploader.enqueue(out["decision_id"])
+        App.brain.notify(out["decision_id"])
         return out
     except zg.ZGUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))

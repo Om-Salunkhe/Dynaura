@@ -17,6 +17,7 @@ class Brain:
         self.hw = hw
         self.store = store
         self.uploader = uploader
+        self.on_decision = None  # callback(decision_id), e.g. write to Arkiv
         self.plan: dict | None = None
         self.decision: dict | None = None
         self._lock = threading.Lock()
@@ -47,6 +48,7 @@ class Brain:
             )
             if self.uploader:
                 self.uploader.enqueue(did, {"forecast": forecast, "raw_answer": reply.text})
+            self.notify(did)
             self.plan = plan
             self.decision = self.store.latest("plan")
             log.info("plan #%s recorded (0G %s)", did, reply.request_id)
@@ -59,7 +61,17 @@ class Brain:
                                       {"reason": reason[:300]})
         self.plan = None
         self.decision = self.store.latest("plan")
+        if self.uploader:
+            self.uploader.enqueue(did)
+        self.notify(did)
         return self.public()
+
+    def notify(self, decision_id: int) -> None:
+        if self.on_decision:
+            try:
+                self.on_decision(decision_id)
+            except Exception:
+                log.exception("decision callback failed")
 
     def public(self) -> dict:
         d = self.decision or {}

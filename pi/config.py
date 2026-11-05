@@ -51,3 +51,7 @@ ZG_STORAGE_CLI = os.getenv("ZG_STORAGE_CLI", "0g-storage-client").strip()
 ZG_RPC = os.getenv("ZG_RPC", "https://evmrpc-testnet.0g.ai").strip()
 ZG_INDEXER = os.getenv("ZG_INDEXER", "https://indexer-storage-testnet-turbo.0g.ai").strip()
 ZG_PRIVATE_KEY = os.getenv("ZG_PRIVATE_KEY", "").strip()
+
+# Arkiv bridge (bridge/bridge.mjs)
+ARKIV_BRIDGE_URL = os.getenv("ARKIV_BRIDGE_URL", "http://127.0.0.1:5100").strip()
+ARKIV_ENABLED = os.getenv("ARKIV_ENABLED", "true").lower() == "true"
