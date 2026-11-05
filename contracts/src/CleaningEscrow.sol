@@ -31,7 +31,7 @@ contract CleaningEscrow is Ownable, ReentrancyGuard {
         uint16 outputAfter;   // panel output at release, % of its clean level
         Status status;
         bytes32 proof;        // hash of the signed meter readings that proved the clean panel
-        bytes32 episodeRoot;  // 0G Storage root of the AI episode that opened the job
+        bytes32 ogStorageRoot;  // 0G Storage root of the AI episode that opened the job
         string ogRequestId;   // 0G Compute request ID of the AI decision that opened the job
     }
 
@@ -52,7 +52,7 @@ contract CleaningEscrow is Ownable, ReentrancyGuard {
     event JobCancelled(uint256 indexed jobId, address indexed payer, uint256 fee);
     event JobDisputed(uint256 indexed jobId, address indexed cleaner, string reason);
     event DisputeResolved(uint256 indexed jobId, bool paidCleaner, address indexed to, uint256 fee);
-    event EpisodeLinked(uint256 indexed jobId, bytes32 episodeRoot);
+    event EpisodeLinked(uint256 indexed jobId, bytes32 ogStorageRoot);
     event OracleChanged(address indexed oracle);
 
     error ZeroAddress();
@@ -212,12 +212,12 @@ contract CleaningEscrow is Ownable, ReentrancyGuard {
 
     /// @notice Attach the 0G Storage root of the AI episode that opened the job. The upload
     ///         finishes after the job is opened, so this is a separate call. It can be set only once.
-    function linkEpisode(uint256 jobId, bytes32 episodeRoot) external onlyOracle {
+    function linkEpisode(uint256 jobId, bytes32 ogStorageRoot) external onlyOracle {
         Job storage j = jobs[jobId];
         if (j.status == Status.None) revert NoJob();
-        if (episodeRoot == bytes32(0)) revert BadAmount();
-        if (j.episodeRoot != bytes32(0)) revert AlreadyLinked();
-        j.episodeRoot = episodeRoot;
-        emit EpisodeLinked(jobId, episodeRoot);
+        if (ogStorageRoot == bytes32(0)) revert BadAmount();
+        if (j.ogStorageRoot != bytes32(0)) revert AlreadyLinked();
+        j.ogStorageRoot = ogStorageRoot;
+        emit EpisodeLinked(jobId, ogStorageRoot);
     }
 }

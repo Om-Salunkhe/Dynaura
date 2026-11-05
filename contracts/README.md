@@ -20,7 +20,7 @@ Dynaura's USDC contracts on Arc. They are **generated, tested and deployed in Ar
 openJob(fee, deadline, outputBefore, ogRequestId)    payer locks USDC          -> Open
 accept(jobId)                                         a cleaner takes it        -> Accepted
 release(jobId, outputAfter >= 90, proof)              oracle: meter says clean  -> Paid (USDC to the cleaner)
-linkEpisode(jobId, episodeRoot)                       oracle: 0G Storage root of the AI episode
+linkEpisode(jobId, ogStorageRoot)                     oracle: 0G Storage root of the AI episode
 cancel(jobId)                                         payer/oracle, still Open  -> Cancelled (USDC back)
 dispute(jobId, reason)                                cleaner, before deadline  -> Disputed
 resolve(jobId, payCleaner)                            committee                 -> Paid or Refunded

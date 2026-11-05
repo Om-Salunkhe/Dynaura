@@ -27,7 +27,7 @@ export const ABI = {
     "function cancel(uint256 jobId)",
     "function refund(uint256 jobId)",
     "function nextJobId() view returns (uint256)",
-    "function jobs(uint256) view returns (address payer, address cleaner, uint96 fee, uint64 deadline, uint16 outputBefore, uint16 outputAfter, uint8 status, bytes32 proof, bytes32 episodeRoot, string ogRequestId)",
+    "function jobs(uint256) view returns (address payer, address cleaner, uint96 fee, uint64 deadline, uint16 outputBefore, uint16 outputAfter, uint8 status, bytes32 proof, bytes32 ogStorageRoot, string ogRequestId)",
     "event JobOpened(uint256 indexed jobId, address indexed payer, uint256 fee, uint64 deadline, uint16 outputBefore, string ogRequestId)",
     "event JobAccepted(uint256 indexed jobId, address indexed cleaner)",
     "event JobPaid(uint256 indexed jobId, address indexed cleaner, uint256 fee, uint16 outputAfter, bytes32 proof)",
@@ -35,7 +35,7 @@ export const ABI = {
     "event JobCancelled(uint256 indexed jobId, address indexed payer, uint256 fee)",
     "event JobDisputed(uint256 indexed jobId, address indexed cleaner, string reason)",
     "event DisputeResolved(uint256 indexed jobId, bool paidCleaner, address indexed to, uint256 fee)",
-    "event EpisodeLinked(uint256 indexed jobId, bytes32 episodeRoot)",
+    "event EpisodeLinked(uint256 indexed jobId, bytes32 ogStorageRoot)",
   ]),
   shop: parseAbi([
     "function pricePerKwh() view returns (uint64)",

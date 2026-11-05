@@ -178,7 +178,7 @@
    {
     "indexed": false,
     "internalType": "bytes32",
-    "name": "episodeRoot",
+    "name": "ogStorageRoot",
     "type": "bytes32"
    }
   ],
@@ -526,7 +526,7 @@
    },
    {
     "internalType": "bytes32",
-    "name": "episodeRoot",
+    "name": "ogStorageRoot",
     "type": "bytes32"
    },
    {
@@ -547,7 +547,7 @@
    },
    {
     "internalType": "bytes32",
-    "name": "episodeRoot",
+    "name": "ogStorageRoot",
     "type": "bytes32"
    }
   ],

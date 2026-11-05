@@ -25,9 +25,9 @@ Lifecycle: `Open` → `Accepted` → `Paid`, plus `Refunded`, `Cancelled` and `D
 - `dispute(uint256 jobId, string reason)`: the cleaner of an `Accepted` job can call it at or before the deadline (for example, "I cleaned it but it is cloudy"). The status becomes `Disputed`, and a disputed job cannot be refunded by the deadline path until `DISPUTE_WINDOW` (constant 3 days) after the deadline. The oracle can still `release` it if the meter sees the panel clean before the deadline.
 - `resolve(uint256 jobId, bool payCleaner)`: **owner only** (the committee), only while `Disputed`. It pays the cleaner or refunds the payer.
 - `refund(uint256 jobId)`: anyone can call it. It returns the fee to the payer for an `Open` or `Accepted` job after the deadline, or for a `Disputed` job after `deadline + DISPUTE_WINDOW`.
-- `linkEpisode(uint256 jobId, bytes32 episodeRoot)`: **oracle only**, for any existing job. The 0G Storage upload finishes after the transaction, so this stores the root and emits `EpisodeLinked`. It can only be set once per job.
-- Struct `Job`, in this order: `payer, cleaner, fee, deadline, outputBefore, outputAfter, status, proof, episodeRoot, ogRequestId`.
-- Events: `JobOpened(jobId, payer, fee, deadline, outputBefore, ogRequestId)`, `JobAccepted`, `JobPaid(jobId, cleaner, fee, outputAfter, proof)`, `JobRefunded`, `JobCancelled`, `JobDisputed(jobId, cleaner, reason)`, `DisputeResolved(jobId, paidCleaner)`, `EpisodeLinked(jobId, episodeRoot)`. Index `jobId` and the addresses.
+- `linkEpisode(uint256 jobId, bytes32 ogStorageRoot)`: **oracle only**, for any existing job. The 0G Storage upload finishes after the transaction, so this stores the root and emits `EpisodeLinked`. It can only be set once per job.
+- Struct `Job`, in this order: `payer, cleaner, fee, deadline, outputBefore, outputAfter, status, proof, ogStorageRoot, ogRequestId`.
+- Events: `JobOpened(jobId, payer, fee, deadline, outputBefore, ogRequestId)`, `JobAccepted`, `JobPaid(jobId, cleaner, fee, outputAfter, proof)`, `JobRefunded`, `JobCancelled`, `JobDisputed(jobId, cleaner, reason)`, `DisputeResolved(jobId, paidCleaner)`, `EpisodeLinked(jobId, ogStorageRoot)`. Index `jobId` and the addresses.
 - Each status change is final; no state may be entered twice. The contract's USDC balance must always equal the sum of the fees of the unfinished jobs.
 
 ## 2. ShopTrade: a nearby shop prepays for spare noon solar, settled by the meter

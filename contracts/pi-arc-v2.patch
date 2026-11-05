@@ -33,7 +33,7 @@ index 602e789..7ada44c 100644
 -                "output_before": j[4], "output_after": j[5], "status": JOB_STATUS[j[6]]}
 +                "output_before": j[4], "output_after": j[5], "status": JOB_STATUS[j[6]],
 +                "proof": "0x" + j[7].hex() if any(j[7]) else None,
-+                "episode_root": "0x" + j[8].hex() if any(j[8]) else None, "og_request_id": j[9] or None}
++                "og_storage_root": "0x" + j[8].hex() if any(j[8]) else None, "og_request_id": j[9] or None}
  
      def release_cleaning(self, job_id: int, output_pct: float, proof: bytes) -> str:
 -        rcpt = self.send(self.need(self.escrow).functions.release(job_id, int(output_pct), proof))
@@ -159,13 +159,13 @@ index dd870ad..5bb4890 100644
 -                    "output_before": lvl, "output_after": None, "open_tx": tx, "cleaner": None}
 -        self._save(f"Panel at {lvl:.0f}% of clean: {fee_usdc:.2f} USDC locked on Arc for a cleaner")
 +                    "output_before": lvl, "output_after": None, "open_tx": tx, "cleaner": None,
-+                    "og_request_id": og_request_id or None, "episode_root": None}
++                    "og_request_id": og_request_id or None, "og_storage_root": None}
 +        self.job["decision_id"] = self._save(f"Panel at {lvl:.0f}% of clean: {fee_usdc:.2f} USDC locked on Arc for a cleaner")
          return self.job
  
 +    def _link_episode(self, job: dict) -> None:
 +        """Once the opening decision's episode is on 0G Storage, write its root into the escrow."""
-+        if job.get("episode_root") or not job.get("decision_id") or job.get("link_tries", 0) >= 3:
++        if job.get("og_storage_root") or not job.get("decision_id") or job.get("link_tries", 0) >= 3:
 +            return
 +        d = next((x for x in self.store.decisions(kind="cleaning", limit=50) if x["id"] == job["decision_id"]), None)
 +        root = d and d.get("storage_root")
@@ -173,7 +173,7 @@ index dd870ad..5bb4890 100644
 +            return
 +        try:
 +            job["link_tx"] = self.arc.link_episode(job["job_id"], root)
-+            job["episode_root"] = root
++            job["og_storage_root"] = root
 +            log.info("Cleaning job #%s linked to 0G episode %s", job["job_id"], root)
 +        except Exception as e:
 +            job["link_tries"] = job.get("link_tries", 0) + 1
