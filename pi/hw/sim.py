@@ -58,6 +58,12 @@ class SimHardware(Hardware):
             else:
                 raise ValueError(f"unknown moment {name!r}")
 
+    def panel_health_pct(self) -> float | None:
+        """SIM knows the dust directly (clouds do not count as dirt). None when the sun is too low."""
+        if self.sun_fraction() < 0.2:
+            return None
+        return round(self._dust * 100 * self._rng.uniform(0.98, 1.02), 1)
+
     def set_away(self, flat: str, away: bool) -> None:
         self.check_flat(flat)
         with self._lock:

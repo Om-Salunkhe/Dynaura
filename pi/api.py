@@ -17,8 +17,10 @@ from fastapi.responses import StreamingResponse
 import config
 import dyna
 import zg
+from arc import Arc, ArcUnavailable
 from arkiv import ArkivQueue
 from brain import Brain
+from cleaning import CleaningWatch
 from hw import FLATS, load_hardware
 from jobs import JobRunner, PlanScheduler
 from meter import MeterLoop
@@ -40,6 +42,8 @@ class App:
     uploader = None
     arkiv = None
     scheduler = None
+    arc = None
+    cleaning = None
 
 
 @asynccontextmanager
@@ -66,6 +70,11 @@ async def lifespan(_: FastAPI):
         App.brain.on_offer = lambda offer: App.arkiv.post("/offer", offer)
         App.brain.arkiv = App.arkiv
         App.arkiv.start()
+    App.arc = Arc()
+    App.cleaning = CleaningWatch(App.hw, App.loop, App.store, App.arc, App.brain)
+    if App.arkiv:
+        App.cleaning.on_job = on_cleaning_job
+    App.cleaning.start()
     App.scheduler = PlanScheduler(App.brain)
     App.scheduler.start()
     log.info("Dynaura up: hw=%s device=%s", config.HW, App.signer.address)
@@ -75,11 +84,26 @@ async def lifespan(_: FastAPI):
         if App.arkiv:
             App.arkiv.stop()
         App.scheduler.stop()
+        App.cleaning.stop()
         App.runner.stop()
         App.loop.stop()
         App.loop.safe_stop("api shutting down")
         App.hw.close()
         App.store.close()
+
+
+def on_cleaning_job(job: dict) -> None:
+    """Every escrow change goes to Arkiv; a paid job also becomes a maintenance record."""
+    tx = job.get("release_tx") or job.get("refund_tx") or job.get("open_tx")
+    App.arkiv.post("/cleaning_job", {**{k: job.get(k) for k in
+                   ("job_id", "status", "fee_usdc", "deadline", "output_before", "output_after")}, "arc_tx": tx})
+    if job["status"] == "paid":
+        App.arkiv.post("/maintenance", {
+            "title": "Panel cleaned",
+            "details": f"Output {job['output_before']:.0f}% -> {job['output_after']:.0f}%. "
+                       f"Paid {job['fee_usdc']:.2f} USDC to {job.get('cleaner')} from Arc escrow #{job['job_id']}.",
+            "arc_tx": tx,
+        })
 
 
 app = FastAPI(title="Dynaura Pi API", lifespan=lifespan)
@@ -90,13 +114,18 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 def health():
     arkiv = {"enabled": bool(App.arkiv), "ok": App.arkiv.ok if App.arkiv else None,
              "error": App.arkiv.last_error if App.arkiv else None}
-    return {"ok": True, "hw": config.HW, "device": App.signer.address, "arkiv": arkiv,
+    arc = {"enabled": App.arc.enabled, "wallet": App.arc.address if App.arc.enabled else None}
+    return {"ok": True, "hw": config.HW, "device": App.signer.address, "arkiv": arkiv, "arc": arc,
             "zg_storage_ready": App.uploader.ready() if App.uploader else False}
+
+
+def live() -> dict:
+    return {**App.loop.state, "runner": App.runner.status, "cleaning": App.cleaning.status}
 
 
 @app.get("/api/state")
 def state():
-    return {**App.loop.state, "runner": App.runner.status}
+    return live()
 
 
 @app.get("/api/stream")
@@ -110,7 +139,7 @@ async def stream(request: Request):
             st = App.loop.state
             if st and st.get("ts") != last_ts:
                 last_ts = st["ts"]
-                yield f"data: {json.dumps({**st, 'runner': App.runner.status})}\n\n"
+                yield f"data: {json.dumps(live())}\n\n"
             await asyncio.sleep(0.5)
 
     return StreamingResponse(events(), media_type="text/event-stream",
@@ -176,6 +205,27 @@ def set_price(body: dict, x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     App.brain.price = max(0.0, float(body.get("price_usdc", config.SHOP_PRICE_USDC)))
     return {"price_usdc": App.brain.price}
+
+
+@app.get("/api/cleaning")
+def cleaning():
+    return App.cleaning.status
+
+
+@app.post("/api/admin/cleaning")
+def post_cleaning(body: dict, x_admin_key: str | None = Header(default=None)):
+    """Admin posts a cleaning job: {"fee_usdc": 2, "deadline_min": 60} -> USDC locked on Arc"""
+    require_admin(x_admin_key)
+    try:
+        with App.cleaning._lock:
+            return App.cleaning.open_job(float(body.get("fee_usdc", config.CLEAN_FEE_USDC)),
+                                         int(body.get("deadline_min", config.CLEAN_DEADLINE_MIN)))
+    except ArcUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Arc transaction failed: {e}")
 
 
 @app.post("/api/ask")

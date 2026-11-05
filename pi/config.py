@@ -58,3 +58,21 @@ ARKIV_ENABLED = os.getenv("ARKIV_ENABLED", "true").lower() == "true"
 
 # Price for spare solar sold to nearby shops (USDC per kWh); the admin can change it in the app
 SHOP_PRICE_USDC = float(os.getenv("SHOP_PRICE_USDC", "0.08") or 0.08)
+
+# Arc testnet (contracts deployed from Arc Studio, see contracts/README.md)
+ARC_RPC_URL = os.getenv("ARC_RPC_URL", "https://rpc.testnet.arc.io").strip()
+ARC_CHAIN_ID = int(os.getenv("ARC_CHAIN_ID", "5042002") or 5042002)
+ARC_PRIVATE_KEY = os.getenv("ARC_PRIVATE_KEY", "").strip()   # Pi wallet = oracle of the contracts
+ARC_USDC = os.getenv("ARC_USDC", "0x3600000000000000000000000000000000000000").strip()
+ARC_ESCROW = os.getenv("ARC_ESCROW", "").strip()
+ARC_SHOP = os.getenv("ARC_SHOP", "").strip()
+ARC_BILLING = os.getenv("ARC_BILLING", "").strip()
+ARC_MIN_FEE_GWEI = float(os.getenv("ARC_MIN_FEE_GWEI", "20") or 20)
+
+# Panel cleaning: alert under DUST_PCT of the clean level, pay the cleaner at CLEAN_PCT or more
+PANEL_BEST_W = float(os.getenv("PANEL_BEST_W", "0") or 0)  # clean panel, all flats on solar (calibrate)
+DUST_PCT = float(os.getenv("DUST_PCT", "70") or 70)
+CLEAN_PCT = float(os.getenv("CLEAN_PCT", "90") or 90)
+CLEAN_FEE_USDC = float(os.getenv("CLEAN_FEE_USDC", "2") or 2)
+CLEAN_DEADLINE_MIN = int(os.getenv("CLEAN_DEADLINE_MIN", "60") or 60)
+CLEAN_AUTO = os.getenv("CLEAN_AUTO", "true").lower() == "true"  # open the escrow by itself when dusty

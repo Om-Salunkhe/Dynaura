@@ -4,7 +4,7 @@ import { and, desc, eq } from "@arkiv-network/sdk/query"
 import { addr, dec, u64 } from "@arkiv-network/sdk/schema"
 import { hexToBytes, stringToBytes } from "viem"
 import { account, BUILDING, publicClient, route, walletClient } from "./bridge.mjs"
-import { DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading } from "./schemas.mjs"
+import { CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading } from "./schemas.mjs"
 
 // Decimals as plain strings ("0.004167"), never scientific notation
 export const d = (n, places = 6) => dec(Number(n || 0).toFixed(places).replace(/\.?0+$/, "") || "0")
@@ -172,4 +172,52 @@ route("POST", "/offer", async (b) => {
     { expiration: ExpirationTime.fromMinutes(Math.ceil(secondsLeft / 60)) },
   )
   return { key: entityKey, txHash }
+})
+
+// POST /cleaning_job  {job_id, status, fee_usdc, deadline, output_before, output_after?, arc_tx?}
+// Created when the escrow opens, patched as it is accepted / paid / refunded.
+// Lives until a day after the deadline; the lasting record is the Maintenance entry.
+const jobKeys = new Map()
+
+route("POST", "/cleaning_job", async (b) => {
+  const set = {
+    status: String(b.status),
+    ...(b.output_after != null ? { output_after: d(b.output_after, 1) } : {}),
+    ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
+  }
+  let k = jobKeys.get(String(b.job_id))
+  if (!k) {
+    try {
+      const found = await publicClient
+        .select({ $key: true })
+        .from(CleaningJob)
+        .where(and(eq("building", BUILDING), eq("job_id", u64(BigInt(b.job_id)))))
+        .ownedBy(account.address)
+        .limit(1)
+        .fetch()
+      k = found.entities[0]?.$key
+    } catch (e) {
+      console.warn("cleaning job lookup failed, creating a new one:", e?.shortMessage || e?.message)
+    }
+  }
+  if (k) {
+    const r = await walletClient.patchEntity(CleaningJob, k, { set })
+    jobKeys.set(String(b.job_id), k)
+    return { key: k, txHash: r.txHash, patched: true }
+  }
+  const secondsLeft = Math.max(0, Number(b.deadline) - Math.floor(Date.now() / 1000))
+  const { entityKey, txHash } = await walletClient.createEntity(
+    CleaningJob,
+    {
+      building: BUILDING,
+      job_id: u64(BigInt(b.job_id)),
+      fee_usdc: d(b.fee_usdc),
+      deadline: u64(BigInt(Math.floor(Number(b.deadline)))),
+      output_before: d(b.output_before, 1),
+      ...set,
+    },
+    { expiration: ExpirationTime.fromMinutes(Math.ceil(secondsLeft / 60) + 24 * 60) },
+  )
+  jobKeys.set(String(b.job_id), entityKey)
+  return { key: entityKey, txHash, patched: false }
 })

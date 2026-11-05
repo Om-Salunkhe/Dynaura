@@ -55,6 +55,11 @@ class Hardware(ABC):
     def safe_stop(self) -> None:
         """All flats to grid, pump off. Must never raise."""
 
+    def panel_health_pct(self) -> float | None:
+        """Panel output as % of a clean panel in the same light, if the backend can tell.
+        Default None: the cleaning watch then compares the panel meter with PANEL_BEST_W."""
+        return None
+
     def close(self) -> None:
         """Release GPIO and buses. Default: safe stop."""
         self.safe_stop()
