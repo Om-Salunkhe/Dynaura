@@ -86,6 +86,33 @@ def test_escrow():
     print("escrow ok")
 
 
+def test_shop():
+    st = deploy("ShopTrade", usdc.address, oracle, society, 80_000)  # 0.08 USDC / kWh
+    assert st.functions.costOf(1500).call() == 120_000  # 1.5 kWh -> 0.12 USDC
+    tx(usdc.functions.approve(st.address, 10 * USDC), shop)
+    s0, t0 = bal(shop), bal(society)
+    tx(st.functions.placeOrder("2026-11-06", 1500, now() + 3600), shop)
+    assert bal(st.address) == 120_000
+    reverts(st.functions.settle(1, 1000), stranger, selector("NotOracle()"))
+    tx(st.functions.settle(1, 1000), oracle)  # only 1 kWh delivered
+    assert bal(society) - t0 == 80_000 and s0 - bal(shop) == 80_000
+    reverts(st.functions.settle(1, 1000), oracle, selector("BadStatus()"))
+
+    tx(st.functions.placeOrder("2026-11-06", 500, now() + 60), shop)
+    tx(st.functions.settle(2, 9999), oracle)  # over-report is capped at the order
+    assert st.functions.orders(2).call()[3] == 500
+
+    tx(st.functions.placeOrder("2026-11-07", 500, now() + 60), shop)
+    reverts(st.functions.refund(3), shop, selector("TooEarly()"))
+    warp(120)
+    reverts(st.functions.refund(3), stranger, selector("NotShop()"))
+    before = bal(shop)
+    tx(st.functions.refund(3), shop)
+    assert bal(shop) - before == 40_000
+    print("shop ok")
+
+
 if __name__ == "__main__":
     test_escrow()
+    test_shop()
     print("all contract tests passed")

@@ -1,0 +1,418 @@
+[
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "usdc_",
+    "type": "address"
+   },
+   {
+    "internalType": "address",
+    "name": "oracle_",
+    "type": "address"
+   },
+   {
+    "internalType": "address",
+    "name": "treasury_",
+    "type": "address"
+   },
+   {
+    "internalType": "uint64",
+    "name": "pricePerKwh_",
+    "type": "uint64"
+   }
+  ],
+  "stateMutability": "nonpayable",
+  "type": "constructor"
+ },
+ {
+  "inputs": [],
+  "name": "BadAmount",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "BadStatus",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NotOracle",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NotOwner",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NotShop",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "TooEarly",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "TransferFailed",
+  "type": "error"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "orderId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "shop",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "string",
+    "name": "day",
+    "type": "string"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint32",
+    "name": "wantWh",
+    "type": "uint32"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "deposit",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint64",
+    "name": "pricePerKwh",
+    "type": "uint64"
+   }
+  ],
+  "name": "OrderPlaced",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "orderId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "shop",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "refunded",
+    "type": "uint256"
+   }
+  ],
+  "name": "OrderRefunded",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "orderId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "shop",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint32",
+    "name": "deliveredWh",
+    "type": "uint32"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "paid",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "refunded",
+    "type": "uint256"
+   }
+  ],
+  "name": "OrderSettled",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": false,
+    "internalType": "uint64",
+    "name": "pricePerKwh",
+    "type": "uint64"
+   }
+  ],
+  "name": "PriceSet",
+  "type": "event"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint32",
+    "name": "wh",
+    "type": "uint32"
+   }
+  ],
+  "name": "costOf",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "nextOrderId",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "oracle",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "name": "orders",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "shop",
+    "type": "address"
+   },
+   {
+    "internalType": "uint96",
+    "name": "deposit",
+    "type": "uint96"
+   },
+   {
+    "internalType": "uint32",
+    "name": "wantWh",
+    "type": "uint32"
+   },
+   {
+    "internalType": "uint32",
+    "name": "deliveredWh",
+    "type": "uint32"
+   },
+   {
+    "internalType": "uint64",
+    "name": "pricePerKwh",
+    "type": "uint64"
+   },
+   {
+    "internalType": "uint64",
+    "name": "deadline",
+    "type": "uint64"
+   },
+   {
+    "internalType": "enum ShopTrade.Status",
+    "name": "status",
+    "type": "uint8"
+   },
+   {
+    "internalType": "string",
+    "name": "day",
+    "type": "string"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "owner",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "string",
+    "name": "day",
+    "type": "string"
+   },
+   {
+    "internalType": "uint32",
+    "name": "wantWh",
+    "type": "uint32"
+   },
+   {
+    "internalType": "uint64",
+    "name": "deadline",
+    "type": "uint64"
+   }
+  ],
+  "name": "placeOrder",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "orderId",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "pricePerKwh",
+  "outputs": [
+   {
+    "internalType": "uint64",
+    "name": "",
+    "type": "uint64"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "orderId",
+    "type": "uint256"
+   }
+  ],
+  "name": "refund",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "oracle_",
+    "type": "address"
+   }
+  ],
+  "name": "setOracle",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint64",
+    "name": "pricePerKwh_",
+    "type": "uint64"
+   }
+  ],
+  "name": "setPrice",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "orderId",
+    "type": "uint256"
+   },
+   {
+    "internalType": "uint32",
+    "name": "deliveredWh",
+    "type": "uint32"
+   }
+  ],
+  "name": "settle",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "treasury",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "usdc",
+  "outputs": [
+   {
+    "internalType": "contract IERC20",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ }
+]
