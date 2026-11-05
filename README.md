@@ -174,7 +174,7 @@ The web app on Vercel is served over https, so it can't call the Pi's plain-http
 | [`web/`](web/) | React app for residents, the committee, the cleaner and shops |
 | [`arkiv/`](arkiv/) | Arkiv schema and judging files |
 | [`deploy/`](deploy/) | systemd units and the Pi setup guide |
-| [`docs/`](docs/) | Architecture, demo script, submission checklist, AI-usage notes |
+| [`docs/`](docs/) | Architecture and AI-usage notes |
 
 ## Team
 
