@@ -90,6 +90,19 @@ def test_estimate_below_what_was_drawn_never_invents_spare():
     assert out["pool"]["grid_wh"] == 0
 
 
+def test_a_flat_is_under_or_over_for_the_period_never_both():
+    """Morning: A leaves 10, B takes 6. Afternoon: A takes 4 of C's. Per period A is net under by 6."""
+    morning = {"available_wh": 30, "panel_wh": 26, "used": {"A": 0, "B": 16, "C": 10}}
+    afternoon = {"available_wh": 30, "panel_wh": 30, "used": {"A": 14, "B": 10, "C": 6}}
+    out = credits.settle_period([morning, afternoon], THREE, P, scale=1.0)
+    a, b, c = (out["flats"][f] for f in "ABC")
+    for x in (a, b, c):
+        assert x["unused_wh"] == 0 or x["over_wh"] == 0, x
+    assert (a["unused_wh"], b["over_wh"], c["unused_wh"]) == (6, 6, 4)
+    assert out["pool"]["neighbor_wh"] == 6 and out["pool"]["grid_wh"] == 4
+    close(out["spare_wh"] - out["pool"]["neighbor_wh"], 60 - 56), "spare minus neighbours = what left the building"
+
+
 def test_shares_config_and_scale():
     assert credits.parse_shares("A:2,B:1,C:0") == {"A": 2.0, "B": 1.0, "C": 0.0}
     assert credits.parse_shares("") == {"A": 1.0, "B": 1.0, "C": 1.0}

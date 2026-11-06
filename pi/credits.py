@@ -12,8 +12,10 @@ Per minute, from the Pi's signed 1-minute summaries plus what the panel *could* 
     common     solar used by common loads (the pump): what the panel meter drew beyond the flats
     share[f]   (available - common) * weight[f] / sum(weights)
     used[f]    the flat's solar use (its meter while its relay was on solar)
+Summed over a period (today, a day, a month), then per period, as SolarCredits takes them:
     unused[f]  max(0, share - used)          over[f]  max(0, used - share): bought from neighbours
-Minutes are summed into a period (today, a day, a month).
+so a flat is either under its share or over it, never both, and sum(unused) - sum(over) is exactly
+the sun that left the building.
 
 The spare pool (sum of unused) goes to: neighbours (what the over-users took), the shop (the 0G
 trader's shop routes), and the grid at the feed-in rate (the rest). With no 0G trade, nothing goes
@@ -69,7 +71,8 @@ def prices() -> dict:
     """USDC per real kWh. The neighbour price defaults to the middle of the export..import band."""
     export = _f("EXPORT_RATE_USDC", 0.006)
     grid = _f("GRID_RATE_USDC", 0.02)
-    neighbor = _f("NEIGHBOR_RATE_USDC", 0) or round((export + grid) / 2, 6)
+    # 0.001 USDC/kWh steps: SolarCredits keeps the rate per Wh in USDC base units (1 = 0.001/kWh)
+    neighbor = round(_f("NEIGHBOR_RATE_USDC", 0) or (export + grid) / 2, 3)
     return {"export": export, "import": grid, "neighbor": neighbor, "shop": _f("SHOP_PRICE_USDC", 0.08)}
 
 
@@ -116,7 +119,7 @@ def trade_terms(trades: list[dict], p: dict) -> tuple[float, float, float]:
             elif r.get("to") in FLATS and wh > 0 and p["export"] <= price <= p["import"]:
                 n_wh += wh
                 n_usdc += wh * price
-    neighbor = round(n_usdc / n_wh, 6) if n_wh else p["neighbor"]
+    neighbor = round(n_usdc / n_wh, 3) if n_wh else p["neighbor"]  # same 0.001 step as on chain
     shop = round(shop_usdc / shop_wh, 6) if shop_wh else p["shop"]
     return shop_wh, neighbor, shop
 
@@ -127,15 +130,24 @@ def settle_period(minutes: list[dict], weights: dict[str, float], p: dict | None
     p = dict(p or prices())
     trades = trades or []
     k = kwh_per_wh() if scale is None else scale
-    tot = {"available": 0.0, "common": 0.0, "spare": 0.0, "neighbor": 0.0}
-    per = {f: {"share": 0.0, "used": 0.0, "unused": 0.0, "over": 0.0} for f in weights}
-    for row in minutes:
+    tot = {"available": 0.0, "common": 0.0}
+    per = {f: {"share": 0.0, "used": 0.0} for f in weights}
+    for row in minutes:  # shares follow the sun minute by minute...
         m = minute_split(row, weights)
-        for key in tot:
-            tot[key] += m[key]
+        tot["available"] += m["available"]
+        tot["common"] += m["common"]
         for f in weights:
-            for key in per[f]:
-                per[f][key] += m[key][f]
+            per[f]["share"] += m["share"][f]
+            per[f]["used"] += m["used"][f]
+    for f in weights:  # ...but a flat is either under or over its share for the period, as on chain
+        per[f]["unused"] = max(0.0, per[f]["share"] - per[f]["used"])
+        per[f]["over"] = max(0.0, per[f]["used"] - per[f]["share"])
+    tot["spare"] = sum(x["unused"] for x in per.values())
+    tot["neighbor"] = min(tot["spare"], sum(x["over"] for x in per.values()))
+    if tot["neighbor"] < sum(x["over"] for x in per.values()):  # meter noise: buyers pay only for what was spare
+        ratio = tot["neighbor"] / sum(x["over"] for x in per.values())
+        for x in per.values():
+            x["over"] *= ratio
     shop_wanted, p["neighbor"], p["shop"] = trade_terms(trades, p)
     exportable = max(0.0, tot["spare"] - tot["neighbor"])
     shop_wh = min(exportable, shop_wanted)
