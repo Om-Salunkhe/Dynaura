@@ -15,7 +15,7 @@
 // 4. A and B claim. SolarCredits computes pool * unused / sum(unused) itself: A gets 0.30, B gets 0.10,
 //    so A gets 3x B (an equal split would have given each 0.20).
 // Every transaction is saved under "demoTxs" in deployments.json.
-import { getAddress, keccak256, parseAbi, parseEventLogs, stringToHex } from "viem"
+import { getAddress, keccak256, parseAbi, parseEventLogs, sha256, stringToHex } from "viem"
 import { flags, setup, usd } from "./chain.mjs"
 
 const args = flags()
@@ -29,10 +29,9 @@ const flat = { A: c.key("ARC_FLAT_A_PRIVATE_KEY"), B: c.key("ARC_FLAT_B_PRIVATE_
 if ((await c.read(sc, "oracle")) !== pi.address) throw new Error("the env's oracle key is not SolarCredits' oracle")
 if ((await c.read(sc, "owner")) !== committee.address) throw new Error("the committee must own SolarCredits")
 
-const building = c.dep.building || "sunrise-apartments"
 const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)
 const key = args.key || `e2e-${stamp}`
-const periodId = keccak256(stringToHex(`${building}:${key}`)) // the Pi's credit_period_id(key)
+const periodId = sha256(stringToHex(`dynaura-credits:${key}`)) // the Pi's credit_period_id(key)
 const RATE = 13n // micro-USDC per Wh: 0.013 USDC per kWh, the midpoint of export 0.006 and import 0.02
 const day = { A: { unused: 30_000n, over: 0n }, B: { unused: 10_000n, over: 0n }, C: { unused: 0n, over: 20_000n } }
 const shopAndGrid = 140_000n // 0.14 USDC
