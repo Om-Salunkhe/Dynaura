@@ -47,6 +47,9 @@ def _f(name: str, default: float) -> float:
 ENABLED = str(getattr(config, "CREDITS_ENABLED", os.getenv("CREDITS_ENABLED", "true"))).lower() == "true"
 CREDITS_DB = os.getenv("CREDITS_DB", "credits.db")
 SAMPLE_S = 5.0          # how often the panel's available power is sampled
+TRADE_EVERY_MIN = float(os.getenv("TRADE_EVERY_MIN", "15") or 15)  # 0G routes the spare this often
+TRADE_MIN_SPARE_WH = float(os.getenv("TRADE_MIN_SPARE_WH", "0.01") or 0.01)  # below this, no trade call
+SHOP_DEMAND_WH = float(os.getenv("SHOP_DEMAND_WH", "0") or 0)  # standing shop demand per window (model Wh), on top of Arc orders
 ARKIV_EVERY_S = 600     # today's credit period goes to Arkiv every 10 minutes
 COMMON_NOISE = 0.03     # panel minus flats below 3% of the panel is meter noise, not the pump
 
@@ -183,10 +186,13 @@ def _range(period: str, now: float | None = None) -> tuple[str, int, int]:
 
 
 class Ledger:
-    def __init__(self, store, hw, arkiv=None, *, path: str | None = None, shares: str | None = None):
+    def __init__(self, store, hw, arkiv=None, *, path: str | None = None, shares: str | None = None, sales=None):
         self.store = store
         self.hw = hw
         self.arkiv = arkiv
+        self.sales = sales  # ShopSettler: today's open shop orders are the shop's demand
+        self.trade = None  # callable(window snapshot) -> trade result; set by api.py when trader.py is there
+        self.last_trade: dict | None = None
         self.weights = parse_shares(shares if shares is not None else os.getenv("FLAT_SHARES", ""))
         self._db = sqlite3.connect(path or CREDITS_DB, check_same_thread=False, isolation_level=None)
         self._db.execute("PRAGMA journal_mode=WAL")
@@ -295,10 +301,34 @@ class Ledger:
         start = end - minutes * 60
         out = settle_period(self.minutes(start, end), self.weights, prices())
         p = prices()
-        return {"since": start, "until": end, "spare_wh": out["spare_wh"],
+        return {"since": start, "until": end, "window": [start, end], "spare_wh": out["spare_wh"],
                 "needs": {f: x["over_wh"] for f, x in out["flats"].items() if x["over_wh"] > 0},
                 "unused": {f: x["unused_wh"] for f, x in out["flats"].items()},
+                "shop_order_wh": self.shop_order_wh(now),
                 "prices": {"export": p["export"], "import": p["import"], "neighbor_default": p["neighbor"], "shop": p["shop"]}}
+
+    def shop_order_wh(self, now: float | None = None) -> float:
+        """What the shop still wants today (model Wh): its open ShopTrade orders (want_wh is real Wh)
+        minus what 0G already routed to the shop today, plus any standing SHOP_DEMAND_WH."""
+        day = datetime.fromtimestamp(now or time.time()).strftime("%Y-%m-%d")
+        want = 0.0
+        for o in list(getattr(self.sales, "orders", {}).values()):
+            if o.get("status") == "open" and o.get("day") == day:
+                want += float(o.get("want_wh") or 0) / _f("BILL_SCALE", 1000)
+        _, start, end = _range(day)
+        routed = sum(float(r.get("wh") or 0) for t in self.trades(start, end) if t.get("mode") == "ai"
+                     for r in t["routes"] if r.get("to") == "shop")
+        return round(max(0.0, want - routed) + SHOP_DEMAND_WH, 4)
+
+    def trade_now(self, minutes: float | None = None, now: float | None = None) -> dict:
+        """Ask the 0G trader where the last window's spare goes (it records the decision)."""
+        if not self.trade:
+            raise RuntimeError("the 0G trader (pi/trader.py) is not in this build")
+        snap = self.window(int(minutes or TRADE_EVERY_MIN), now)
+        if snap["spare_wh"] < TRADE_MIN_SPARE_WH:
+            return {"skipped": "no spare sun in the window", "window": snap}
+        self.last_trade = {"at": int(time.time()), **(self.trade(snap) or {})}
+        return self.last_trade
 
     # ---- on chain (SolarCredits, helpers in arc.py) ----------------------------------------
     def settle(self, arc, period: str = "today") -> dict:
@@ -363,7 +393,7 @@ class Ledger:
 
     # ---- threads -----------------------------------------------------------------------
     def _run(self) -> None:
-        last, last_post, last_trades = time.monotonic(), 0.0, 0.0
+        last, last_post, last_trades, last_call = time.monotonic(), 0.0, 0.0, time.time()
         while not self._stop.wait(SAMPLE_S):
             now = time.monotonic()
             try:
@@ -371,6 +401,12 @@ class Ledger:
             except Exception:
                 log.exception("credits sample failed")
             last = now
+            if self.trade and time.time() - last_call >= TRADE_EVERY_MIN * 60:
+                last_call = time.time()
+                try:
+                    self.trade_now()
+                except Exception:
+                    log.exception("credits trade failed")
             try:
                 if time.time() - last_trades > 30:  # a new 0G trade reaches Arkiv within ~30 s
                     last_trades = time.time()

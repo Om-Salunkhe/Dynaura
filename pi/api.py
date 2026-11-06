@@ -91,7 +91,14 @@ async def lifespan(_: FastAPI):
     App.scheduler = PlanScheduler(App.brain)
     App.scheduler.start()
     if credits.ENABLED:  # fair share + solar credits (dy-arkiv); off = no change
-        App.credits = credits.Ledger(App.store, App.hw, App.arkiv)
+        App.credits = credits.Ledger(App.store, App.hw, App.arkiv, sales=App.sales)
+        try:  # the 0G trader (dy-0g) routes each window's spare; without trader.py, no trades
+            import trader
+            App.credits.trade = lambda snap: trader.decide_routes(
+                **trader.from_ledger(snap), store=App.store, uploader=App.uploader,
+                notify=lambda did: App.brain.on_decision and App.brain.on_decision(did))
+        except ImportError:
+            log.info("pi/trader.py not found: no 0G trades yet, the spare counts as grid export")
         App.credits.start()
     log.info("Dynaura up: hw=%s device=%s", config.HW, App.signer.address)
     try:
@@ -405,6 +412,18 @@ def get_credits(period: str = "today"):
         return App.credits.period(period)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/admin/credits/trade")
+def trade_credits(body: dict | None = None, x_admin_key: str | None = Header(default=None)):
+    """Demo: ask 0G now where the last window's spare sun goes (default window TRADE_EVERY_MIN)."""
+    require_admin(x_admin_key)
+    if not App.credits:
+        raise HTTPException(status_code=404, detail="credits are off (CREDITS_ENABLED=false)")
+    try:
+        return App.credits.trade_now((body or {}).get("minutes"))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.post("/api/admin/credits/settle")

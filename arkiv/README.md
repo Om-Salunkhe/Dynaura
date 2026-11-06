@@ -13,7 +13,7 @@ The building's heartbeat expiring is its offline alarm.
 
 | File | What |
 |---|---|
-| [schema.md](schema.md) | The 9 schemas: indexed columns, lifetimes, what is sealed, how they link to 0G and Arc |
+| [schema.md](schema.md) | The 13 schemas: indexed columns, lifetimes, what is sealed, how they link to 0G and Arc |
 | [how-you-use-arkiv.md](how-you-use-arkiv.md) | Screens ↔ queries, edit rights, expiry, the write path, live transactions, measurements |
 | [why-arkiv.md](why-arkiv.md) | What a normal database would lose, and what we kept off Arkiv |
 | [friction.md](friction.md) | What got in our way, with reproductions and evidence |
