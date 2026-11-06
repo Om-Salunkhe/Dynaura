@@ -91,7 +91,7 @@ def _find_tee(obj, out=None, path=""):
     return out
 
 
-def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2, model: str | None = None) -> ZGReply:
+def chat(messages: list[dict], max_tokens: int = 4000, temperature: float = 0.2, model: str | None = None) -> ZGReply:
     model = model or config.ZG_MODEL
     t0 = time.monotonic()
     try:

@@ -37,7 +37,7 @@ def ask(store, brain, flat: str, question: str) -> dict:
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": f"Data:\n{json.dumps(context)}\n\nQuestion: {question[:500]}"},
         ],
-        max_tokens=500,
+        max_tokens=2000,
         temperature=0.3,
     )
     answer = zg.extract_text(reply.text)

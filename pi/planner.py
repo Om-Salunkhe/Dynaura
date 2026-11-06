@@ -103,7 +103,7 @@ def validate(plan: dict, forecast: dict) -> dict:
 def make_plan(forecast: dict, history: list[dict], away: dict[str, bool]) -> tuple[dict, zg.ZGReply, str]:
     """Returns (validated plan, 0G reply, prompt). Raises zg.ZGUnavailable on any failure."""
     prompt = build_prompt(forecast, history, away)
-    reply = zg.chat([{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}])
+    reply = zg.chat([{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}], max_tokens=6000)
     plan = validate(zg.extract_json(reply.text), forecast)
     log.info("0G plan %s: %s", reply.request_id, plan["summary"])
     return plan, reply, prompt
