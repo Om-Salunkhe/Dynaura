@@ -89,6 +89,7 @@ export default function CleanerJobs() {
                   {Math.round(j.outputBefore)}%{j.outputAfter != null ? ` → ${Math.round(j.outputAfter)}%` : ""} output
                 </span>
                 <Proof kind="arc" id={j.arcTx} />
+                <Proof kind="og" id={j.ogStorageRoot} />
                 <Proof kind="arkiv" id={j.key} />
               </span>
             </div>
