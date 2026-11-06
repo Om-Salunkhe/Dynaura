@@ -17,9 +17,11 @@ Summed over a period (today, a day, a month), then per period, as SolarCredits t
 so a flat is either under its share or over it, never both, and sum(unused) - sum(over) is exactly
 the sun that left the building.
 
-The spare pool (sum of unused) goes to: neighbours (what the over-users took), the shop (the 0G
-trader's shop routes), and the grid at the feed-in rate (the rest). With no 0G trade, nothing goes
-to the shop: the spare goes to the grid, recorded as no-ai. A routing is never invented here.
+The spare pool (sum of unused) goes to: neighbours (what over-users drew, by the meters, at the
+neighbour price), the shop (the 0G trader's shop routes) and the grid at the feed-in rate (the
+rest). With no 0G (no-ai trades, a fixed rule): neighbours' drawn energy is still settled, at the
+default midpoint price; nothing goes to the shop; the rest goes to the grid. A routing is never
+invented here.
 
 Units: *_wh are model Wh, the meters' unit. 1 model Wh = BILL_SCALE/1000 real kWh. Prices are USDC
 per real kWh, like billing.py. Behind CREDITS_ENABLED (default true); off = nothing runs.
