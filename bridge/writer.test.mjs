@@ -7,6 +7,7 @@ import { encodeAbiParameters, encodeEventTopics, keccak256, toHex } from "viem"
 
 process.env.ARKIV_MAX_QUEUE = "3"
 process.env.ARKIV_RECEIPT_WAIT_MS = "300"
+process.env.ARKIV_WRITE_DEADLINE_MS = "200"
 const { createWriter, QueueFullError, UncertainWriteError } = await import("./writer.mjs")
 
 const ME = "0x00000000000000000000000000000000000000aa"
@@ -200,4 +201,19 @@ test("a hash with no receipt is marked uncertain and never resent", async () => 
   )
   assert.equal(calls, 1)
   assert.equal(w.stats().uncertain.length, 1)
+})
+
+test("an SDK call that hangs after the tx was mined: found by nonce at the deadline, not resent", async () => {
+  const c = fakeChain()
+  const w = createWriter({ publicClient: c.client, address: ME, log: quiet })
+  let calls = 0
+  const t0 = Date.now()
+  const out = await w.enqueue("readings", async (tx) => {
+    calls++
+    c.mine(tx.nonce, { created: [key(3)] }) // mined at once...
+    return new Promise(() => {}) // ...but the receipt wait never returns
+  })
+  assert.equal(calls, 1)
+  assert.equal(out.entityKey, key(3))
+  assert.ok(Date.now() - t0 < 2000, "settled at the deadline, not minutes later")
 })

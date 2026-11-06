@@ -16,14 +16,19 @@
 //       - no hash, nonce still free    -> it never left: retry once with the SAME nonce, so even
 //                                         if the first copy turns up later only one can land
 //     An uncertain write is never sent again automatically; it shows up in /health.
+//  5. No attempt is waited on for more than 45 s: after that it is reconciled by nonce like a lost reply.
 import { ENTITY_EVENTS_ABI, EntityMutationError } from "@arkiv-network/sdk"
 import { decodeEventLog } from "viem"
-import { isRetryable, sleep, withBackoff } from "./retry.mjs"
+import { isRetryable, redact, sleep, withBackoff } from "./retry.mjs"
 
 const ARKIV_ADDRESS = "0x4400000000000000000000000000000000000044" // the entity engine
 const MAX_QUEUE = Number(process.env.ARKIV_MAX_QUEUE || 200)
 const RECEIPT_WAIT_MS = Number(process.env.ARKIV_RECEIPT_WAIT_MS || 60_000)
 const NONCE_SCAN_BLOCKS = 90 // ~3 minutes of 2 s blocks
+// viem's receipt wait can hang for minutes while the RPC is degraded, even after the tx is mined
+// (seen live: mined in 4 s, the SDK returned after 505 s, holding up every heartbeat behind it).
+// Past this deadline we stop waiting on the SDK and reconcile by nonce, as for any lost reply.
+const WRITE_DEADLINE_MS = Number(process.env.ARKIV_WRITE_DEADLINE_MS || 45_000)
 const MAX_GAS = 15_000_000n // half of Rabdi's 30M block gas limit
 /** Gas limit for a batch of `ops` operations (Arkiv's write-safety floor). */
 export const gasFor = (ops = 1) => BigInt(1_000_000 + 400_000 * Math.max(0, ops - 1))
@@ -38,6 +43,21 @@ export class UncertainWriteError extends Error {
     this.txHash = txHash
     this.nonce = nonce
   }
+}
+
+class WriteDeadlineError extends Error {
+  timedOut = true
+}
+
+/** Wait for a write, but not forever. If we stop waiting, its late outcome is ignored here and
+ *  found again by reconciliation (by nonce), so it can never be applied twice. */
+function withDeadline(promise, ms) {
+  promise.catch(() => {})
+  let timer
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new WriteDeadlineError(`no answer from the SDK after ${ms / 1000} s`)), ms)
+  })
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer))
 }
 
 /** The node refused the batch in simulation (expired entity, wrong owner, ...): retrying won't help. */
@@ -138,7 +158,7 @@ export function createWriter({ publicClient, address, log = console }) {
     const nonce = await nonceAt("pending")
     busy.nonce = nonce
     try {
-      return await item.fn(await txParams(nonce, item))
+      return await withDeadline(item.fn(await txParams(nonce, item)), WRITE_DEADLINE_MS)
     } catch (e) {
       return await reconcile(item, nonce, e, 0)
     }
@@ -146,7 +166,7 @@ export function createWriter({ publicClient, address, log = console }) {
 
   async function reconcile(item, nonce, e, attempt) {
     // Rejected by the SDK before any network call (schema, value or expiry checks): nothing sent.
-    if (!(e instanceof EntityMutationError) && !isRetryable(e)) throw e
+    if (!(e instanceof EntityMutationError) && !isRetryable(e) && !e?.timedOut) throw e
     if (e?.txHash) return await settleByHash(e.txHash, nonce, item, e)
 
     const latest = await nonceAt("latest")
@@ -161,11 +181,11 @@ export function createWriter({ publicClient, address, log = console }) {
       throw markUncertain(item, nonce, undefined, `still pending after ${RECEIPT_WAIT_MS / 1000} s`)
     }
     // Our nonce is unused and nothing is pending: the write never left this machine.
-    if (isEngineRevert(e) || !isRetryable(e) || attempt >= 1) throw e
+    if (isEngineRevert(e) || !(isRetryable(e) || e?.timedOut) || attempt >= 1) throw e
     counts.retried++
     await sleep(500 + Math.random() * 1000)
     try {
-      return await item.fn(await txParams(nonce, item))
+      return await withDeadline(item.fn(await txParams(nonce, item)), WRITE_DEADLINE_MS)
     } catch (e2) {
       return await reconcile(item, nonce, e2, attempt + 1)
     }
@@ -240,5 +260,5 @@ export function createWriter({ publicClient, address, log = console }) {
 }
 
 function short(e) {
-  return String(e?.shortMessage || e?.message || e).split("\n")[0].slice(0, 240)
+  return redact(String(e?.shortMessage || e?.message || e).split("\n")[0]).slice(0, 240)
 }

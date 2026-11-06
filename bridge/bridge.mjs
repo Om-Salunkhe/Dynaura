@@ -5,7 +5,7 @@ import { createPublicClient, createWalletClient } from "@arkiv-network/sdk"
 import { rabdi } from "@arkiv-network/sdk/chains"
 import { formatEther, http, isHex } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
-import { withBackoff } from "./retry.mjs"
+import { redact, withBackoff } from "./retry.mjs"
 import { createWriter } from "./writer.mjs"
 
 const PORT = Number(process.env.ARKIV_BRIDGE_PORT || 5100)
@@ -60,7 +60,7 @@ route("GET", "/health", async () => {
   if (writes.uncertain.length) warnings.push(`${writes.uncertain.length} write(s) with unknown outcome, not resent: check them on the explorer`)
   if (writes.queued > writes.max_queue * 0.8) warnings.push(`write queue almost full (${writes.queued}/${writes.max_queue})`)
   if (writes.in_flight?.for_s > 90) warnings.push(`write "${writes.in_flight.label}" in flight for ${writes.in_flight.for_s}s`)
-  const extra = Object.assign({}, ...(await Promise.all(healthParts.map((f) => f(block).catch((e) => ({ health_error: String(e?.message || e) }))))))
+  const extra = Object.assign({}, ...(await Promise.all(healthParts.map((f) => f(block).catch((e) => ({ health_error: redact(e?.shortMessage || e?.message || e) }))))))
   return {
     ok: warnings.length === 0,
     building: BUILDING,
@@ -105,7 +105,7 @@ const server = createServer(async (req, res) => {
     const out = await fn(body, url)
     res.writeHead(200).end(json(out))
   } catch (e) {
-    const error = String(e?.shortMessage || e?.message || e).split("\n")[0]
+    const error = redact(String(e?.shortMessage || e?.message || e).split("\n")[0])
     console.error(`${req.method} ${url.pathname} failed:`, error)
     // 503 = queue full (try later), 502 = sent but outcome unknown (do NOT resend), 500 = failed
     const status = typeof e?.status === "number" && e.status >= 400 && e.status < 600 ? e.status : 500

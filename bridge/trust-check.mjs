@@ -11,7 +11,16 @@ import { eq } from "@arkiv-network/sdk/query"
 import { u64 } from "@arkiv-network/sdk/schema"
 import { http, parseEther, stringToBytes } from "viem"
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
+import { redact } from "./retry.mjs"
 import { Decision } from "./schemas.mjs"
+
+// viem errors quote the RPC URL, which carries the access key: never print one raw.
+for (const ev of ["uncaughtException", "unhandledRejection"]) {
+  process.on(ev, (e) => {
+    console.error(`trust check failed: ${redact(String(e?.shortMessage || e?.message || e).split("\n")[0])}`)
+    process.exit(1)
+  })
+}
 
 const BUILDING = process.env.BUILDING_ID || ""
 if (!BUILDING || BUILDING === "sunrise-apartments") {

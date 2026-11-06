@@ -24,3 +24,14 @@ export async function withBackoff(fn, { tries = 5, base = 400, max = 8000 } = {}
     }
   }
 }
+
+/** Errors from viem quote the full RPC URL, and rabdi() puts the access key in that URL's path.
+ *  Everything this service prints or returns goes through here first. */
+export function redact(text) {
+  let out = String(text)
+  const key = process.env.ARKIV_ACCESS_KEY
+  if (key) out = out.split(key).join("<access-key>")
+  return out
+    .replace(/(rpc\.rabdi\.db-chain\.testnet\.arkiv\.network)\/[^\s"'`]+/g, "$1/<access-key>")
+    .replace(/\bark_[A-Za-z0-9_-]{8,}/g, "<access-key>")
+}
