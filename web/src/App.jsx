@@ -14,6 +14,7 @@ import History from "./pages/History.jsx";
 import Home from "./pages/Home.jsx";
 import Landing from "./pages/Landing.jsx";
 import PanelHealth from "./pages/PanelHealth.jsx";
+import Scenarios from "./pages/Scenarios.jsx";
 import ShopOffers from "./pages/ShopOffers.jsx";
 import Society from "./pages/Society.jsx";
 
@@ -30,6 +31,7 @@ const NAV = {
     { to: "/admin/trading", label: "Trading", icon: "trade" },
     { to: "/society", label: "Society", icon: "society" },
     { to: "/admin/panel", label: "Panel", icon: "panel" },
+    { to: "/scenarios", label: "Scenarios", icon: "spark" },
   ],
   cleaner: [{ to: "/jobs", label: "Jobs", icon: "broom" }],
   shop: [{ to: "/shop", label: "Offers", icon: "trade" }],
@@ -48,6 +50,7 @@ function Routed() {
     <Routes>
       <Route path="/ask" element={<AskDyna />} />
       <Route path="/demo" element={<Demo />} />
+      <Route path="/scenarios" element={<Scenarios />} />
       <Route path="/" element={<Landing />} />
       <Route element={<Layout nav={nav} />}>
         <Route path="/home" element={who.role === "resident" ? <Home /> : <Navigate to={HOME[who.role]} replace />} />

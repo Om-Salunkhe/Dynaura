@@ -30,6 +30,7 @@ from sales import ShopSettler
 from og_storage import Uploader
 from zg_registry import Registry
 from signer import DeviceSigner
+from spare import SparePump
 from store import Store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -51,6 +52,7 @@ class App:
     sales = None
     credits = None  # fair-share ledger (credits.py), None when CREDITS_ENABLED=false
     trader = None  # 0G trade loop (trader.py), routes each window's spare sun
+    spare = None   # 0G runs the tank pump on spare sun when flats are away (spare.py)
 
 
 @asynccontextmanager
@@ -67,7 +69,8 @@ async def lifespan(_: FastAPI):
     # Each episode log also records what the building looked like when Dyna decided
     App.uploader.snapshot = lambda: {**App.loop.state, "runner": App.runner.status if App.runner else None}
     App.brain = Brain(App.hw, App.store, App.uploader)
-    App.runner = JobRunner(App.hw, App.loop, App.brain)
+    App.spare = SparePump(App.hw, App.loop, store=App.store, uploader=App.uploader, notify=App.brain.notify)
+    App.runner = JobRunner(App.hw, App.loop, App.brain, spare=App.spare)
     App.runner.start()
     if config.ARKIV_ENABLED:
         App.arkiv = ArkivQueue(App.store, App.loop, App.runner)
@@ -178,7 +181,8 @@ def retry_episodes(x_admin_key: str | None = Header(default=None)):
 
 
 def live() -> dict:
-    return {**App.loop.state, "runner": App.runner.status, "cleaning": App.cleaning.status}
+    return {**App.loop.state, "runner": App.runner.status, "cleaning": App.cleaning.status,
+            "spare_pump": App.spare.status() if App.spare else None}
 
 
 @app.get("/api/state")
@@ -467,6 +471,19 @@ def settle_credits(body: dict | None = None, x_admin_key: str | None = Header(de
         raise HTTPException(status_code=400, detail=str(e))
     except (RuntimeError, ArcUnavailable) as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/api/spare")
+def spare_status():
+    """Scenario 2: the last time 0G decided whether the tank pump runs on spare sun."""
+    return App.spare.status() if App.spare else {"enabled": False}
+
+
+@app.post("/api/admin/spare/check")
+def spare_check(x_admin_key: str | None = Header(default=None)):
+    """Demo: ask 0G now whether the tank pump should run on the spare sun (flats away)."""
+    require_admin(x_admin_key)
+    return App.spare.check_now()
 
 
 @app.post("/api/moment/{name}")

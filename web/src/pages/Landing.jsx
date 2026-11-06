@@ -58,6 +58,9 @@ function LandingNav() {
           <Link to="/shop" className="rounded-full px-3 py-1.5 hover:text-white">
             Marketplace
           </Link>
+          <Link to="/scenarios" className="rounded-full px-3 py-1.5 hover:text-white">
+            Scenarios
+          </Link>
         </nav>
         <Link
           to="/home"

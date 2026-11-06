@@ -21,7 +21,8 @@ def _minutes(hhmm: str) -> int:
 
 
 class JobRunner:
-    def __init__(self, hw, loop, brain, interval: float = 2.0):
+    def __init__(self, hw, loop, brain, interval: float = 2.0, spare=None):
+        self.spare = spare  # spare.SparePump: 0G runs the pump on sun that away flats leave unused
         self.hw = hw
         self.loop = loop
         self.brain = brain
@@ -67,6 +68,8 @@ class JobRunner:
                 self.ran.add((today, "tank"))
                 log.info("tank pump on for %ss (plan %s)", config.PUMP_SECONDS, j["start"])
                 self.hw.run_pump(config.PUMP_SECONDS)
+        if self.spare is not None:
+            self.spare.maybe(in_window=in_window, sun_ok=sun_ok)
         self.status = {"mode": "plan", "in_window": in_window, "sun_ok": sun_ok, "jobs": jobs}
         return self.status
 

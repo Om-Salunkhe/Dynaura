@@ -226,6 +226,21 @@ class RealHardware(Hardware):
         with self._lock:
             return {name: self._read_one(name) for name in METERS}
 
+    def solar_available_w(self) -> float | None:
+        """What the panel could give right now. On this model the panel drives its own load and its
+        INA219 reads that, so the panel meter IS the available sun (lamp brighter = more). The fair-share
+        credits split this. Set PANEL_READS_AVAILABLE=false on a board where the panel feeds the flats
+        (then the meter reads only what is drawn, and credits fall back to PANEL_AVAILABLE_W / PANEL_BEST_W)."""
+        if _env("PANEL_READS_AVAILABLE", "true").lower() == "false":
+            return None
+        last = self._last.get("panel")
+        if last is None:
+            try:
+                return self.read_meters()["panel"].w
+            except OSError:
+                return 0.0
+        return last[1].w
+
     # ---- relays ---------------------------------------------------------------------------
     def set_flat(self, flat: str, source: str) -> None:
         self.check_flat(flat)
