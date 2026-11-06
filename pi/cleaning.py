@@ -200,8 +200,7 @@ class CleaningWatch:
             "fee_usdc": config.CLEAN_FEE_USDC, "deadline": None, "created_at": now, "updated_at": now,
             "dusty_pct": lvl, "after_pct": None, "done_at": None, "cleaner": None, "resolution": None,
             "og": og, "arc": {"job_id": None, "cleaner": None, "open_tx": None, "release_tx": None, "refund_tx": None,
-                              "proof_hash": None, "proof_input": None, "proof_minutes": None, "proof_window": None,
-                              "link_tx": None},
+                              "proof_hash": None, "proof_input": None, "proof_window": None, "link_tx": None},
             "arkiv_key": None,
         }
         cov = og.get("coverage_pct")
@@ -311,7 +310,7 @@ class CleaningWatch:
     def _release(self, job: dict, after: float) -> None:
         proof, blob, minutes = self._proof()
         tx = self.arc.release_cleaning(job["arc"]["job_id"], after, proof)
-        job["arc"].update(release_tx=tx, proof_hash="0x" + proof.hex(), proof_input=blob, proof_minutes=minutes,
+        job["arc"].update(release_tx=tx, proof_hash="0x" + proof.hex(), proof_input=blob,
                           proof_window=[min(minutes), max(minutes)] if minutes else None)
         job["after_pct"] = after
         self._finish(job, "paid", f"Panel back at {after:.0f}% (was {job.get('dusty_pct') or 0:.0f}%): "
