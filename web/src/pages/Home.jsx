@@ -8,6 +8,7 @@ import StackBars from "../components/StackBars.jsx";
 import { bill, hourly, plan as demoPlan, recommendations, timeline, today } from "../data/demo.js";
 import { planToView } from "../data/society.js";
 import { shortId, useLive, usePi } from "../lib/api.js";
+import { planStatus } from "../lib/plan.js";
 import { fetchDecisions, useArkiv } from "../lib/arkiv.js";
 import { FLATS, useRole } from "../lib/role.jsx";
 
@@ -19,9 +20,11 @@ export default function Home() {
   const flat = FLATS[who.flat];
   const live = useLive();
   const api = usePi("/api/plan", null);
-  const livePlan = !api.demo && api.data?.plan;
-  const recs = livePlan ? api.data.plan.recommendations?.[flat.id] ?? [] : recommendations;
-  const reqId = livePlan ? shortId(api.data.request_id) : demoPlan.requestId;
+  const ps = planStatus(api, live);
+  const livePlan = ps.mode === "ai";
+  // a live Pi without an AI plan shows nothing from 0G, never the demo tips
+  const recs = livePlan ? api.data.plan.recommendations?.[flat.id] ?? [] : ps.mode === "demo" ? recommendations : [];
+  const reqId = livePlan ? shortId(api.data.request_id) : ps.mode === "demo" ? demoPlan.requestId : null;
   const dateText = new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
   return (
@@ -57,8 +60,8 @@ export default function Home() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4">
         <UsingNow flat={flat} live={live} className="lg:col-span-5" />
         <HourChart className="lg:col-span-7" />
-        <Schedule api={api} className="hidden lg:col-span-7 lg:flex" />
-        <Recommended recs={recs} reqId={reqId} className="lg:col-span-5" />
+        <Schedule api={api} ps={ps} className="hidden lg:col-span-7 lg:flex" />
+        <Recommended recs={recs} reqId={reqId} ps={ps} className="lg:col-span-5" />
         <BuildingNow live={live} me={flat.id} className="hidden lg:col-span-4 lg:flex" />
         <BillCard className="hidden lg:col-span-4 lg:flex" />
         <RecentArkiv className="hidden lg:col-span-4 lg:flex" />
@@ -149,13 +152,20 @@ const S0 = 9; // 9 AM
 const S1 = 15; // 3 PM
 const pct = (h) => ((h - S0) / (S1 - S0)) * 100;
 
-function Schedule({ api, className = "" }) {
+function Schedule({ api, ps, className = "" }) {
   const [view, setView] = useState(demoPlan);
-  const live = !api.demo && api.data?.plan;
+  const live = ps?.mode === "ai";
   useEffect(() => {
     if (live) setView(planToView(api.data, api.data.runner?.jobs));
   }, [api.data, live]);
   const jobs = view.groups.flatMap((g) => g.jobs.map((j) => ({ ...j, group: g.name }))).slice(0, 5);
+  if (ps?.mode === "none")
+    return (
+      <section className={`card flex-col gap-2 rounded-[14px] p-6 ${className}`}>
+        <span className="text-[15px] font-medium">Society schedule</span>
+        <span className="text-[13px] text-muted">{ps.why}. Pumps and chargers wait for a plan; nothing is guessed.</span>
+      </section>
+    );
 
   return (
     <section className={`card flex-col gap-3 rounded-[14px] p-6 ${className}`}>
@@ -202,14 +212,24 @@ function Schedule({ api, className = "" }) {
   );
 }
 
-function Recommended({ recs, reqId, className = "" }) {
+function Recommended({ recs, reqId, ps, className = "" }) {
   return (
     <section className={`card flex flex-col gap-3 rounded-[14px] px-[18px] lg:p-6 ${className}`}>
       <span className="flex flex-col gap-0.5">
         <span className="text-[15px] font-medium">Recommended for you</span>
-        <span className="text-xs text-muted">By 0G from tomorrow's sun · <span className="mono text-[11px]">{reqId}</span></span>
+        <span className="text-xs text-muted">
+          {ps?.mode === "none" ? (
+            ps.why
+          ) : (
+            <>
+              {ps?.mode === "demo" ? "Demo · " : ""}By 0G from tomorrow's sun · <span className="mono text-[11px]">{reqId}</span>
+            </>
+          )}
+        </span>
       </span>
-      {recs.length === 0 && <span className="text-sm text-muted">No tips today. Your use already follows the sun.</span>}
+      {recs.length === 0 && (
+        <span className="text-sm text-muted">{ps?.mode === "none" ? "No tips without a 0G plan. Dyna won't guess." : "No tips today. Your use already follows the sun."}</span>
+      )}
       {recs.map((r) => (
         <div key={r.title} className="flex items-center gap-3 rounded-[10px] border border-line bg-card-solid py-2.5 pl-3 pr-2 lg:pl-3.5">
           <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-sun-soft text-sun-ink">
@@ -284,7 +304,7 @@ function RecentArkiv({ className = "" }) {
   const dec = useArkiv(() => fetchDecisions(3), null);
   const items = dec.live && dec.data?.length
     ? dec.data.map((d) => ({ when: `${d.day} · ${d.kind === "plan" ? "AI decision" : d.kind}`, text: d.summary, proof: d.requestId ? "0G proof" : "Arkiv" }))
-    : timeline.slice(0, 3).map((t) => ({ when: `${t.when} · ${t.title}`, text: t.text, proof: t.proof.startsWith("0G") ? "0G proof" : "Arc tx" }));
+    : timeline.slice(0, 3).map((t) => ({ when: `${t.when} · ${t.title}`, text: t.text, proof: `${t.proof.startsWith("0G") ? "0G proof" : "Arc tx"} · demo` }));
   return (
     <section className={`card flex-col rounded-[14px] p-6 ${className}`}>
       <span className="pb-2 text-[15px] font-medium">Recent on Arkiv</span>

@@ -28,6 +28,7 @@ export default function CleaningAlert() {
   const hero = useHero(live);
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
+  const [noFrame, setNoFrame] = useState(false);
   if (hero.stage !== "flagged") return null;
   const v = hero.verdict || {};
   const fee = hero.fee ?? 2;
@@ -50,11 +51,16 @@ export default function CleaningAlert() {
       <div className="flex flex-col gap-1.5">
         {demo ? (
           <DemoFrame />
+        ) : noFrame ? (
+          <div className="grid aspect-[4/3] w-full place-items-center rounded-[10px] border border-dashed border-line bg-inner px-3 text-center text-[11.5px] text-muted">
+            The Pi didn't send the frame (GET /api/camera/latest.jpg)
+          </div>
         ) : (
           <img
             src={frameUrl(v, hero.updatedAt)}
             alt="The panel, as the Pi's camera saw it for the 0G check"
             className="aspect-[4/3] w-full rounded-[10px] border border-line object-cover"
+            onError={() => setNoFrame(true)}
           />
         )}
         <span className="text-[11px] text-muted">{v.input === "meter-only" ? "No vision model: judged from the meter and the forecast" : "Frame the 0G vision check looked at"}</span>

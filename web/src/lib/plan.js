@@ -45,3 +45,19 @@ export function routingStory(live, plan) {
   const ai = plan?.mode === "ai" && plan.plan;
   return { text, reason: ai ? plan.plan.summary || null : null, requestId: ai ? plan.request_id : null };
 }
+
+/**
+ * What the plan screens may show. "ai": a real 0G plan. "none": a Pi is connected but there's no
+ * AI plan (never fill the gap with demo data labelled 0G). "demo": no Pi at all, demo data, labelled.
+ * `api` is usePi("/api/plan"), `live` is useLive().
+ */
+export function planStatus(api, live) {
+  const piLive = !api.demo || (live && !live.demo);
+  if (!api.demo && api.data?.plan && api.data.mode !== "no-ai") return { mode: "ai" };
+  if (piLive)
+    return {
+      mode: "none",
+      why: api.data?.mode === "no-ai" || api.demo ? "No plan yet: 0G unreachable" : "No 0G plan yet today",
+    };
+  return { mode: "demo" };
+}

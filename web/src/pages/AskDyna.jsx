@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { dynaChat } from "../data/demo.js";
-import { postJSON } from "../lib/api.js";
+import { postJSON, useLive } from "../lib/api.js";
 import { useRole } from "../lib/role.jsx";
 
 const SUGGESTIONS = ["Best time to run the AC?", "Explain my bill", "Will tomorrow be sunny?"];
@@ -10,7 +10,12 @@ const SUGGESTIONS = ["Best time to run the AC?", "Explain my bill", "Will tomorr
 export default function AskDyna() {
   const go = useNavigate();
   const [who] = useRole();
-  const [msgs, setMsgs] = useState(dynaChat);
+  const live = useLive();
+  // the sample conversation is demo data: label it, and drop it once a real Pi is connected
+  const [msgs, setMsgs] = useState(() => dynaChat.map((m) => (m.proof ? { ...m, proof: `Demo · ${m.proof}` } : m)));
+  useEffect(() => {
+    if (!live.demo) setMsgs((m) => (m.some((x) => x.proof?.startsWith("Demo · ")) ? [{ from: "dyna", text: ["Ask me about your meter, your bill or tomorrow's sun. I answer on 0G and show the proof."] }] : m));
+  }, [live.demo]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef(null);
@@ -28,14 +33,20 @@ export default function AskDyna() {
     try {
       const r = await postJSON("/api/ask", { question: q, flat: who.flat });
       setMsgs((m) => [...m, { from: "dyna", text: [r.answer], proof: r.proof }]);
-    } catch {
+    } catch (e) {
       setMsgs((m) => [
         ...m,
-        {
-          from: "dyna",
-          text: ["I can't reach the building right now, so this is a demo answer. Once 0G is connected I'll answer from your meter, bills and tomorrow's sun."],
-          proof: "Demo · not sent to 0G",
-        },
+        live.demo
+          ? {
+              from: "dyna",
+              text: ["I can't reach the building right now, so this is a demo answer. Once 0G is connected I'll answer from your meter, bills and tomorrow's sun."],
+              proof: "Demo · not sent to 0G",
+            }
+          : {
+              from: "dyna",
+              text: [e.status === 503 ? "0G is unreachable right now, so I can't answer. I won't guess." : `The building couldn't answer: ${e.message}`],
+              proof: "No 0G answer",
+            },
       ]);
     } finally {
       setBusy(false);

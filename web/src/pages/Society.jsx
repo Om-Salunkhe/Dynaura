@@ -3,6 +3,7 @@ import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { plan as demoPlan } from "../data/demo.js";
 import { planToView } from "../data/society.js";
+import { planStatus } from "../lib/plan.js";
 import { postJSON, shortId, usePi } from "../lib/api.js";
 import { useRole } from "../lib/role.jsx";
 
@@ -63,6 +64,27 @@ export default function Society() {
   };
 
   const noAi = !api.demo && api.data?.mode === "no-ai";
+  // A live Pi without an AI plan: say so, never show the demo plan as if 0G made it
+  const ps = planStatus(api, null);
+  if (ps.mode === "none")
+    return (
+      <div className="flex flex-col gap-3">
+        <PageHeader kicker="Sunrise Apartments" title="Spare sun runs the building." />
+        <section className="card flex flex-col gap-1 rounded-[14px] border-bad">
+          <span className="text-[11px] font-medium tracking-wider text-bad">NO PLAN</span>
+          <span className="text-sm font-medium">{ps.why}. Nothing was moved: every flat stays on grid until Dyna has a plan.</span>
+          {api.data?.reason && <span className="text-xs text-muted">{api.data.reason}</span>}
+        </section>
+        {isAdmin && (
+          <div className="flex flex-col gap-1">
+            <button type="button" className="btn-ghost" onClick={replan} disabled={busy}>
+              {busy ? "Asking 0G…" : "Re-plan today on 0G"}
+            </button>
+            {err && <span className="text-xs text-bad">{err}</span>}
+          </div>
+        )}
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-3">
