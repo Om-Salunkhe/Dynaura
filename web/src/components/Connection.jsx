@@ -19,11 +19,12 @@ import Icon from "./Icon.jsx";
 function useStatus() {
   const live = useLive();
   const { piUrl } = useConnection();
-  if (!live.demo) return { label: `Live · Pi ${piHost(piUrl)}`, tone: "bg-sun-soft text-sun-ink", dot: "animate-pulse bg-sun" };
+  if (!live.demo) return { label: `Live · Pi ${piHost(piUrl)}`, short: "Live from the Pi", tone: "bg-sun-soft text-sun-ink", dot: "animate-pulse bg-sun" };
   const reason = live.reason || "no answer";
   const bad = live.blocked || !isValidPiUrl(piUrl);
   return {
     label: `Demo data · Pi not reachable (${reason})`,
+    short: live.blocked ? "Pi blocked (https)" : "Demo data · no Pi",
     tone: bad ? "bg-[rgba(180,35,24,0.12)] text-bad" : "bg-inner text-muted",
     dot: bad ? "bg-bad" : "bg-idle",
   };
@@ -41,7 +42,8 @@ export function ConnectionPill({ size = "md" }) {
       className={`chip max-w-[420px] whitespace-nowrap ${st.tone} ${xl ? "px-5 py-3 text-lg" : "hidden py-1.5 text-[11px] sm:inline-flex"}`}
     >
       <span className={`flex-none rounded-full ${st.dot} ${xl ? "h-3 w-3" : "h-2 w-2"}`} />
-      <span className="truncate">{st.label}</span>
+      {/* the projector header has no room for the reason: it's in the tooltip */}
+      <span className="truncate">{xl ? st.short : st.label}</span>
     </button>
   );
 }
