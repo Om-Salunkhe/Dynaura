@@ -8,6 +8,7 @@ import StackBars from "../components/StackBars.jsx";
 import { bill, hourly, plan as demoPlan, recommendations, timeline, today } from "../data/demo.js";
 import { planToView } from "../data/society.js";
 import { shortId, useLive, usePi } from "../lib/api.js";
+import { panelVolts, panelWatts } from "../lib/panel.js";
 import { planStatus } from "../lib/plan.js";
 import { fetchDecisions, useArkiv } from "../lib/arkiv.js";
 import { FLATS, useRole } from "../lib/role.jsx";
@@ -90,11 +91,14 @@ function UsingNow({ flat, live, className = "" }) {
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
           <span className="flex items-center gap-2 text-[12.5px] text-muted">
-            Using right now <DemoBadge demo={live.demo} />
+            Roof panel generating <DemoBadge demo={live.demo} />
           </span>
           <span className="flex items-baseline gap-1.5 pt-1">
-            <span className="num text-[52px] font-light leading-none lg:text-[68px]">{(meter?.w ?? 0).toFixed(2)}</span>
-            <span className="text-[15px] text-muted">W</span>
+            <span className="num text-[52px] font-light leading-none lg:text-[68px]">{panelVolts(live)}</span>
+            <span className="text-[15px] text-muted">V</span>
+          </span>
+          <span className="num text-[12.5px] text-muted">
+            {panelWatts(live)} W of sun · your flat uses {(meter?.w ?? 0).toFixed(2)} W
           </span>
         </div>
         <span className={`chip flex-none border ${source === "solar" ? "border-transparent bg-sun-soft text-sun-ink" : "border-line bg-card-solid text-ink-2"}`}>
@@ -251,7 +255,14 @@ function BuildingNow({ live, me, className = "" }) {
   return (
     <section className={`card flex-col rounded-[14px] p-6 ${className}`}>
       <span className="pb-2 text-[15px] font-medium">Building now</span>
-      <Row k="Roof panel" v={`${(live.meters?.panel?.w ?? 0).toFixed(2)} W`} />
+      <Row
+        k="Roof panel"
+        v={
+          <>
+            {panelVolts(live)} V <span className="text-[11px] font-normal text-muted">· {panelWatts(live)} W</span>
+          </>
+        }
+      />
       {rows.map(([id, label]) => {
         const f = live.flats?.[id] || {};
         const w = (live.meters?.[id]?.w ?? 0).toFixed(2);

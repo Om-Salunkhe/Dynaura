@@ -6,7 +6,9 @@ import CleaningAlert from "../components/CleaningAlert.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import SettleCredits from "../components/SettleCredits.jsx";
 import { admin } from "../data/demo.js";
+import Icon from "../components/Icon.jsx";
 import { useLive } from "../lib/api.js";
+import { panelVolts, panelWatts } from "../lib/panel.js";
 import { ARKIV_BUSY_TEXT, ARKIV_READY, fetchHeartbeat, useArkiv } from "../lib/arkiv.js";
 
 /** The Pi renews one Arkiv entity every 30 s with a 2-minute lifetime. If it stops, the entity
@@ -46,6 +48,27 @@ export default function AdminOverview() {
         right={<span className="rounded-md bg-btn px-2 py-1 text-[11px] font-medium tracking-wider text-btn-ink">ADMIN</span>}
       />
       <CleaningAlert />
+
+      <section className="card flex items-center justify-between rounded-[14px] p-4">
+        <span className="flex items-center gap-2.5 text-sm">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sun-soft text-sun-ink">
+            <Icon name="panel" />
+          </span>
+          <span className="flex flex-col">
+            <span className="font-medium">Roof panel generating</span>
+            <span className="flex items-center gap-1.5 text-xs text-muted">
+              live from the meter <DemoBadge demo={live.demo} />
+            </span>
+          </span>
+        </span>
+        <span className="flex flex-col items-end">
+          <span className="flex items-baseline gap-1">
+            <span className="num text-[40px] font-light leading-none">{panelVolts(live)}</span>
+            <span className="text-sm text-muted">V</span>
+          </span>
+          <span className="num text-[11.5px] text-muted">{panelWatts(live)} W of sun</span>
+        </span>
+      </section>
 
       <div className="grid grid-cols-2 gap-2.5">
         <Tile label="Solar generated" value={`${admin.generatedKwh} kWh`} note={`${admin.forecastPct}% of forecast`} good />
