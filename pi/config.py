@@ -38,6 +38,11 @@ BUILDING_KWP = float(os.getenv("BUILDING_KWP", "2.0") or 2.0)
 ZG_ROUTER_URL = os.getenv("ZG_ROUTER_URL", "").strip()
 ZG_API_KEY = os.getenv("ZG_API_KEY", "").strip()
 ZG_MODEL = os.getenv("ZG_MODEL", "0gm-1.0-35b-a3b").strip()
+# 0G vision model that looks at the panel photo (dust check). Empty or not on the Router = meter-only check.
+ZG_VISION_MODEL = os.getenv("ZG_VISION_MODEL", "").strip()
+# Panel camera (pi/camera.py): a command that prints one JPEG on stdout, or a fixed photo file.
+CAMERA_CMD = os.getenv("CAMERA_CMD", "").strip()
+CAMERA_FILE = os.getenv("CAMERA_FILE", "").strip()
 # Longest wait for an answer (connecting gives up after 5 s), and no automatic retry: if 0G fails,
 # the building goes to its safe stop instead of waiting. Tune ZG_TIMEOUT_S to the measured latency.
 ZG_TIMEOUT_S = float(os.getenv("ZG_TIMEOUT_S", "30") or 30)
