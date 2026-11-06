@@ -18,7 +18,7 @@ function fromArkiv(decisions, maintenance, bills = []) {
     ids: [["og", d.storageRoot], ["arkiv", d.key]],
   }));
   const m = maintenance.map((x) => ({ kind: "clean", when: x.date, title: x.title, text: x.text, key: x.key, ids: [["arc", x.arcTx], ["arkiv", x.key]] }));
-  const b = bills.map((x) => ({
+  const b = bills.filter((x, i, all) => all.findIndex((y) => y.flat === x.flat && y.month === x.month) === i).map((x) => ({
     kind: "bill",
     when: `${x.month}-28`, // a month's bill sorts at its end
     title: `Bill · ${x.month}`,
