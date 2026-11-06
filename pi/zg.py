@@ -13,6 +13,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 
 import httpx
+import openai
 from openai import OpenAI
 
 import config
@@ -22,6 +23,12 @@ log = logging.getLogger("dynaura.0g")
 
 class ZGUnavailable(RuntimeError):
     """0G could not be reached or gave no usable answer."""
+
+    decision_id: int | None = None  # the "no-ai" / "no_check" decision logged for it, when there is one
+
+
+class ZGModelUnavailable(ZGUnavailable):
+    """The Router answered, but this model is not there or does not take this input (404 / 400 / 422)."""
 
 
 @dataclass
@@ -84,11 +91,12 @@ def _find_tee(obj, out=None, path=""):
     return out
 
 
-def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2) -> ZGReply:
+def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2, model: str | None = None) -> ZGReply:
+    model = model or config.ZG_MODEL
     t0 = time.monotonic()
     try:
         raw = client().chat.completions.with_raw_response.create(
-            model=config.ZG_MODEL,
+            model=model,
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
@@ -96,7 +104,9 @@ def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2)
         )
     except ZGUnavailable:
         raise
-    except Exception as e:  # network, auth, 402 no balance, 404 model
+    except (openai.NotFoundError, openai.BadRequestError, openai.UnprocessableEntityError) as e:
+        raise ZGModelUnavailable(f"0G model {model} unavailable: {e}") from e
+    except Exception as e:  # network, auth, 402 no balance
         raise ZGUnavailable(f"0G call failed: {e}") from e
 
     latency_ms = round((time.monotonic() - t0) * 1000)
@@ -110,7 +120,7 @@ def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2)
     if not text:
         raise ZGUnavailable("0G returned an empty answer")
     usage = resp.usage.model_dump() if resp.usage else {}
-    reply = ZGReply(text=text, request_id=request_id or body.get("id"), model=resp.model or config.ZG_MODEL,
+    reply = ZGReply(text=text, request_id=request_id or body.get("id"), model=resp.model or model,
                     tee=_find_tee(body), usage=usage, trace=trace, latency_ms=latency_ms)
     if reply.request_id:
         _proofs[reply.request_id] = reply.proof()
@@ -119,6 +129,12 @@ def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2)
     log.info("0G answered in %d ms (request %s, provider %s, tee_verified %s)",
              latency_ms, reply.request_id, trace.get("provider"), reply.tee_verified)
     return reply
+
+
+def check_dust(jpeg, ctx, **kw) -> dict:
+    """The 0G dust check lives in pi/dust.py (it records decisions); this is a shortcut to it."""
+    import dust
+    return dust.check_dust(jpeg, ctx, **kw)
 
 
 def extract_json(text: str) -> dict:

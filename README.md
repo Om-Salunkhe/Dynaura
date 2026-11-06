@@ -14,6 +14,7 @@ Built from scratch at ETHGlobal Mumbai (5–7 Nov 2026) by Om Salunkhe, Devang G
 | Live app | **TBD** (Vercel; the Pi-backed parts are live only on the venue network, see [Run it](#run-it)) |
 | Arc Studio project | [studio.arc.io/app/63db67fa…](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852) |
 | Arc contracts | [CleaningEscrow](https://explorer.testnet.arc.io/address/0xf215116c72784e7490ddf3166dcb53b84855b8b9) · [SolarBilling](https://explorer.testnet.arc.io/address/0x5bd5aecc43968994e90f33df7177fb384401902b) · [ShopTrade](https://explorer.testnet.arc.io/address/0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47) (Arc testnet, chain 5042002; [`deployments.json`](contracts/deployments.json)) |
+| 0G contract | [EpisodeRegistry `0xb62f…a984`](https://chainscan-galileo.0g.ai/address/0xb62f4531f035d5cd188799d96bac553b5d7da984) (0G Galileo testnet, chain 16602, source verified; [`zerog/`](zerog/)) |
 | Arkiv building wallet | **TBD** (Rabdi testnet, chain 7794095) |
 | Prize tracks | 0G: Build with 0G PC · Arc: Best Smart Contracts with Advanced Stablecoin Logic, In Arc Studio · Arkiv: Build on Arkiv (from scratch) |
 
@@ -88,6 +89,7 @@ The same code runs without the board in **SIM mode** (`DYNAURA_HW=sim`), with a 
 
 - **A 0G call in the decision loop.** [`pi/planner.py`](pi/planner.py) asks the 0G Compute Router (OpenAI-compatible, `verify_tee: true`) for the daily plan. The Pi validates the JSON, and the relays and pump act on it ([`pi/jobs.py`](pi/jobs.py)). Ask Dyna ([`pi/dyna.py`](pi/dyna.py)) answers residents on 0G too.
 - **An episode log on 0G Storage with a request ID per decision.** [`pi/og_storage.py`](pi/og_storage.py) uploads each decision's full log (input, raw answer, request ID, model, TEE fields) and keeps its root. The root is also written to the decision's Arkiv entity.
+- **Every episode indexed on 0G Chain.** After each upload the Pi calls [`EpisodeRegistry`](zerog/src/EpisodeRegistry.sol)`.record(root, requestId, ai)`. That gives judges one contract where every decision is listed in order, AI or not. Each log also carries the sha256 of the log before it, so a missing or edited episode shows up.
 - **A safe stop with no faked decision.** [`pi/brain.py`](pi/brain.py): if 0G or the forecast fails, the plan is cleared, every flat goes to grid, the pump stops, and a `no-ai` decision is logged and uploaded like any other.
 - **A reason to come back tomorrow.** Every evening Dyna plans the next day from the forecast and the last 7 days on Arkiv, and every resident sees their own tips on Home.
 - **Real hardware**: a metered cardboard building with relays, shown live.
@@ -96,12 +98,15 @@ The same code runs without the board in **SIM mode** (`DYNAURA_HW=sim`), with a 
 
 **Proofs from our runs:** <!-- TODO(dy-demo): fill from GET /api/decisions after the live run -->
 
-| Decision | 0G request ID | 0G Storage root | Arkiv entity |
-|---|---|---|---|
-| Daily plan | TBD | TBD | TBD |
-| Dust check | TBD | TBD | TBD |
-| No-AI safe stop | — (no 0G call) | TBD | TBD |
-| Ask Dyna | TBD | TBD | TBD |
+| Decision | 0G request ID | 0G Storage root | 0G Chain (EpisodeRegistry) | Arkiv entity |
+|---|---|---|---|---|
+| Daily plan | TBD | TBD | TBD | TBD |
+| Dust check | TBD | TBD | TBD | TBD |
+| No-AI safe stop (Pi, 6 Nov 22:34) | — (0G unreachable, no call) | [`0x534e0ec1…5440`](https://storagescan-galileo.0g.ai/submission/159841) | [episode #1](https://chainscan-galileo.0g.ai/tx/0x907d516f0284ec21e3fe7f2686ccf1ea590f5497ba8690ef32a10da5283c015c), `ai=false` | TBD |
+| No-AI safe stop (next) | — | [`0x7d6726af…b4cf`](https://storagescan-galileo.0g.ai/submission/159842) | [episode #2](https://chainscan-galileo.0g.ai/tx/0xeba80bdbf2c9f9de3e1a4aee8bb3726b3fa710171c786805de0fbe6ed192821c), `ai=false` | TBD |
+| Ask Dyna | TBD | TBD | TBD | TBD |
+
+We checked both safe-stop rows end to end. We downloaded both logs back from 0G Storage: each is a `plan` decision in mode `no-ai` with every flat on grid. Episode #2's `prev.sha256` equals the sha256 of episode #1's log, byte for byte. On chain, `episodeOf(root)` returns 1 and 2.
 
 Explorers: [0G Storage (Galileo)](https://storagescan-galileo.0g.ai) · [0G Chain (Galileo)](https://chainscan-galileo.0g.ai).
 
