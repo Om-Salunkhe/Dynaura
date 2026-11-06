@@ -161,8 +161,9 @@ function Kicker({ n, children }) {
 
 const teeLabel = (tee) => {
   const e = Object.entries(tee || {});
-  if (!e.length) return null;
-  return e.some(([k, v]) => /verif/i.test(k) && v === true) ? "TEE verified" : "TEE data attached";
+  // The Router has no per-call verified flag today: say only what is true (TEE-attested model, sealed call)
+  if (e.some(([k, v]) => /verif/i.test(k) && v === true)) return "TEE verified";
+  return "TEE-attested model";
 };
 
 // ---- 1 · Morning plan ------------------------------------------------------
@@ -173,7 +174,7 @@ function Morning({ connected, offline, live }) {
   const view = hasPlan ? planToView(api, live.runner?.jobs) : demoPlan;
   const win = hasPlan ? api.plan.solar_window : ["10:00", "15:00"];
   const jobs = view.groups.flatMap((g) => g.jobs).sort((a, b) => a.start - b.start).slice(0, 6);
-  const tee = hasPlan ? teeLabel(api.tee) : "TEE verified";
+  const tee = hasPlan ? teeLabel(api.tee) : "TEE-attested model";
   const reqId = hasPlan ? api.request_id : view.requestId;
 
   if (connected && !hasPlan) {

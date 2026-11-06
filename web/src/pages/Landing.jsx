@@ -6,7 +6,7 @@ const PILLARS = [
   {
     verb: "Decides",
     who: "0G Compute",
-    text: "Dyna reads tomorrow's sun and moves pumps, chargers and spare solar into it. Every plan carries its 0G request ID and TEE check.",
+    text: "Dyna reads tomorrow's sun and moves pumps, chargers and spare solar into it. Every plan carries its 0G request ID, from a TEE-attested model.",
   },
   {
     verb: "Pays",

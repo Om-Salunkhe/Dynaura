@@ -171,7 +171,7 @@ export const dynaChat = [
       "Tomorrow's sun is strong. Heating at 13:30 instead would run on solar and save about 0.04 USDC.",
     ],
     actions: ["Set geyser for 13:30", "Not now"],
-    proof: "Answered on 0G · TEE verified · 0x51be…9a02",
+    proof: "Answered on 0G · TEE-attested model · 0x51be…9a02",
   },
   { from: "me", text: "How much did sharing earn me?" },
   {

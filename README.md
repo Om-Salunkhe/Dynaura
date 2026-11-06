@@ -35,9 +35,9 @@ Today that's a committee member with a spreadsheet and a WhatsApp group. Dynaura
 
 The hero flow, as shown in the demo:
 
-1. **Plan (0G).** Every evening the Pi sends Dyna tomorrow's sun forecast, the last 7 days of use (read back from Arkiv) and who is away. Dyna answers on **0G Compute** with a plan: the solar window, when each shared job runs, and tips per flat. The Pi keeps the 0G request ID and TEE flag, and uploads the full episode log to **0G Storage**.
+1. **Plan (0G).** Every evening the Pi sends Dyna tomorrow's sun forecast, the last 7 days of use (read back from Arkiv) and who is away. Dyna answers on **0G Compute** with a plan: the solar window, when each shared job runs, and tips per flat. The Pi keeps the 0G request ID and uploads the full episode log to **0G Storage**.
 2. **Run.** Relays move each flat between solar (yellow LED) and grid (blue LED), and the pump runs at its planned slot. The Pi meters everything once a second and signs every 1-minute summary with its device key.
-3. **Look (0G).** Tracing paper on the panel plays the dust. When output falls below 70% of what the panel should give, or the committee presses *Scan panel*, the Pi takes a frame of the panel and asks 0G: is it dirty, how much is covered, and why? The verdict comes back with its 0G request ID and TEE flag. A meter alone can't tell dust from a cloud.
+3. **Look (0G).** Tracing paper on the panel plays the dust. When output falls below 70% of what the panel should give, or the committee presses *Scan panel*, the Pi takes a frame of the panel and asks 0G: is it dirty, how much is covered, and why? The verdict comes back with its 0G request ID. A meter alone can't tell dust from a cloud.
 4. **Approve.** A dirty verdict becomes a cleaning request. The committee sees the frame and 0G's verdict in the app and approves it. Only then does the Pi lock a **2 USDC fee in an escrow on Arc**, tagged with that 0G request ID. A rejected request moves no money.
 5. **Clean.** A cleaner accepts the job from their own wallet, cleans the panel and taps *Mark done* (that moves no money).
 6. **Paid by the meter.** The Pi measures the output again. When it's back to at least 90% of a clean panel, and at least 15 points above the dusty reading, the Pi (the escrow's only oracle) releases the USDC to the cleaner, with the hash of the signed readings as proof. If not, it keeps waiting, and after the deadline the society gets its money back. The cleaner can dispute, and the committee decides.
@@ -56,7 +56,7 @@ flowchart LR
   end
   Pi["Raspberry Pi 4 · pi/<br/>1 s meter loop · signed 1-min summaries<br/>plan runner · safe stop · FastAPI + SSE"]
   B <--> Pi
-  Pi -- "plan · dust check on a camera frame<br/>(request ID, TEE flag)" --> ZC["0G Compute Router<br/>0gm-1.0-35b-a3b (text + image)"]
+  Pi -- "plan · dust check on a camera frame<br/>(request ID)" --> ZC["0G Compute Router<br/>0gm-1.0-35b-a3b (text + image)"]
   Pi -- "episode log per decision" --> ZS["0G Storage<br/>(root hash)"]
   Pi -- "root + request ID" --> ZR["0G Chain<br/>EpisodeRegistry"]
   Pi -- "oracle: open / release escrow,<br/>post bills, settle sales" --> Arc["Arc testnet · USDC<br/>CleaningEscrow · SolarBilling · ShopTrade"]
@@ -96,7 +96,7 @@ The same code runs without the board in **SIM mode** (`DYNAURA_HW=sim`), with a 
 - **0G inside the decision loop, at two checkpoints.**
   - **The day's plan.** [`pi/planner.py`](pi/planner.py) asks the [0G Compute Router](https://router-api.0g.ai/v1) (OpenAI-compatible, `verify_tee: true`, model `0gm-1.0-35b-a3b`) for the plan, and the relays and pump follow the validated JSON ([`pi/jobs.py`](pi/jobs.py)).
   - **Is the panel dirty?** When the meter sees output drop, or the committee presses *Scan panel*, `pi/camera.py` captures a frame and `zg.check_dust` sends it to 0G's own model, `0gm-1.0-35b-a3b`, which takes text and images, and asks whether the panel is dirty, how much of it is covered, and why. If the image call isn't available, the same check decides from the meter and the cloud forecast, and the decision is marked `meter-only`. Only a dirty verdict creates a cleaning request, and no money moves until the committee approves it.
-- **An episode log on 0G Storage with a request ID per decision.** Every decision (plan, dust check, Ask Dyna, safe stop) is saved as an episode: the input, the raw 0G answer, the request ID, the model, the TEE fields and the building's state, chained to the previous episode by hash. [`pi/og_storage.py`](pi/og_storage.py) uploads it to 0G Storage and retries until it lands.
+- **An episode log on 0G Storage with a request ID per decision.** Every decision (plan, dust check, Ask Dyna, safe stop) is saved as an episode: the input, the raw 0G answer, the request ID, the model, any TEE fields the Router returns and the building's state, chained to the previous episode by hash. [`pi/og_storage.py`](pi/og_storage.py) uploads it to 0G Storage and retries until it lands.
 - **Every episode indexed on 0G Chain.** After each upload the Pi calls [`EpisodeRegistry`](zerog/src/EpisodeRegistry.sol)`.record(root, requestId, ai)` on Galileo ([`0xb62f…a984`](https://chainscan-galileo.0g.ai/address/0xb62f4531f035d5cd188799d96bac553b5d7da984), source verified). That gives judges one contract where every decision is listed in order, AI or not.
 - **A safe stop, never a fake verdict.** If 0G can't be reached, the plan is cleared, every flat goes to grid and the pump stops ([`pi/brain.py`](pi/brain.py)). A dust check that can't reach 0G flags nothing and is logged as `no_check`. Outages are uploaded and anchored like any other decision.
 - **Real hardware**, demoed live at the 0G booth, plus a replayable SIM mode.
@@ -104,12 +104,14 @@ The same code runs without the board in **SIM mode** (`DYNAURA_HW=sim`), with a 
 
 **What breaks if 0G is removed:** Without 0G the building can't see its own panel: a meter alone can't tell dust from a cloud, so it would either pay a cleaner every cloudy afternoon or never notice the dust.
 
-**Proofs from our runs:** <!-- TODO(dy-demo): fill from GET /api/decisions after the live run -->
+**About TEE:** 0G lists `0gm-1.0-35b-a3b` as TEE-attested and the Router marks every call `x-0g-e2ee: sealed`. The Router doesn't return a per-call verification flag, so we never show a call as "TEE verified"; we record any TEE fields that come back.
+
+**Proofs from our runs** (live on the Pi, 6 Nov; full trail in the Arc section below):
 
 | Decision | 0G request ID | 0G Storage root | 0G Chain (EpisodeRegistry) | Arkiv entity |
 |---|---|---|---|---|
-| Daily plan | TBD | TBD | TBD | TBD |
-| Dust check: dirty (opened the cleaning request) | TBD | TBD | TBD | TBD |
+| Daily plan | `648ffb36-494f-485f-9195-905cd8d0de63` | [`0x9690700b…aee3`](https://storagescan-galileo.0g.ai/submission/160107) | [episode #21](https://chainscan-galileo.0g.ai/tx/0xaa5308fde1cf2c82328852db4a1ede61c562c0a94be2d7eaf3a0edeb02a7c7fb), `ai=true` | TBD |
+| Dust check: **dirty, 50% covered** (opened cleaning job 11) | `38b9d5f5-1c88-4dd5-a178-4d5f5ae013ab` | [`0x844bb6aa…dcd6`](https://storagescan-galileo.0g.ai/submission/160068) | [episode #11](https://chainscan-galileo.0g.ai/tx/0x54074ae1d73a33b15a9a4fdddbf8124fdfe032b119bf8e4d2b085d1460e1f238), `ai=true` | cleaning_job [`0xf89c…7abb`](https://rabdi.explorer.arkiv.network/entity/0xf89cb161a52c72ec22db10cec421acdf27cc8096b7b49c775eee58f052ea7abb) |
 | Dust check: 0G unreachable (`no_check`) | — (no 0G answer) | TBD | TBD | TBD |
 | No-AI safe stop (Pi, 6 Nov 22:34) | — (0G unreachable, no call) | [`0x534e0ec1…5440`](https://storagescan-galileo.0g.ai/submission/159841) | [episode #1](https://chainscan-galileo.0g.ai/tx/0x907d516f0284ec21e3fe7f2686ccf1ea590f5497ba8690ef32a10da5283c015c), `ai=false` | [`0x7980…9c39`](https://rabdi.explorer.arkiv.network/entity/0x798036b1c95ac505f4937ed8484547b50ae10c5fe794e059445acb5f6ea79c39) |
 | No-AI safe stop (next) | — | [`0x7d6726af…b4cf`](https://storagescan-galileo.0g.ai/submission/159842) | [episode #2](https://chainscan-galileo.0g.ai/tx/0xeba80bdbf2c9f9de3e1a4aee8bb3726b3fa710171c786805de0fbe6ed192821c), `ai=false` | TBD |
@@ -139,18 +141,18 @@ Deploy transactions: [escrow](https://explorer.testnet.arc.io/tx/0x7bc2adcd3d0ef
 
 **Safety:** OpenZeppelin `SafeERC20`, `ReentrancyGuard` and `Ownable2Step` (ownership can't be renounced), nothing `payable`, and an event for every state change. Neither the oracle nor the committee can accept a cleaning job, so neither can pay itself. A payout to a frozen USDC address doesn't block the job: the amount waits for its recipient to claim.
 
-**Roles:** the Pi is the oracle; it opens an escrow only after the committee approves in the app. The committee resolves disputes on chain from its own wallet, not the Pi's. <!-- TODO(dy-arc): committee wallet address --> For the demo the treasury is the Pi's wallet; in a real building it, and the committee, would be the society's multisig.
+**Roles:** the Pi is the oracle; it opens an escrow only after the committee approves in the app. The committee resolves disputes on chain from its own wallet, not the Pi's. Committee wallet: [`0x6c11…63D6`](https://explorer.testnet.arc.io/address/0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6), owner of all three contracts. For the demo the treasury is the Pi's wallet; in a real building it, and the committee, would be the society's multisig.
 
-**Transactions from our run** <!-- TODO(dy-arc): fill from the on-chain e2e run -->
+**Transactions:** *live* = the hero run on the Pi (0G flagged real dust, the committee approved, escrow job #3); *e2e* = our scripted run of every path ([`contracts/scripts/e2e.mjs`](contracts/scripts/e2e.mjs)).
 
 | Step | Call | Tx |
 |---|---|---|
-| Committee approves → escrow opens | `CleaningEscrow.openJob(fee, deadline, outputBefore, ogRequestId)` | TBD |
-| Cleaner accepts | `accept(jobId)` | TBD |
-| Meter proves the clean → cleaner paid | `release(jobId, outputAfter, proof)` | TBD |
-| Job linked to its 0G episode | `linkEpisode(jobId, ogStorageRoot)` | TBD |
-| Cleaner disputes → committee resolves | `dispute(jobId, reason)` → `resolve(jobId, payCleaner)` | TBD |
-| A flat pays its bill (split solar / grid) | `SolarBilling.pay(billId)` | TBD |
+| Committee approves → escrow opens | `CleaningEscrow.openJob(fee, deadline, outputBefore, ogRequestId)` | [live](https://explorer.testnet.arc.io/tx/0xf6296bce9c99e57d5c3a8df0b4c4b3734cf30a53044b43e95197e4669bf68743) · [e2e](https://explorer.testnet.arc.io/tx/0x5e49a59dcc28633377f04ad15ebc66a618f2888f46e072a3ebc1fc225862b894) |
+| Cleaner accepts | `accept(jobId)` | [live](https://explorer.testnet.arc.io/tx/0x7ccafaf3f2a9df579eb891b0c3a1f2824bb935163238cd11c68c519b2f1ec93b) · [e2e](https://explorer.testnet.arc.io/tx/0xc206d3d13e82271d9b59ed96e4302695be7ac5f472bc09a891b9686d389b9739) |
+| Meter proves the clean → cleaner paid | `release(jobId, outputAfter, proof)` | [live](https://explorer.testnet.arc.io/tx/0xbb26ef269b7b725f29ce7a084385dc8577b0c516b7542bb46d96b5b9d8ed0cbd) (60.8% → 99.1%) · [e2e](https://explorer.testnet.arc.io/tx/0xee5a1b1b9d2dea939b125e3b40a4613ab99b12022770b4280a373f819614f2e9) |
+| Job linked to its 0G episode | `linkEpisode(jobId, ogStorageRoot)` | [live](https://explorer.testnet.arc.io/tx/0x7febaa603e24f31b63545471af3f515e7f37b093ba23d650e3534c538184abc1) · [e2e](https://explorer.testnet.arc.io/tx/0x4576b7945b58dcb404051ff1ddc75bb8bbeaf5848154d32c70700328efaf3d30) |
+| Cleaner disputes → committee resolves | `dispute(jobId, reason)` → `resolve(jobId, payCleaner)` | e2e: [dispute](https://explorer.testnet.arc.io/tx/0x7567890a9452e35bfaae8ef36e86f02d75a2d7c82dd63f1dbca898f1d72ab745) → [resolve by the committee](https://explorer.testnet.arc.io/tx/0xdf7ba154225fd9f0514323b596aad4f6b27fdf76f80cffb1dd77b9352b0631e8) (the Pi's resolve is refused) |
+| A flat pays its bill (split solar / grid) | `SolarBilling.pay(billId)` | e2e: [postBill](https://explorer.testnet.arc.io/tx/0x86132eba80d909c0416f530d35f89603bd38fa88f5659fba743a615cf09a3b24) → [pay, split](https://explorer.testnet.arc.io/tx/0x21e8b1741c1550a00324935587b16028da566f1dd87a73e426c17faf5c0cfd87) |
 | A shop order settles | `ShopTrade.settle(orderId, deliveredWh)` | TBD |
 
 **Reusable by other builders:** `CleaningEscrow` is a generic "pay when a device proves the job is done" escrow. Swap the panel meter for any sensor (a water-tank level, a lift's uptime, an air-quality reading) and it works unchanged.
