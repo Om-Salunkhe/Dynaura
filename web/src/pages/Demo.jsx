@@ -53,7 +53,10 @@ export default function Demo() {
         ]
       : [],
     dust: [
-      { label: hero.live ? "Dust on (SIM)" : "Tracing paper on", fn: hero.actions.dust, when: ["clean", "paid", "refunded"] },
+      { label: hero.live ? "Dust on (SIM)" : "Tracing paper on", fn: hero.actions.dust, when: ["clean", "paid", "refunded", "resolved"] },
+      // v3: 0G looks, then the committee approves before any money moves
+      ...(hero.v3 && hero.live ? [{ label: "Scan panel (0G)", fn: hero.actions.scan, when: ["clean", "dusty"] }] : []),
+      ...(hero.v3 ? [{ label: "Committee approves", fn: () => hero.actions.approve?.(hero.fee), when: ["flagged"] }] : []),
       ...(hero.live ? [] : [{ label: "Cleaner accepts", fn: hero.actions.accept, when: ["open"] }]),
       // Live: only the SIM's own buttons; the Pi and the cleaner's wallet move the escrow, not us
       ...(hero.live
@@ -384,7 +387,7 @@ function Dust({ hero }) {
           </span>
         ) : (
           <span className="text-3xl font-medium leading-tight 2xl:text-4xl">
-            {hero.stage === "clean" ? "Tracing paper goes on the panel…" : "The meter is the judge. Nobody presses approve."}
+            {hero.stage === "clean" ? "Tracing paper goes on the panel…" : "0G sees the dust, the committee approves, the meter decides the payout."}
           </span>
         )}
         <HeroSteps hero={hero} size="xl" />

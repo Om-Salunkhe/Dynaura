@@ -21,7 +21,10 @@ export default function BottomNav({ items }) {
             }`
           }
         >
-          <Icon name={it.icon} size={19} />
+          <span className="relative">
+            <Icon name={it.icon} size={19} />
+            {it.dot && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-bad" aria-label="needs attention" />}
+          </span>
           {it.label}
         </NavLink>
       ))}

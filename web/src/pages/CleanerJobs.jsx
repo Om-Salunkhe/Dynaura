@@ -3,6 +3,7 @@ import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import Proof from "../components/Proof.jsx";
 import WalletButton from "../components/WalletButton.jsx";
+import { DisputeButton } from "../components/Dispute.jsx";
 import { cleaner } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
 import { ARC_READY, errText, short, useWallet, write } from "../lib/arc.js";
@@ -12,7 +13,7 @@ import { stageIndex, useHero } from "../lib/hero.js";
 const STEPS = [
   ["Accept the job", "From your own wallet, on Arc"],
   ["Clean the panel, tap Mark done", "The meter checks the panel, not your word"],
-  ["Back at 90%+ for a minute", "USDC is yours. Nobody presses approve."],
+  ["Back at 90%+ for a minute", "And 15 points above the dusty level. Then USDC is yours."],
 ];
 
 const ends = (ms) => new Date(ms).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
@@ -124,12 +125,19 @@ function JobCard({ hero, onChain, me }) {
   const j = hero.job;
   const pct = hero.pct != null ? Math.round(hero.pct) : null;
 
-  if (["clean", "dusty"].includes(hero.stage) || !j) {
+  if (["clean", "dusty", "flagged"].includes(hero.stage) || !j) {
+    const flagged = hero.stage === "flagged";
     return (
       <section className="card flex flex-col gap-2 rounded-[14px] text-sm">
-        <span className="text-[11px] font-medium tracking-wider text-muted">{hero.stage === "dusty" ? "A JOB IS OPENING" : "NO JOBS RIGHT NOW"}</span>
+        <span className="text-[11px] font-medium tracking-wider text-muted">
+          {flagged ? "A JOB IS WAITING FOR APPROVAL" : hero.stage === "dusty" ? "A PANEL IS BEING CHECKED" : "NO JOBS RIGHT NOW"}
+        </span>
         <span className="text-base font-medium">
-          {hero.stage === "dusty" ? "A panel near you just got dusty. The escrow is being locked on Arc." : "All panels near you are clean."}
+          {flagged
+            ? "0G says a panel near you is dirty. The committee approves before the fee is locked and the job opens."
+            : hero.stage === "dusty"
+              ? "A panel near you dropped in output. 0G looks at it before anything is posted."
+              : "All panels near you are clean."}
         </span>
         <span className="text-muted">A job appears here when a panel drops under {hero.dustPct}% of its clean output.</span>
         {hero.live && !hero.arc && <span className="text-xs text-muted">The Pi has no Arc escrow set up, so it can't post jobs yet.</span>}
@@ -158,6 +166,40 @@ function JobCard({ hero, onChain, me }) {
       setBusy(false);
     }
   };
+
+  const markDone = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await hero.actions.done();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (hero.stage === "disputed" || hero.stage === "resolved") {
+    const r = j.resolution;
+    return (
+      <section className="card flex flex-col gap-3 rounded-[14px]">
+        <span className="text-[11px] font-medium tracking-wider text-bad">{hero.stage === "disputed" ? "DISPUTED" : "RESOLVED"} · JOB #{j.id}</span>
+        <span className="text-base font-medium">
+          {hero.stage === "disputed"
+            ? `${j.fee.toFixed(2)} USDC stays locked. The committee decides: pay you or refund the society.`
+            : r === "paid"
+              ? `The committee paid you ${j.fee.toFixed(2)} USDC.`
+              : r === "refunded"
+                ? "The committee refunded the society."
+                : "The committee resolved the dispute."}
+        </span>
+        <span className="text-xs text-muted">The committee wallet decides disputes, not the Pi.</span>
+        <span className="flex flex-wrap gap-2 text-xs">
+          <Proof kind="arc" id={j.releaseTx || j.refundTx} label="Arc tx" />
+        </span>
+      </section>
+    );
+  }
 
   if (hero.stage === "paid" || hero.stage === "refunded") {
     const paid = hero.stage === "paid";
@@ -213,8 +255,8 @@ function JobCard({ hero, onChain, me }) {
       {hero.stage === "accepted" && mine && (
         <>
           <span className="text-sm text-ink-2">Clean the panel, then tap Mark done. Your tap doesn't release the money: the meter has to see it.</span>
-          <button type="button" className="btn min-h-[56px] text-base" onClick={hero.actions.done}>
-            Mark done · let the meter check
+          <button type="button" className="btn min-h-[56px] text-base" disabled={busy} onClick={markDone}>
+            {busy ? "Telling the Pi…" : "Mark done · let the meter check"}
           </button>
         </>
       )}
@@ -230,11 +272,13 @@ function JobCard({ hero, onChain, me }) {
             <span className="absolute inset-y-0 w-1 bg-good" style={{ left: `${hero.cleanPct}%` }} title={`Pays at ${hero.cleanPct}%`} />
           </div>
           <span className="text-xs text-muted">
-            The contract pays on meter proof, not on your word: {j.fee.toFixed(2)} USDC is released automatically once the panel holds {hero.cleanPct}%+ for a minute.
+            The contract pays on meter proof, not on your word: {j.fee.toFixed(2)} USDC is released automatically once the panel holds {hero.cleanPct}%+ for a minute
+            {hero.dustyPct != null ? ` and is at least ${hero.minGain ?? 15} points above the dusty ${Math.round(hero.dustyPct)}%` : ""}.
           </span>
         </div>
       )}
 
+      {mine && <DisputeButton hero={hero} />}
       {acceptTx && <Proof kind="arc" id={acceptTx} label="Accepted on Arc" className="self-center text-xs" />}
       {err && <span className="text-center text-xs text-bad">{err}</span>}
     </section>

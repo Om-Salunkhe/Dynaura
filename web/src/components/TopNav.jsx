@@ -23,7 +23,10 @@ export default function TopNav({ items }) {
         <nav aria-label="Main" className="flex flex-1 items-center justify-center gap-1">
           {items.map((it) => (
             <NavLink key={it.to} to={it.to} end={it.end ?? it.to === "/home"} className={link}>
-              <Icon name={it.icon} size={16} />
+              <span className="relative">
+                <Icon name={it.icon} size={16} />
+                {it.dot && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-bad" aria-label="needs attention" />}
+              </span>
               {it.label}
             </NavLink>
           ))}

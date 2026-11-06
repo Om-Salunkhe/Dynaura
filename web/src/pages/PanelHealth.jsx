@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import HeroSteps from "../components/HeroSteps.jsx";
 import Icon from "../components/Icon.jsx";
+import CleaningAlert from "../components/CleaningAlert.jsx";
+import { ResolveDispute } from "../components/Dispute.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import Proof from "../components/Proof.jsx";
 import { panel } from "../data/demo.js";
@@ -16,7 +18,10 @@ const DEADLINES = [
 
 const HEADLINE = {
   clean: ["PANEL IS CLEAN", "text-sun-ink", "Output is where it should be for this light."],
-  dusty: ["DUST ALERT", "text-bad", "Dyna flagged panel_dirty. The Pi is locking the cleaning fee on Arc."],
+  dusty: ["OUTPUT LOW", "text-bad", "The meter dropped under the line, so the Pi asks 0G to look at the panel."],
+  flagged: ["NEEDS APPROVAL", "text-bad", "0G looked at the panel and says it's dirty. Approve the cleaning to lock the fee on Arc."],
+  disputed: ["DISPUTED", "text-bad", "The cleaner disputed the job. The committee decides: pay the cleaner or refund the society."],
+  resolved: ["RESOLVED", "text-good", "The committee resolved the dispute."],
   open: ["ESCROW OPEN", "text-bad", "The fee is locked on Arc. Waiting for a cleaner to accept."],
   accepted: ["CLEANER ON THE WAY", "text-sun-ink", "A cleaner accepted. The meter decides when it's clean."],
   cleaning: ["CHECKING THE METER", "text-sun-ink", "The panel is coming back. It pays at the clean line."],
@@ -31,7 +36,7 @@ export default function PanelHealth() {
   const dusty = pct != null && pct < hero.dustPct;
   const [kicker, tone, text] =
     hero.stage === "dusty" && !hero.flagged
-      ? ["OUTPUT LOW", "text-bad", `Under ${hero.dustPct}%. The meter checks for a minute before Dyna flags panel_dirty.`]
+      ? ["OUTPUT LOW", "text-bad", hero.state === "rejected" ? "The committee dismissed the last cleaning request." : `Under ${hero.dustPct}%. The meter only triggers a look: 0G decides if it's dust.`]
       : HEADLINE[hero.stage] || HEADLINE.clean;
   const ring = hero.stage === "paid" ? "--good" : dusty ? "--bad" : "--sun";
   const j = hero.job;
@@ -43,6 +48,7 @@ export default function PanelHealth() {
         title="Panel health"
         right={<span className="rounded-md bg-btn px-2 py-1 text-[11px] font-medium tracking-wider text-btn-ink">ADMIN</span>}
       />
+      <CleaningAlert />
 
       <section className="card flex items-center gap-4 rounded-[14px]">
         <div
@@ -93,7 +99,8 @@ export default function PanelHealth() {
           {j && <span className="chip bg-inner py-1 text-xs">{j.fee.toFixed(2)} USDC</span>}
         </div>
         <HeroSteps hero={hero} />
-        {!hero.live && ["clean", "paid", "refunded"].includes(hero.stage) && (
+        <ScanPanel hero={hero} />
+        {!hero.live && ["clean", "paid", "refunded", "resolved"].includes(hero.stage) && (
           <button type="button" className="btn-ghost" onClick={hero.actions.dust}>
             <Icon name="panel" size={16} />
             <span className="pl-2">Try it: put tracing paper on the panel (demo)</span>
@@ -103,7 +110,9 @@ export default function PanelHealth() {
         {hero.live && !hero.arc && <span className="text-xs text-muted">Arc escrow isn't set up on the Pi (ARC_ESCROW), so no job opens by itself.</span>}
       </section>
 
-      {!j && <ManualPost hero={hero} />}
+      <ResolveDispute hero={hero} />
+      {/* an older Pi without the v3 approval flow still gets the hand-posted job */}
+      {!j && hero.live && !hero.v3 && <ManualPost hero={hero} />}
 
       <section className="card flex items-center justify-between rounded-[14px]">
         <span className="flex flex-col">
@@ -114,6 +123,45 @@ export default function PanelHealth() {
           History
         </Link>
       </section>
+    </div>
+  );
+}
+
+/** Ask the Pi to take a picture and have 0G check it now (v3). The meter drop also does this. */
+function ScanPanel({ hero }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState(null);
+  const canScan = !hero.live || hero.v3;
+  const scan = async () => {
+    setNote(null);
+    if (!hero.live) {
+      return setNote(
+        ["clean", "paid", "resolved", "refunded"].includes(hero.stage)
+          ? { text: "Demo: 0G sees a clean panel. Put tracing paper on to see a dirty verdict." }
+          : { text: "Demo: the panel is already being handled." },
+      );
+    }
+    setBusy(true);
+    try {
+      const r = await hero.actions.scan();
+      if (r?.job) setNote({ text: `0G says dirty${r.job.og?.coverage_pct != null ? ` (~${Math.round(r.job.og.coverage_pct)}% covered)` : ""}: a cleaning request is waiting for approval.`, bad: true });
+      else if (r?.dirty === false) setNote({ text: `0G says clean${r.og?.reason ? `: “${r.og.reason}”` : "."} Nothing flagged.`, ok: true });
+      else setNote({ text: "Scanned." });
+    } catch (e) {
+      setNote({ text: e.status === 503 ? "0G unreachable: nothing is flagged, nothing is guessed." : e.message, bad: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button type="button" className="btn-ghost self-start" onClick={scan} disabled={busy || !canScan || ["flagged", "open", "accepted", "cleaning", "disputed"].includes(hero.stage)}>
+        {busy ? "Looking at the panel…" : "Scan panel"}
+      </button>
+      <span className="text-[11.5px] text-muted">
+        {canScan ? "Takes a picture now and asks 0G if it's dust. A meter drop does this by itself." : "This Pi has no scan endpoint yet (needs the v3 cleaning API)."}
+      </span>
+      {note && <span className={`text-[12.5px] ${note.bad ? "text-bad" : note.ok ? "text-good" : "text-muted"}`}>{note.text}</span>}
     </div>
   );
 }

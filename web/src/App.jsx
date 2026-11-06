@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
+import { useCleaningAlert } from "./lib/hero.js";
 import { RoleProvider, useRole } from "./lib/role.jsx";
 import { useTheme } from "./lib/theme.js";
 import AdminOverview from "./pages/AdminOverview.jsx";
@@ -36,14 +37,19 @@ const NAV = {
 
 const HOME = { resident: "/home", admin: "/admin", cleaner: "/jobs", shop: "/shop" };
 
+// admin screens that show the cleaning request, so their nav items get a dot
+const ALERT_ON = new Set(["/admin", "/admin/panel"]);
+
 function Routed() {
   const [who] = useRole();
+  const alert = useCleaningAlert();
+  const nav = NAV[who.role].map((it) => (alert && ALERT_ON.has(it.to) ? { ...it, dot: true } : it));
   return (
     <Routes>
       <Route path="/ask" element={<AskDyna />} />
       <Route path="/demo" element={<Demo />} />
       <Route path="/" element={<Landing />} />
-      <Route element={<Layout nav={NAV[who.role]} />}>
+      <Route element={<Layout nav={nav} />}>
         <Route path="/home" element={who.role === "resident" ? <Home /> : <Navigate to={HOME[who.role]} replace />} />
         <Route path="/society" element={<Society />} />
         <Route path="/building" element={<Building />} />

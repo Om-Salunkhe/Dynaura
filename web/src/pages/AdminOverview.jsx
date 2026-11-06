@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import DemoBadge from "../components/DemoBadge.jsx";
 import Legend from "../components/Legend.jsx";
+import CleaningAlert from "../components/CleaningAlert.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { admin } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
@@ -43,6 +44,7 @@ export default function AdminOverview() {
         title="Building overview"
         right={<span className="rounded-md bg-btn px-2 py-1 text-[11px] font-medium tracking-wider text-btn-ink">ADMIN</span>}
       />
+      <CleaningAlert />
 
       <div className="grid grid-cols-2 gap-2.5">
         <Tile label="Solar generated" value={`${admin.generatedKwh} kWh`} note={`${admin.forecastPct}% of forecast`} good />
