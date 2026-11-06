@@ -61,8 +61,8 @@ maintenance, heartbeat, offers, open jobs), fired together as one "page load", f
 |---|---|---|---|---|---|
 | 09:00, quiet | keyless | 20 loads, 3 s apart | **100/100** | 0 | 953 ms / 4.4 s |
 | 09:00, quiet | keyless | 4 viewers × 25 loads at once (~40 queries/s) | **500/500** | 0 | 425–461 ms / 599–887 ms |
-| 22:40, venue busy | keyless | 12 loads, 2 s apart | **4/60** | 223 of 228 requests | 6.3 s / 16 s |
-| 22:40, venue busy | with a key | 12 loads, 2 s apart | **60/60** | 0 | 686 ms / 1.0 s |
+| 22:30, venue busy | keyless | 12 loads, 2 s apart | **4/60** | 223 of 228 requests | 6.3 s / 16 s |
+| 22:30, venue busy | with a key | 12 loads, 2 s apart | **60/60** | 0 | 686 ms / 1.0 s |
 
 The 429s say `ANON_COST_LIMITED: unauthenticated query budget exhausted`: anonymous reads share
 a cost budget, and once it's spent they fail until it resets. During judging the whole venue shares
@@ -143,7 +143,7 @@ This is the hero moment's Arkiv trail in order:
 
 | What | Entity |
 |---|---|
-| A signed panel reading (one of 76 live readings on 6 Nov, 23:00) | [`0x252c1092…`](https://rabdi.explorer.arkiv.network/entity/0x252c10922d71e999d50f56109234b93b6d653095f7e46555d4be93c75dc028b0) |
+| A signed panel reading (one of 76 live readings on 6 Nov, 22:30) | [`0x252c1092…`](https://rabdi.explorer.arkiv.network/entity/0x252c10922d71e999d50f56109234b93b6d653095f7e46555d4be93c75dc028b0) |
 | The no-AI safe stop: "0G unreachable: building runs on grid, no jobs moved" | [`0x798036b1…`](https://rabdi.explorer.arkiv.network/entity/0x798036b1c95ac505f4937ed8484547b50ae10c5fe794e059445acb5f6ea79c39) |
 | Today's daily totals | [`0xdee82c66…`](https://rabdi.explorer.arkiv.network/entity/0xdee82c66a2b47991cf939a8458d006c785d10e2050174de0e479a3aab3584e87) |
 

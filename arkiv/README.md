@@ -69,7 +69,7 @@ EOF
 
 `expiresAt` is the block each record disappears at; blocks are 2 seconds apart.
 
-**Checked 6 Nov 2026, 23:00:** the live building had 76 panel and flat readings, its daily totals,
+**Checked 6 Nov 2026, 22:30 IST:** the live building had 76 panel and flat readings, its daily totals,
 and a decision. That decision is the no-AI safe stop the Pi logged while the 0G Router was down.
 The heartbeat query was empty because the Pi was switched off for the night.
 

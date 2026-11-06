@@ -173,7 +173,7 @@ it's a lot to absorb in a hackathon.
 
 The same five web-app queries against the keyless endpoint:
 - At 09:00: **750/750** succeeded, up to ~40 queries/s.
-- At 22:40: **4/60** succeeded. 223 of 228 requests were 429s, and a page load took 6 s at the
+- At 22:30: **4/60** succeeded. 223 of 228 requests were 429s, and a page load took 6 s at the
   median.
 - With an access key at the same moment: 60/60, 0.7 s.
 
