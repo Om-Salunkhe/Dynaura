@@ -69,7 +69,7 @@ export default function AskDyna() {
         </span>
         <span className="flex flex-1 flex-col gap-0.5">
           <span className="text-lg font-medium">Dyna</span>
-          <span className="text-xs text-muted">Knows your meter, bills and the sun · 1 iAI per answer</span>
+          <span className="text-xs text-muted">Knows your meter, bills and the sun</span>
         </span>
       </header>
 
