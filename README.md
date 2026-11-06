@@ -14,7 +14,7 @@ Built from scratch at ETHGlobal Mumbai (5–7 Nov 2026) by Om Salunkhe, Devang G
 | Live app | **TBD** (Vercel; the Pi-backed parts are live only on the venue network, see [Run it](#run-it)) |
 | Arc Studio project | [studio.arc.io/app/63db67fa…](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852) |
 | Arc contracts | [CleaningEscrow](https://explorer.testnet.arc.io/address/0xf215116c72784e7490ddf3166dcb53b84855b8b9) · [SolarBilling](https://explorer.testnet.arc.io/address/0x5bd5aecc43968994e90f33df7177fb384401902b) · [ShopTrade](https://explorer.testnet.arc.io/address/0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47) (Arc testnet, chain 5042002; [`deployments.json`](contracts/deployments.json)) |
-| Arkiv building wallet | **TBD** (Rabdi testnet, chain 7794095) |
+| Arkiv building wallet | [`0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd`](https://rabdi.explorer.arkiv.network/address/0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) (Rabdi testnet, chain 7794095; building id `sunrise-apartments`) |
 | Prize tracks | 0G: Build with 0G PC · Arc: Best Smart Contracts with Advanced Stablecoin Logic, In Arc Studio · Arkiv: Build on Arkiv (from scratch) |
 
 ---
@@ -100,7 +100,7 @@ The same code runs without the board in **SIM mode** (`DYNAURA_HW=sim`), with a 
 |---|---|---|---|
 | Daily plan | TBD | TBD | TBD |
 | Dust check | TBD | TBD | TBD |
-| No-AI safe stop | — (no 0G call) | TBD | TBD |
+| No-AI safe stop | — (no 0G call) | TBD | [`0x798036b1…`](https://rabdi.explorer.arkiv.network/entity/0x798036b1c95ac505f4937ed8484547b50ae10c5fe794e059445acb5f6ea79c39) |
 | Ask Dyna | TBD | TBD | TBD |
 
 Explorers: [0G Storage (Galileo)](https://storagescan-galileo.0g.ai) · [0G Chain (Galileo)](https://chainscan-galileo.0g.ai).
@@ -133,20 +133,31 @@ Deploy transactions: [escrow](https://explorer.testnet.arc.io/tx/0x7bc2adcd3d0ef
 
 *Track: Build on Arkiv (from scratch).*
 
-Every record is written by one **building wallet** through [`bridge/`](bridge/) with `@arkiv-network/sdk`. Readers always filter by that owner, because anyone can write any tag. No names, phone numbers or addresses are stored, only flats `A`, `B`, `C`.
+Every record is written by one **building wallet** through [`bridge/`](bridge/) with `@arkiv-network/sdk`. Readers accept a record only if that wallet both created it and still owns it, because anyone can write any tag and hand an entity to any wallet. No names, phone numbers or addresses are stored, only flats `A`, `B`, `C`.
 
 What expiry does for us:
 - **Heartbeat, 2 minutes, renewed every 30 s.** If the Pi goes quiet, the entity expires and the app shows "Building offline". There is no monitoring server; the expiry is the alarm.
 - **Shop offers expire when the solar window closes.** The market closes itself.
-- **Cleaning jobs expire after their deadline.** The lasting record is the maintenance entry written when a job is paid.
+- **A cleaning request is one entity from 0G's flag to payout,** patched at each step. If nobody approves the flag, it lapses after 48 h. An approved job lives until a week after its escrow deadline, which leaves time to dispute. The lasting record is the maintenance entry written when a job is paid.
 - **Readings last 7 days, daily totals and bills about 6 months.**
 
-What reads from Arkiv: Dyna's planner (the last 7 days of daily totals go into every 0G prompt), the History timeline, the "Building online" badge, shop offers and the maintenance log. They're read straight from the browser, with no server in between.
+What reads from Arkiv: Dyna's planner (the last 7 days of daily totals go into every 0G prompt), the History timeline (decisions, bills, daily totals, maintenance), Home, the "Building online" badge, shop offers, the cleaner's job board, the resident's Bill page and the admin's trading and upkeep pages. The app reads them straight from the browser, with no server in between.
 
 - Schema: [`arkiv/schema.md`](arkiv/schema.md)
 - Judging files: [`friction.md`](arkiv/friction.md) · [`reach.md`](arkiv/reach.md) · [`why-arkiv.md`](arkiv/why-arkiv.md) · [`how-you-use-arkiv.md`](arkiv/how-you-use-arkiv.md)
-- **Building wallet:** TBD
-- **A query you can run:** <!-- TODO(dy-arkiv): copy-paste query (curl or a 5-line node script) for the latest decisions owned by the building wallet --> TBD
+- **Building wallet:** [`0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd`](https://rabdi.explorer.arkiv.network/address/0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd), building id `sunrise-apartments`
+- **A query you can run:** the building's latest 0G decisions, with their proof fields (no SDK needed):
+
+```bash
+curl -s https://rpc.rabdi.db-chain.testnet.arkiv.network \
+  -H 'Content-Type: application/json' --data @- <<'EOF'
+{"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":[
+  "arkiv.schema = str('dynaura.decision') AND building = str('sunrise-apartments') AND $creator = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) AND $owner = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) ORDER BY decision_id:u64 DESC",
+  {"select":{"key":true,"expiresAt":true,"attributes":{"kind":true,"mode":true,"day":true,"og_request_id":true,"og_storage_root":true}},"limit":"0x5"}]}
+EOF
+```
+
+If it answers `ANON_COST_LIMITED`, the public endpoint's anonymous budget is used up: add a free key from [hub.arkiv.network/access-keys](https://hub.arkiv.network/access-keys) as the last part of the URL (`…arkiv.network/<your-key>`). More queries: [`arkiv/README.md`](arkiv/README.md).
 
 ## Run it
 
@@ -194,25 +205,6 @@ The web app on Vercel is served over https, so it can't call the Pi's plain-http
 ## AI usage
 
 We used AI coding assistants. [`docs/ai-usage/`](docs/ai-usage/) says where and how, part by part, with the prompts and plans we worked from.
-
-## Arkiv
-
-Records live on Arkiv's Rabdi testnet (chain 7794095), written by one building wallet and read by
-the app straight from the browser. Schemas, judging notes and more queries are in [`arkiv/`](arkiv/README.md).
-
-- Building wallet (demo, `sunrise-apartments`): **TODO** address from the Pi bridge's `/health`
-- Test wallet (`test-dyarkiv-1`): [`0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd`](https://rabdi.explorer.arkiv.network/address/0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd)
-
-The building's latest AI decisions, with their 0G proofs (no key or SDK needed):
-
-```bash
-curl -s https://rpc.rabdi.db-chain.testnet.arkiv.network \
-  -H 'Content-Type: application/json' --data @- <<'EOF'
-{"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":[
-  "arkiv.schema = str('dynaura.decision') AND building = str('test-dyarkiv-1') AND $creator = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) AND $owner = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) ORDER BY decision_id:u64 DESC",
-  {"select":{"key":true,"expiresAt":true,"attributes":{"kind":true,"day":true,"og_request_id":true,"og_storage_root":true}},"limit":"0x3"}]}
-EOF
-```
 
 ## Status
 
