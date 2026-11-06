@@ -113,10 +113,10 @@ function WorkReceipts({ address }) {
   const list = (r.live || r.limited) && Array.isArray(r.data) ? r.data : null;
   return (
     <section className="card flex flex-col gap-1 rounded-[14px]">
-      <span className="text-base font-medium">Your work history</span>
-      <span className="pb-1 text-xs text-muted">Receipts on Arkiv that your wallet owns: the building creates them, you keep them, the committee can't delete them.</span>
+      <span className="text-base font-medium">Your work receipts</span>
+      <span className="pb-1 text-xs text-muted">One Arkiv receipt per paid job. The building creates it, your wallet owns it.</span>
       {!list && <span className="text-xs text-muted">{r.limited ? "Arkiv busy, retrying" : r.error ? "Couldn't read Arkiv right now." : "Loading…"}</span>}
-      {list?.length === 0 && <span className="text-sm text-muted">No receipts yet. One is minted to your wallet when a job pays out.</span>}
+      {list?.length === 0 && <span className="text-sm text-muted">No receipts yet. The first one arrives in your wallet when a job pays out.</span>}
       {list?.map((w) => (
         <div key={w.key} className="flex flex-col gap-1.5 border-t border-line py-2.5 text-sm first-of-type:border-0">
           <div className="flex items-center justify-between gap-2">
@@ -131,8 +131,11 @@ function WorkReceipts({ address }) {
             )}
             {w.paidAt && <span className="text-muted">{new Date(w.paidAt * 1000).toLocaleDateString([], { day: "numeric", month: "short" })}</span>}
             <Proof kind="arc" id={w.releaseTx} />
-            <Proof kind="arkiv" id={w.key} label="Owned by you" />
+            <Proof kind="arkiv" id={w.key} label="Arkiv" />
           </span>
+          {w.owner && w.owner.toLowerCase() === address.toLowerCase() && (
+            <span className="text-[11px] text-muted">In your wallet: the committee can't delete it.</span>
+          )}
         </div>
       ))}
     </section>
