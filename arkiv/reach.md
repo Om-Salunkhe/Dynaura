@@ -28,7 +28,7 @@ the link.
 | Demo video | Under 3 minutes, the hero moment end to end | **TODO:** link |
 | Open source | MIT-licensed repo, including the bridge, schemas, trust check and smoke test, reusable by any Arkiv project that writes from a device | **TODO:** repo link once public |
 | Social | Thread on X tagging Arkiv, 0G and Arc | **TODO:** links, impressions, the right handles |
-| Arkiv community | Our [friction log](friction.md), with six issues ready to file upstream (gas estimate for back-to-back extensions, `rabdi()` blockTime, access key dropped by an explicit URL, `.ownedBy()` spoofing in the README example, `$createdAt` sort, Node 25 warning) | **TODO:** issue links once Pawan approves filing |
+| Arkiv community | Our [friction log](friction.md), with nine issues ready to file upstream (among them: the gas estimate for back-to-back extensions, the access key leaking through error messages, `.ownedBy()` spoofing in the README example, and a receipt wait that can hang for minutes) | **TODO:** issue links once Pawan approves filing |
 
 ## What others can reuse
 

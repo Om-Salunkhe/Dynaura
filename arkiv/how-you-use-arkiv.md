@@ -31,6 +31,7 @@ wallet **created and still owns** (`.createdBy(w).ownedBy(w)`; see [Trust](#trus
 | **History**, **Admin upkeep** | `dynaura.maintenance` | `building = …` | `at` desc, 10–20 | `at` is an unindexed sort key (see friction #6) | Yes |
 | **Shop offers** | `dynaura.offer` | `building = …` | `window_end` asc, 20 | Expired offers are not returned: **the market closed itself** | Yes |
 | **Cleaner job board** | `dynaura.cleaning_job` | `building = …` **and `status = open`** (or accepted/paid) | `job_id` desc, 20 | The status column is indexed so the board is one query | Read ready (`fetchCleaningJobs`); **TODO** wire the screen |
+| **Job → its 0G decision** (proof chip on a job) | `dynaura.decision` | `building = …` **and `og_request_id = <the job's og_request_id>`** | 1 | Joins Arc escrow → Arkiv job → 0G decision with one indexed lookup | Read ready (`fetchDecisionByOgRequest`) |
 | **Resident Bill** | `dynaura.bill` | `building = …` **and `flat = A`** (or `month = 2026-11`) | `month` desc, 12 | A flat sees its own bills; the committee filters by month | Read ready (`fetchBills`); **TODO** wire the screen |
 | **Admin trading**, shop receipt | `dynaura.sale` | `building = …` (and `buyer = <shop wallet>`) | `order_id` desc, 20 | A shop can find its own receipts by wallet | Read ready (`fetchSales`); **TODO** wire the screen |
 | **Panel proof** (escrow release) | `dynaura.reading` | `building`, **`meter = panel`**, **`minute >= t`** | `minute` desc, 60 | The release proof hashes the last 3 signed panel readings, which anyone can re-fetch and verify | Read ready (`fetchReadings`) |
@@ -45,7 +46,8 @@ The same queries run in our live smoke test
 | Who | Can | How it's enforced |
 |---|---|---|
 | **Building wallet** (on the Pi) | Create every record. Patch only heartbeat, daily totals, cleaning jobs. Extend lifetimes. | The bridge is the only process with the key; it listens on 127.0.0.1 only |
-| **Building wallet** | **Not** change a bill, sale, reading, decision, offer or maintenance entry after it is written | Created with `flags: { readonly: true }`. Arkiv itself refuses the change |
+| **Building wallet** | **Not** change a bill, sale, reading, offer, maintenance entry, or a decision with its proof, after it is written | Created with `flags: { readonly: true }`. Arkiv itself refuses the change |
+| **Building wallet** | Add a missing 0G root to a decision **once** (0G Storage was offline when it was written) | The bridge patches only `og_storage_root`, only if the decision has none, and refuses a different one (`409`) |
 | **Anyone else** | Write entities with our schema tags, even hand them to our wallet | Every read requires `$creator = w AND $owner = w`. [`trust-check.mjs`](../bridge/trust-check.mjs) proves it live: a stranger's fake "pay the cleaner twice" decision, transferred to our wallet, shows up under `.ownedBy()` alone and not under ours |
 | **The Pi's device key** (separate from the wallet) | Sign each 1-minute meter summary | `sig` + `signer` stored on every reading; anyone can recover the signer |
 

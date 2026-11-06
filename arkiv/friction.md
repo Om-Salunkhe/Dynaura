@@ -179,7 +179,56 @@ by passing `gasPrice`, and add jittered backoff on reads.
 **Suggestion.** An Asia-region RPC, or support for JSON-RPC batch requests through the SDK's write
 path.
 
-## 10. Small things that cost minutes
+## 10. Every viem error prints the access key (High)
+
+**What happened.** `rabdi({ accessKey })` puts the key in the RPC URL's path, and viem's errors
+quote the full URL (`URL: https://rpc.rabdi…/<key>` in `message` and `metaMessages`). During a slow
+spell a read timed out, and the default Node crash output printed **our access key into a log
+file**. We caught it, deleted the log and checked the key was never committed. Any app that logs
+`error.message`, sends errors to Sentry, or shows them on screen leaks its key the same way.
+
+**Reproduce.** Make any request time out (`http(undefined, { timeout: 1 })`) and print the error.
+
+**Workaround.** A `redact()` on everything the bridge, the smoke test and the web app print or
+return ([`bridge/retry.mjs`](../bridge/retry.mjs), [`arkivReads.js`](../web/src/lib/arkivReads.js)).
+Arkiv's security skill says to "redact the entire transport diagnostic", but that's easy to miss.
+
+**Suggestion.** Send the key as a header, so URLs and errors never carry it. Or have the SDK wrap
+transport errors and strip the path.
+
+## 11. The docs disagree on whether an access key may ship in a browser (Medium)
+
+**What happened.** We had to decide whether our web app's bundle may contain an access key. The
+SDK's `rabdi()` TSDoc says the key "is not a secret, as it ships with any app that talks to the
+chain, but restrict it to your origins or IPs". Arkiv's `arkiv-security-trust` skill says
+"operator RPC keys stay server-side… a browser-wallet user configures their own RPC key", and the
+browser guide says "never give a browser the operator's server key".
+
+**What we did.** No key of ours ships. The app reads keyless from the public endpoint with
+jittered backoff, which we measured to be enough for our read volume
+([how-you-use-arkiv.md](how-you-use-arkiv.md#reads-from-the-browser-and-the-access-key)).
+The bridge (server side) keeps the key.
+
+**Suggestion.** One documented answer, ideally a read-only browser key type with origin
+restriction and its own quota.
+
+## 12. The SDK can wait minutes for a receipt that was there after 4 seconds (Medium)
+
+**What happened.** A 4-reading batch was mined 4 s after we sent it
+([`0x5eacfc2a…`](https://rabdi.explorer.arkiv.network/tx/0x5eacfc2a796589c31ab24c09dfa94ded9de5602f28a778ed517aef65088fa2b1),
+block 273,044). But `executeBatch` only returned **505 s later**, while the RPC was answering
+slowly. Inside, viem's `waitForTransactionReceipt` has a 180-second default and retries
+underneath, and the SDK passes no timeout. Our queue is strictly one write at a time, so every
+heartbeat waited behind it. Long enough for the building to look offline.
+
+**Workaround.** Each write attempt now gets a 45-second deadline. Past it, the writer stops waiting
+and reconciles by nonce: the transaction is found in the block that used our nonce, without a
+second send. An offline test covers it. That run ended "reconciled", with no duplicate.
+
+**Suggestion.** Let callers pass a receipt timeout through `createEntity` / `executeBatch`, or
+return `{ txHash, nonce }` right after sending, with the receipt as a second promise.
+
+## 13. Small things that cost minutes
 
 - **A patch keeps the expiry.** This is in the `patchEntity` TSDoc ("a patch never moves … the
   expiry") but not in the README. We verified it live before relying on it: a `daily_output` and a
@@ -207,6 +256,6 @@ path.
 
 ### Issues to file upstream
 
-Items 1, 2, 3, 5, 6 and 7 are ready to file at
+Items 1, 2, 3, 5, 6, 7, 10, 11 and 12 are ready to file at
 [Arkiv-Network/reported-issues](https://github.com/Arkiv-Network/reported-issues). **TODO (Pawan):**
 approve filing them and add the links here.
