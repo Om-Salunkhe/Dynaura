@@ -17,7 +17,8 @@ const SCENARIOS = [
 ];
 
 const FLATS = ["A", "B", "C"];
-const W = (x) => (x == null ? "–" : `${Number(x).toFixed(Number(x) < 1 ? 2 : 1)} W`);
+// the model panel under a desk lamp gives milliwatts, so small readings keep 3 decimals
+const W = (x) => (x == null ? "–" : `${Number(x).toFixed(Number(x) < 0.1 ? 3 : Number(x) < 1 ? 2 : 1)} W`);
 // Sun the panel can give right now. The Pi's figure first: on the real board the panel meter reads it
 // through its own load, while the SIM panel meter only shows what flats draw from it.
 const sunW = (live) => live.spare_pump?.now?.panel_w ?? live.meters?.panel?.w;
@@ -202,7 +203,11 @@ function Building({ live, highlight = [], extra }) {
           <Icon name="panel" size={28} className={sunOk ? "text-sun-ink" : "text-muted"} />
           Rooftop panel
         </span>
-        <span className="num text-3xl font-medium">{W(panelW)}</span>
+        {/* the panel's voltage rises with the lamp; the watts are what the Pi counts as sun */}
+        <span className="flex flex-col items-end">
+          <span className="num text-3xl font-medium">{live.meters?.panel?.v != null ? `${Number(live.meters.panel.v).toFixed(2)} V` : "–"}</span>
+          <span className="num text-sm text-muted">{W(panelW)} of sun</span>
+        </span>
       </div>
       <div className="grid gap-2">
         {[...FLATS].reverse().map((f) => {
