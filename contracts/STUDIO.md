@@ -35,7 +35,7 @@ Checked against the live RPC and https://docs.arc.io:
 3. **`pull`:** Studio's contracts and tests come back to `studio/out/pulled` and are diffed against `src/`. We review them (SafeERC20, `nonReentrant`, the oracle = the Pi wallet, no `payable`, 6-decimal USDC). Any fix goes **back through Studio**, so the code Studio deploys is the code in `src/`.
 4. **`deploy`:** `02-deploy.md` deploys all three to Arc testnet with the constructor arguments and reads them back.
 5. **`console`:** `03-console.md` has Studio build a small escrow console as the app's own frontend, connected to the deployed contract. Our main app (`web/`) uses the same addresses.
-6. `scripts/e2e.py` then runs the escrow and a split bill on Arc testnet against those addresses and saves the transaction links.
+6. `scripts/committee.mjs` hands ownership to the committee wallet. Then `scripts/e2e.mjs` runs the escrow, a dispute the committee resolves and a split bill on Arc testnet, and saves the transaction links.
 
 ```bash
 contracts/studio/run.sh whoami
@@ -81,3 +81,11 @@ Project: https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852 (you nee
    - **The oracle can still release a disputed job when the meter reads clean.** This is intended: the sun settles it.
    - **A cleaner can accept a job and never clean it.** The payer is refunded at the deadline, so no funds are lost.
 4. **Pulled back:** `src/*.sol` is byte-identical to Studio's `contracts/*.sol`, and `test/` holds Studio's tests plus `test/acceptance/`. Only the import paths differ, because our sources live in `src/`.
+5. **`deploy`:**
+   - Studio re-ran the 211 tests and deployed all three contracts to Arc testnet. The deploy came from its Circle smart wallet `0x5b12…ef42`, through ERC-4337, with gas sponsored by a paymaster.
+   - It read every constructor setting back and verified the source on the explorer.
+   - We checked all of this on-chain ourselves. The runtime bytecode equals a local build of `src/`; only the metadata hash differs. See `deployments.json`.
+6. **`console`:**
+   - Studio built the app's frontend: a one-page escrow console with the jobs list, the actions each wallet is allowed (accept, dispute, cancel, refund) and a live event feed. The code is pulled into `studio/console/`.
+   - Studio found that Arc's RPC rejects `eth_getLogs` filtered by several event topics, so the console fetches raw logs and decodes them in the browser.
+   - **Public link:** the Studio project itself needs a Circle login. The Studio-built app can be published for free: in the workspace, open **Integrations** in the workbench header (or the **+** menu in the chat toolbar), connect Vercel, Netlify or Hugging Face, then ask Studio to "deploy this".

@@ -13,7 +13,7 @@
   "bytecodeCheck": "runtime bytecode of all three equals a local build of src/ (only the metadata hash differs)",
   "usdc": "0x3600000000000000000000000000000000000000",
   "oracle": "0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf",
-  "owner": "0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf",
+  "owner": "0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6",
   "treasury": "0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf",
   "gridPayee": "0x69E52f183FE1D423Da95619986a648194cbFF140",
   "pricePerKwh": 80000,
@@ -29,5 +29,39 @@
     "address": "0x5bd5aecc43968994e90f33df7177fb384401902b",
     "deployTx": "0x7588f283b6e87e6c74b8d1b990b890f71b5156bf5bfd4b5fc3edf6aae29101bb"
   },
-  "demoTxs": {}
+  "demoTxs": {
+    "committee": {
+      "fund committee 1 USDC": "0xd0423c19a60dfdcd48550e3cefc955471875a9016c8814d4e5cc9bb16f6668ef",
+      "fund cleaner 3 USDC": "0x3e0c589b5d2e4bdcc794774b17c478ab7acb463379e5cb4f2de1e78c6b8551f4",
+      "CleaningEscrow.transferOwnership": "0x1f8f4a4c8e2e3e1a1ffef17d3e68d35622b2727977226e1e7b5498752e416f52",
+      "CleaningEscrow.acceptOwnership": "0x0e14b7c01fe353818179ad5767555fe06ce95f053efc9249c580807d439d5229",
+      "ShopTrade.transferOwnership": "0x067569362211c0b55a5080dcd6f969b9a9657809d33fe43185fcf8eed82ba7d5",
+      "top up committee gas": "0x76c89ff5ca2aaf46e925b0d90d3d6ac3c3bdb1da8a2d7eca1329b182bd94432e",
+      "ShopTrade.acceptOwnership": "0x765ae598786d70075dc0dd3aa317085aca5959ee819ddf8f8d9d05576b7ec67f",
+      "SolarBilling.transferOwnership": "0x1063823544cffcdf35360b161b073e2dd319a930ce0eeb18ed8abdbf2daa59ef",
+      "SolarBilling.acceptOwnership": "0xcbb5c44ede94b5bedbdd33e0231a8d3d82ee773033ea17106a07e350be7e0c10"
+    },
+    "e2e 20261106T171758": {
+      "approve fee": "0xedef63087ec6042980c78d258a38d2720fce35240a2037e788820f072c485602",
+      "openJob": "0x5e49a59dcc28633377f04ad15ebc66a618f2888f46e072a3ebc1fc225862b894",
+      "accept": "0xc206d3d13e82271d9b59ed96e4302695be7ac5f472bc09a891b9686d389b9739",
+      "linkEpisode": "0x4576b7945b58dcb404051ff1ddc75bb8bbeaf5848154d32c70700328efaf3d30",
+      "release": "0xee5a1b1b9d2dea939b125e3b40a4613ab99b12022770b4280a373f819614f2e9",
+      "approve fee 2": "0x2609c9c7fa7b598b98180b082e439a6b6b7ed545d10de841c1503bea6844a6f6",
+      "openJob 2": "0x4cca511b38205758540a3c1ffcaff97bc034af1cb5282f3e88afad4d0e2e4e78",
+      "accept 2": "0x7e81faef90aa30d1dcc5b1999271e6cb1a8d7d4714508e0557d231512b9d0be4",
+      "dispute": "0x7567890a9452e35bfaae8ef36e86f02d75a2d7c82dd63f1dbca898f1d72ab745",
+      "resolve (committee)": "0xdf7ba154225fd9f0514323b596aad4f6b27fdf76f80cffb1dd77b9352b0631e8",
+      "postBill": "0x86132eba80d909c0416f530d35f89603bd38fa88f5659fba743a615cf09a3b24",
+      "approve bill": "0x1a560eb43c627b0cb786364b0ffe825a9ef3a0725e26991e579b9d53dee13e7d",
+      "pay (split)": "0x21e8b1741c1550a00324935587b16028da566f1dd87a73e426c17faf5c0cfd87"
+    }
+  },
+  "committee": "0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6",
+  "roles": {
+    "oracle": "the Pi (releases, settles, bills, links 0G roots)",
+    "owner": "the committee (resolves disputes, can rotate the oracle)",
+    "treasury": "the society (the Pi wallet in the demo)",
+    "gridPayee": "stand-in for the electricity board"
+  }
 }

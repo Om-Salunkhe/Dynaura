@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 import billing
 import config
@@ -21,7 +21,7 @@ import zg
 from arc import Arc, ArcUnavailable
 from arkiv import ArkivQueue
 from brain import Brain
-from cleaning import CleaningWatch
+from cleaning import CleaningWatch, DustCheckMissing
 from hw import FLATS, load_hardware
 from jobs import JobRunner, PlanScheduler
 from meter import MeterLoop
@@ -77,7 +77,8 @@ async def lifespan(_: FastAPI):
         App.brain.arkiv = App.arkiv
         App.arkiv.start()
     App.arc = Arc()
-    App.cleaning = CleaningWatch(App.hw, App.loop, App.store, App.arc, App.brain)
+    App.cleaning = CleaningWatch(App.hw, App.loop, App.store, App.arc, App.brain,
+                                 capture=dust_camera(), check_dust=getattr(zg, "check_dust", None))
     if App.arkiv:
         App.cleaning.on_job = on_cleaning_job
     App.cleaning.start()
@@ -103,22 +104,30 @@ async def lifespan(_: FastAPI):
         App.store.close()
 
 
+def dust_camera():
+    """The panel camera (pi/camera.py): capture(hw) -> JPEG. None until it is installed."""
+    try:
+        import camera
+        return camera.capture
+    except ImportError:
+        log.warning("pi/camera.py not found: the panel can't be scanned yet")
+        return None
+
+
 def on_cleaning_job(job: dict) -> None:
-    """Every escrow change goes to Arkiv; a paid job also becomes a maintenance record."""
-    tx = job.get("release_tx") or job.get("refund_tx") or job.get("open_tx")
-    # The 0G dust check behind this job (once the confirm hook is on). Its episode root arrives after
-    # the 0G Storage upload, so it is read again on every status change.
-    if job.get("og_decision_id") and not job.get("og_storage_root"):
-        job["og_storage_root"] = (App.store.decision(job["og_decision_id"]) or {}).get("storage_root")
-    App.arkiv.post("/cleaning_job", {**{k: job.get(k) for k in
-                   ("job_id", "status", "fee_usdc", "deadline", "output_before", "output_after",
-                    "og_request_id", "og_storage_root")}, "arc_tx": tx})
-    if job["status"] == "paid":
+    """Every step of a cleaning request goes to Arkiv as the job dict itself (one entity per request,
+    patched as it moves; the bridge replies with its key). A paid job also becomes a maintenance record."""
+    og, arc = job.get("og") or {}, job.get("arc") or {}
+    body = {k: v for k, v in job.items() if k not in ("status", "job_id")}  # drop the aliases for older screens
+    body["_on_reply"] = lambda out: App.cleaning.set_arkiv_key(job["id"], out.get("key"))
+    App.arkiv.post("/cleaning_job", body)
+    if job["state"] == "paid":
         App.arkiv.post("/maintenance", {
             "title": "Panel cleaned",
-            "details": f"Output {job['output_before']:.0f}% -> {job['output_after']:.0f}%. "
-                       f"Paid {job['fee_usdc']:.2f} USDC to {job.get('cleaner')} from Arc escrow #{job['job_id']}.",
-            "arc_tx": tx,
+            "details": f"0G saw dust ({og.get('coverage_pct')}% covered, request {og.get('request_id')}). "
+                       f"Output {job.get('dusty_pct') or 0:.0f}% -> {job.get('after_pct') or 0:.0f}%. "
+                       f"Paid {job['fee_usdc']:.2f} USDC to {job.get('cleaner')} from Arc escrow #{arc.get('job_id')}.",
+            "arc_tx": arc.get("release_tx"),
         })
 
 
@@ -245,23 +254,68 @@ def set_price(body: dict, x_admin_key: str | None = Header(default=None)):
 
 @app.get("/api/cleaning")
 def cleaning():
+    """{job, history, ...}: the cleaning request in progress (see pi/cleaning.py for the states)."""
     return App.cleaning.status
 
 
-@app.post("/api/admin/cleaning")
-def post_cleaning(body: dict, x_admin_key: str | None = Header(default=None)):
-    """Admin posts a cleaning job: {"fee_usdc": 2, "deadline_min": 60} -> USDC locked on Arc"""
-    require_admin(x_admin_key)
+@app.get("/api/camera/latest.jpg")
+def camera_latest():
+    """The last frame the Pi looked at (the one 0G judged)."""
+    if not App.cleaning.frame:
+        raise HTTPException(status_code=404, detail="no frame yet: scan the panel first")
+    return Response(content=App.cleaning.frame, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+def _cleaning_call(fn, *args):
     try:
-        with App.cleaning._lock:
-            return App.cleaning.open_job(float(body.get("fee_usdc", config.CLEAN_FEE_USDC)),
-                                         int(body.get("deadline_min", config.CLEAN_DEADLINE_MIN)))
-    except ArcUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        return fn(*args)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except ArcUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Arc transaction failed: {e}")
+
+
+@app.post("/api/admin/cleaning/scan")
+def scan_panel(x_admin_key: str | None = Header(default=None)):
+    """Take a frame and let 0G judge it now: {job} (flagged) or {dirty: false, og}. 503 when 0G is unreachable."""
+    require_admin(x_admin_key)
+    try:
+        return App.cleaning.scan("admin")
+    except zg.ZGUnavailable as e:
+        return JSONResponse(status_code=503, content={"error": "0G unreachable", "detail": str(e)[:300]})
+    except DustCheckMissing as e:
+        return JSONResponse(status_code=503, content={"error": "dust check not installed", "detail": str(e)})
+
+
+@app.post("/api/admin/cleaning")
+def post_cleaning(x_admin_key: str | None = Header(default=None)):
+    """Older screens: same as Scan panel (no money moves before the admin approves)."""
+    return scan_panel(x_admin_key)
+
+
+@app.post("/api/admin/cleaning/approve")
+def approve_cleaning(body: dict | None = None, x_admin_key: str | None = Header(default=None)):
+    """Approve the flagged request: {"fee_usdc": 2} (optional) -> the Pi locks the fee in the Arc escrow."""
+    require_admin(x_admin_key)
+    fee = (body or {}).get("fee_usdc")
+    return _cleaning_call(App.cleaning.approve, float(fee) if fee is not None else None)
+
+
+@app.post("/api/admin/cleaning/reject")
+def reject_cleaning(x_admin_key: str | None = Header(default=None)):
+    """Dismiss the flagged request. No money moved."""
+    require_admin(x_admin_key)
+    return _cleaning_call(App.cleaning.reject)
+
+
+@app.post("/api/cleaning/done")
+def cleaning_done():
+    """The cleaner's "Mark done" (not a transaction): the meter checks the panel for a minute."""
+    return _cleaning_call(App.cleaning.mark_done)
 
 
 @app.get("/api/sales")

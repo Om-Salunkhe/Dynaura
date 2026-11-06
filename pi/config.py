@@ -85,10 +85,11 @@ ARC_MIN_FEE_GWEI = float(os.getenv("ARC_MIN_FEE_GWEI", "20") or 20)
 PANEL_BEST_W = float(os.getenv("PANEL_BEST_W", "0") or 0)  # clean panel, all flats on solar (calibrate)
 DUST_PCT = float(os.getenv("DUST_PCT", "70") or 70)
 CLEAN_PCT = float(os.getenv("CLEAN_PCT", "90") or 90)
+MIN_GAIN_PCT = float(os.getenv("MIN_GAIN_PCT", "15") or 15)  # ...and at least this many points above the dusty level
 CLEAN_FEE_USDC = float(os.getenv("CLEAN_FEE_USDC", "2") or 2)
 CLEAN_DEADLINE_MIN = int(os.getenv("CLEAN_DEADLINE_MIN", "60") or 60)
-CLEAN_AUTO = os.getenv("CLEAN_AUTO", "true").lower() == "true"  # open the escrow by itself when dusty
-DUST_RECHECK_S = float(os.getenv("DUST_RECHECK_S", "120") or 120)  # wait before asking 0G about the dust again
+CLEAN_AUTO = os.getenv("CLEAN_AUTO", "true").lower() == "true"  # a meter drop triggers a camera look by itself
+DUST_RECHECK_S = float(os.getenv("DUST_RECHECK_S", "120") or 120)  # wait before the meter triggers another look
 
 # Monthly bills (SolarBilling). 1 Wh on the model = BILL_SCALE/1000 kWh in the real building.
 BILL_SCALE = float(os.getenv("BILL_SCALE", "1000") or 1000)
