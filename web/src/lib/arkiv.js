@@ -49,26 +49,59 @@ export const fetchReadings = (opts) => reads.readings(arkiv(), opts);
  *  Returns { ok, signaturesOk, hashOk, computed, expected, signer, window, readings }. */
 export const verifyJobPayout = (job, opts) => verifyPayout(arkiv(), job, opts);
 
-/** Run an Arkiv read; fall back to demo data when Arkiv isn't configured or reachable. */
+export const ARKIV_BUSY_TEXT = "Arkiv busy, retrying";
+
+/**
+ * Run an Arkiv read; fall back to demo data when Arkiv isn't configured or reachable.
+ * State: { data, live, error, limited, retryAt }.
+ * - limited: Arkiv's free public endpoint is out of queries (429 ANON_COST_LIMITED). The read is
+ *   retried by itself when the pause ends (retryAt, ms). Screens should say ARKIV_BUSY_TEXT, not
+ *   "not reachable", and not pass the demo data off as live.
+ * - If the read worked before, its last real data stays on screen while Arkiv is busy (live: false).
+ */
 export function useArkiv(fn, fallback, deps = []) {
-  // limited = Arkiv's free public endpoint is out of queries (429 ANON_COST_LIMITED): a busy
-  // network, not a broken building. Screens can say "Arkiv busy" rather than "not reachable".
-  const [state, setState] = useState({ data: fallback, live: false, error: null, limited: false });
+  const [state, setState] = useState({ data: fallback, live: false, error: null, limited: false, retryAt: 0 });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!ARKIV_READY) return;
     let alive = true;
+    let timer;
     fn()
-      .then((data) => alive && setState({ data, live: true, error: null, limited: false }))
-      .catch(
-        (error) =>
-          alive && setState({ data: fallback, live: false, error: reads.redact(error?.shortMessage || error?.message || error), limited: Boolean(error?.limited) }),
-      );
+      .then((data) => alive && setState({ data, live: true, error: null, limited: false, retryAt: 0 }))
+      .catch((error) => {
+        if (!alive) return;
+        const limited = Boolean(error?.limited);
+        const retryAt = limited ? Date.now() + 61_000 : 0;
+        setState((prev) => ({
+          data: limited && prev.live ? prev.data : fallback, // keep real data rather than swap in demo data
+          live: false,
+          error: reads.redact(error?.shortMessage || error?.message || error),
+          limited,
+          retryAt,
+        }));
+        if (limited) timer = setTimeout(() => alive && setAttempt((n) => n + 1), retryAt - Date.now());
+      });
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, attempt]);
   return state;
+}
+
+/** App-wide: is Arkiv's free budget spent right now? { busy, retryInS, text } for a banner. */
+export function useArkivBusy() {
+  const [until, setUntil] = useState(0);
+  const [, tick] = useState(0);
+  useEffect(() => reads.onBudget(setUntil), []);
+  useEffect(() => {
+    if (!until) return;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [until]);
+  const retryInS = until ? Math.max(0, Math.ceil((until - Date.now()) / 1000)) : 0;
+  return { busy: Boolean(until), retryInS, text: until ? `${ARKIV_BUSY_TEXT} in ${retryInS}s` : "" };
 }
 
 export const short = (h) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : "");

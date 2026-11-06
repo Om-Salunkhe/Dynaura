@@ -44,6 +44,18 @@ export function isBudgetExhausted(e) {
 }
 const BUDGET_PAUSE_MS = 60_000;
 let budgetOutUntil = 0;
+const budgetListeners = new Set();
+/** Hear when Arkiv's free budget runs out (pausedUntil = ms timestamp) or comes back (0). */
+export function onBudget(fn) {
+  budgetListeners.add(fn);
+  fn(Date.now() < budgetOutUntil ? budgetOutUntil : 0);
+  return () => budgetListeners.delete(fn);
+}
+const setBudgetOut = (until) => {
+  if (until === budgetOutUntil) return;
+  budgetOutUntil = until;
+  for (const fn of budgetListeners) fn(until);
+};
 
 /** Reads are safe to repeat: back off exponentially, with jitter so retries don't line up.
  *  Once the free budget is spent, every read fails at once for a minute (the app shows its demo
@@ -52,10 +64,12 @@ export async function withBackoff(fn, { tries = 4, base = 400 } = {}) {
   if (Date.now() < budgetOutUntil) throw new ArkivBudgetError("Arkiv's public endpoint is out of free queries (ANON_COST_LIMITED); retrying in a minute");
   for (let i = 0; ; i++) {
     try {
-      return await fn();
+      const out = await fn();
+      if (budgetOutUntil) setBudgetOut(0); // the budget is back
+      return out;
     } catch (e) {
       if (isBudgetExhausted(e)) {
-        budgetOutUntil = Date.now() + BUDGET_PAUSE_MS;
+        setBudgetOut(Date.now() + BUDGET_PAUSE_MS);
         throw new ArkivBudgetError("Arkiv's public endpoint is out of free queries (ANON_COST_LIMITED); retrying in a minute", { cause: e });
       }
       if (i + 1 >= tries || !isRetryable(e)) throw e;
