@@ -143,6 +143,24 @@ low[0x45] = {"shunt": 3000, "bus_v": 0.0}
 hw5, _, _ = make(low)
 ok(hw5.read_meters()["panel"].v == 6.0, "low-side panel uses PANEL_V")
 
+# PANEL_SENSE=voltage: no current through the panel, the sun level comes from its voltage
+volt = dict(FULL)
+volt[0x45] = {"shunt": 0, "bus_v": 2.3}
+hw6, bus6, _ = make(volt, PANEL_SENSE="voltage", PANEL_V_DARK="0.5", PANEL_V_SUN="2.3", PANEL_RATED_W="1.0")
+p6 = hw6.read_meters()["panel"]
+ok(abs(p6.w - 1.0) < 0.01 and p6.v == 2.3, f"lamp on (2.3 V, 0 mA) = 100 % sun = PANEL_RATED_W (got {p6})")
+bus6.sensors[0x45]["bus_v"] = 1.4
+ok(abs(hw6.read_meters()["panel"].w - 0.5) < 0.01, "halfway between dark and sun voltage = half the watts")
+ok(abs(hw6.solar_available_w() - 0.5) < 0.01, "available sun follows the voltage")
+ok(abs(hw6.panel_health_pct() - 50.0) < 0.5, "panel health = the sun level in % (for the dust check)")
+ok(hw.panel_health_pct() is None, "current mode: health left to the cleaning watch (PANEL_BEST_W)")
+bus6.sensors[0x45]["bus_v"] = 0.3
+ok(hw6.read_meters()["panel"].w == 0.0, "below PANEL_V_DARK = no sun")
+bus6.sensors[0x45]["bus_v"] = 3.0
+ok(abs(hw6.read_meters()["panel"].w - 1.0) < 0.01, "brighter than PANEL_V_SUN is capped at 100 %")
+for k in ("PANEL_SENSE", "PANEL_V_DARK", "PANEL_V_SUN", "PANEL_RATED_W"):
+    os.environ.pop(k, None)
+
 # missing panel sensor is fatal
 try:
     make({k: v for k, v in FULL.items() if k != 0x45})

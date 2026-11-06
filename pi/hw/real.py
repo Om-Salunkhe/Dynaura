@@ -12,6 +12,11 @@ Wiring as built (Nov 6, see the hardware notes in docs/architecture.md):
   register reads ~0 V. Their volts come from SUPPLY_V (the power bank, 5 V).
 - The panel sensor reads the panel's own voltage when it is wired high-side. If it reads ~0 V
   (low-side wiring), PANEL_V is used while current flows.
+- PANEL_SENSE=voltage: the panel has no load of its own (no current flows through its INA219), so
+  the sun level comes from the panel's voltage instead. PANEL_V_DARK (lamp off) is 0 % sun and
+  PANEL_V_SUN (lamp on the clean panel) is 100 %; the panel then reports PANEL_RATED_W x that level
+  as its watts (model scale), so the plan, spare pump, credits and dust check work unchanged.
+  The current shown for the panel is then derived from those watts, not measured.
 
 No extra Python packages: I2C uses smbus2 or the Pi's own python3-smbus (the venv is made with
 --system-site-packages), and GPIO uses the `pinctrl` command that the bench tests used, or
@@ -147,6 +152,11 @@ class RealHardware(Hardware):
         self._lock = threading.RLock()
         self.supply_v = _env_f("SUPPLY_V", 5.0)
         self.panel_v = _env_f("PANEL_V", 6.0)
+        # PANEL_SENSE=voltage: sun level from the panel's voltage (a panel with no load of its own)
+        self.panel_sense = _env("PANEL_SENSE", "current").lower()
+        self.panel_v_dark = _env_f("PANEL_V_DARK", 0.5)
+        self.panel_v_sun = _env_f("PANEL_V_SUN", 3.0)
+        self.panel_rated_w = _env_f("PANEL_RATED_W", 1.0)
         self.flat_nominal_ma = _env_f("FLAT_NOMINAL_MA", 10.5)
         self.stale_s = _env_f("METER_STALE_S", 10.0)
         shunt = _env_f("INA_SHUNT_OHMS", 0.1)
@@ -193,6 +203,9 @@ class RealHardware(Hardware):
                         name, hex(addrs[name]) if addrs[name] else "none", self.flat_nominal_ma)
         log.info("real hardware ready: meters %s, relays %s",
                  {n: hex(i.addr) for n, i in self._ina.items()}, gpios)
+        if self.panel_sense == "voltage":
+            log.info("panel sun from voltage: %.2f V = 0 %%, %.2f V = 100 %% = %.2f W",
+                     self.panel_v_dark, self.panel_v_sun, self.panel_rated_w)
 
     # ---- meters ---------------------------------------------------------------------------
     def _read_one(self, name: str) -> Reading:
@@ -214,6 +227,10 @@ class RealHardware(Hardware):
             raise OSError(f"INA219 {name} at {hex(ina.addr)} not answering") from err
 
         ma = max(0.0, ma)  # a reversed shunt or noise must not make negative energy
+        if name == "panel" and self.panel_sense == "voltage":
+            r = self._panel_from_voltage(bus_v)
+            self._last[name] = (time.monotonic(), r)
+            return r
         if name == "panel":
             v = bus_v if bus_v >= 0.5 else (self.panel_v if ma > 0.5 else 0.0)
         else:
@@ -221,6 +238,19 @@ class RealHardware(Hardware):
         r = Reading(round(v, 3), round(ma, 1))
         self._last[name] = (time.monotonic(), r)
         return r
+
+    def sun_level(self, v: float) -> float:
+        """0..1: where the panel voltage sits between PANEL_V_DARK (lamp off) and PANEL_V_SUN (lamp on)."""
+        span = self.panel_v_sun - self.panel_v_dark
+        if span <= 0:
+            return 1.0 if v >= self.panel_v_sun else 0.0
+        return max(0.0, min(1.0, (v - self.panel_v_dark) / span))
+
+    def _panel_from_voltage(self, bus_v: float) -> Reading:
+        """PANEL_SENSE=voltage: watts = PANEL_RATED_W x sun level; the current is derived from them."""
+        w = self.panel_rated_w * self.sun_level(bus_v)
+        ma = w / bus_v * 1000 if bus_v > 0.05 else 0.0
+        return Reading(round(bus_v, 3), round(ma, 2))
 
     def read_meters(self) -> dict[str, Reading]:
         with self._lock:
@@ -240,6 +270,19 @@ class RealHardware(Hardware):
             except OSError:
                 return 0.0
         return last[1].w
+
+    def panel_health_pct(self) -> float | None:
+        """PANEL_SENSE=voltage: the sun level in % (lamp on a clean panel = 100), whatever the flats
+        draw. Otherwise None, and the cleaning watch compares the panel meter with PANEL_BEST_W."""
+        if self.panel_sense != "voltage":
+            return None
+        last = self._last.get("panel")
+        if last is None:
+            try:
+                last = (0.0, self.read_meters()["panel"])
+            except OSError:
+                return None
+        return round(100 * self.sun_level(last[1].v), 1)
 
     # ---- relays ---------------------------------------------------------------------------
     def set_flat(self, flat: str, source: str) -> None:
