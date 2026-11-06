@@ -25,17 +25,17 @@ wallet **created and still owns** (`.createdBy(w).ownedBy(w)`; see [Trust](#trus
 
 | Who / screen | Schema | Indexed filter | Order, limit | Why this shape | In the app now |
 |---|---|---|---|---|---|
-| **Dyna's planner prompt** (Pi, via bridge `GET /history`) | `dynaura.daily_output` | `building = …` | `day` desc, 7 | The AI plans tomorrow from the building's own last week, read back from the open record | Yes (Pi) |
+| **Dyna's planner prompt** (Pi, via bridge `GET /history`), **History** | `dynaura.daily_output` | `building = …` | `day` desc, 7 | The AI plans tomorrow from the building's own last week, read back from the open record | Yes |
 | **Admin: "Building online"** badge | `dynaura.heartbeat` | `building = …` | `updated` desc, 1 | **No row means offline**: the heartbeat expired because the Pi stopped renewing it | Yes |
 | **History** timeline, **Home** "Recent on Arkiv" | `dynaura.decision` | `building = …` | `decision_id` desc, 15 | Each row links its 0G request ID and 0G Storage root | Yes |
 | **History**, **Admin upkeep** | `dynaura.maintenance` | `building = …` | `at` desc, 10–20 | `at` is an unindexed sort key (see friction #6) | Yes |
 | **Shop offers** | `dynaura.offer` | `building = …` | `window_end` asc, 20 | Expired offers are not returned: **the market closed itself** | Yes |
-| **Cleaner job board** | `dynaura.cleaning_job` | `building = …` **and `status = open`** (or accepted/paid) | `job_id` desc, 20 | The status column is indexed so the board is one query | Read ready (`fetchCleaningJobs`); **TODO** wire the screen |
+| **Cleaner job board** | `dynaura.cleaning_job` | `building = …` **and `status` ∈ {open, accepted, cleaned}** (or one state, e.g. `flagged`) | `created_at` desc, 20 | One entity per request from flag to payout; the indexed status makes each board one query | Yes, with the 0G and Arc proof links |
 | **Job → its 0G decision** (proof chip on a job) | `dynaura.decision` | `building = …` **and `og_request_id = <the job's og_request_id>`** | 1 | Joins Arc escrow → Arkiv job → 0G decision with one indexed lookup | Read ready (`fetchDecisionByOgRequest`) |
-| **Resident Bill** | `dynaura.bill` | `building = …` **and `flat = A`** (or `month = 2026-11`) | `month` desc, 12 | A flat sees its own bills; the committee filters by month | Read ready (`fetchBills`); **TODO** wire the screen |
-| **Admin trading**, shop receipt | `dynaura.sale` | `building = …` (and `buyer = <shop wallet>`) | `order_id` desc, 20 | A shop can find its own receipts by wallet | Read ready (`fetchSales`); **TODO** wire the screen |
-| **Panel proof** (escrow release) | `dynaura.reading` | `building`, **`meter = panel`**, **`minute >= t`** | `minute` desc, 60 | The release proof hashes the last 3 signed panel readings, which anyone can re-fetch and verify | Read ready (`fetchReadings`) |
-| **Bridge internals** | `daily_output`, `cleaning_job`, `heartbeat` | `day = …` / `job_id = …` | 1 | Find today's totals or a job's entity to patch it; recover the live heartbeat after a restart | Yes (bridge) |
+| **Resident Bill**, **History** | `dynaura.bill` | `building = …` **and `flat = A`** (or `month = 2026-11`) | `month` desc, 12 | A flat sees its own bills; the committee filters by month | Yes |
+| **Admin trading** | `dynaura.sale` | `building = …` (and `buyer = <shop wallet>`) | `order_id` desc, 20 | A shop can find its own receipts by wallet | Yes |
+| **Verify payout** (a paid job's proof) | `dynaura.reading` | `building`, **`meter = panel`**, **`minute` between the job's `proof_from` and `proof_to`** | `minute` desc | Re-fetch the exact signed readings the escrow paid on and recompute its hash | Read ready (`fetchReadings`); the screen is dy-web's |
+| **Bridge internals** | `daily_output`, `cleaning_job`, `heartbeat` | `day = …` / `case_id = …` (or `job_id`) | 1 | Find today's totals or a request's entity to patch it; recover the live heartbeat after a restart | Yes (bridge) |
 | **Keeper** (every 6 h) | maintenance, bill, sale, daily_output | **`$expiresAt <= head + 30 days`** | 20 | Extend records worth keeping before they lapse | Yes (bridge) |
 
 The same queries run in our live smoke test
@@ -84,7 +84,7 @@ a few IPs, so the demo uses the public-app key.
 |---|---|---|
 | Heartbeat | `fromMinutes(2)`, renewed every 30 s with **patch + extend in one atomic batch** | App shows "Building offline". No monitoring server |
 | Offer | `atDate(window_end)` with an `atLeast` of 2 min | Shops stop seeing it at sunset |
-| Cleaning job | `atDate(deadline + 1 day)` | Off the job board after the escrow refunds |
+| Cleaning request | `fromHours(48)` when 0G flags it; extended to `atDate(deadline + 7 days)` on approval; +7 days on a dispute | A flag nobody approves disappears; a finished job leaves the board after the dispute window |
 | Reading | `fromDays(7)` | Minute-level household data is gone after a week |
 | Decision | `fromDays(30)` | The full episode stays on 0G Storage |
 | Maintenance, bill, sale, daily totals | `fromDays(180)`, then the keeper extends them to `max()` | They live while the building runs, and lapse if it stops paying |
@@ -120,7 +120,7 @@ the heartbeat's remaining life and the keeper's last run. Eleven offline tests
 
 ## Live transactions
 
-From the smoke test run on 6 Nov 2026 against the test building `test-dyarkiv-1` (test wallet
+From the smoke test run on 6 Nov 2026 against the test building `test-dyarkiv-1` (the same wallet as the live building,
 [`0xd961…17Cd`](https://rabdi.explorer.arkiv.network/address/0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd)).
 This is the hero moment's Arkiv trail in order:
 
@@ -139,8 +139,16 @@ This is the hero moment's Arkiv trail in order:
 | Shop pays on Arc | Sale, sealed | [`0x464a2344…`](https://rabdi.explorer.arkiv.network/tx/0x464a234407b0e374e4a18c2f4f316dce919708c61282f588b4d3a2586176ddc0) |
 | Month end | Bill for flat A, sealed | [`0x15620473…`](https://rabdi.explorer.arkiv.network/tx/0x15620473aa9ba19438426417fda40217d76093bdc305374940b4735edbe7b10c) |
 
-**TODO (Pawan/Om):** add the same trail from the live demo on `sunrise-apartments`, from the Pi's
-bridge, once it has run.
+**On the live building** `sunrise-apartments`, written by the Pi's own bridge (same wallet):
+
+| What | Entity |
+|---|---|
+| A signed panel reading (one of 76 live readings on 6 Nov, 23:00) | [`0x252c1092…`](https://rabdi.explorer.arkiv.network/entity/0x252c10922d71e999d50f56109234b93b6d653095f7e46555d4be93c75dc028b0) |
+| The no-AI safe stop: "0G unreachable: building runs on grid, no jobs moved" | [`0x798036b1…`](https://rabdi.explorer.arkiv.network/entity/0x798036b1c95ac505f4937ed8484547b50ae10c5fe794e059445acb5f6ea79c39) |
+| Today's daily totals | [`0xdee82c66…`](https://rabdi.explorer.arkiv.network/entity/0xdee82c66a2b47991cf939a8458d006c785d10e2050174de0e479a3aab3584e87) |
+
+The demo run's decisions, with their 0G request IDs, storage roots and Arkiv entities, are in the
+README's proof table.
 
 ## Measured
 

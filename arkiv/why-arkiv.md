@@ -81,6 +81,31 @@ hold copies of those links; here the record book is as public as the things it p
 - **Arkiv** gives typed, indexed, queryable records with an owner and an end date. That is exactly
   a building's record book.
 
+## What we kept off Arkiv, and why
+
+Arkiv is public and long-lived, so we only put there what the building wants anyone to be able to
+check. Everything else stays where it belongs:
+
+| Kept off Arkiv | Where it lives instead | Why |
+|---|---|---|
+| **Names, phone numbers, flat owners, the cleaner's identity** | Nowhere in our system; flats are `A`, `B`, `C` | A public, permanent record of who lives where is a privacy and safety risk. Nothing on any screen needs it. |
+| **Raw 1-second meter samples** | The Pi's local SQLite, for 7 days | 86,400 rows a day per meter would cost gas and say more about a household than anyone needs. Arkiv gets one **signed** 1-minute summary per meter, enough to prove a payout. |
+| **Camera frames of the panel** (cleaning flow v3) | The Pi; 0G's vision model sees them for the dust check | A rooftop photo can show neighbours' windows. Arkiv holds 0G's verdict instead: `coverage_pct`, `og_input`, `og_tee` and the `og_request_id`, which point to the evidence. |
+| **Full 0G episode logs** (prompt, raw answer, forecast, building state) | 0G Storage, content-addressed | Large, permanent, and addressed by hash. Arkiv stores the `og_storage_root`, so the short record points at the full one. |
+| **Money and its rules** | Arc: the CleaningEscrow, ShopTrade and SolarBilling contracts | Arkiv can't hold USDC or enforce "pay only on proof". It records what Arc did (`open_tx`, `release_tx`, `refund_tx`). |
+| **Control of the building** (relays, pump) | The Pi, locally | A flat must switch to grid in under 2 s even with no internet. A write takes 3–5 s, so Arkiv is the record, never the control channel. When Arkiv is unreachable, the building keeps running and the records queue. |
+| **Keys and the admin password** | Local `.env` files with `chmod 600`, never logged | Our access key appears in RPC URLs, so every error we print or show is redacted first. |
+
+**One gap we know about.** Dyna's plan is told which flats are away tomorrow, so its one-sentence
+summary can say "Flat B is away". That summary is written to Arkiv in plain text, and the prompt
+behind it goes into the episode log on 0G Storage. For a real building, occupancy is a burglary
+signal. The fix:
+- have the planner say "an empty flat" in its summary;
+- redact the away list from the episode before upload.
+
+It's flagged to Om, since `pi/` is his code. For the demo it's a cardboard building, so nobody is
+at risk.
+
 ## What it costs
 
 On Rabdi, one write is 43k–572k gas at 1 gwei: 0.00004–0.0006 tGLM. A busy demo day is roughly
