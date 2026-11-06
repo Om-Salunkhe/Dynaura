@@ -20,7 +20,7 @@ export default function Bill() {
   const { adminKey } = useConnection();
   const ark = useArkiv(() => fetchBills({ flat: who.flat }), null, [who.flat]);
   // newest first from Arkiv; a re-posted month keeps only its newest bill
-  const arkBills = ark.live ? ark.data.filter((p, i, all) => all.findIndex((q) => q.month === p.month) === i) : null;
+  const arkBills = ark.live || (ark.limited && Array.isArray(ark.data)) ? ark.data.filter((p, i, all) => all.findIndex((q) => q.month === p.month) === i) : null;
   const live = !pi.demo && pi.data;
   const [demoPaid, setDemoPaid] = useState(false);
   const [busy, setBusy] = useState(null);

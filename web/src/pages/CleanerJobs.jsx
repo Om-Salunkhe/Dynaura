@@ -30,7 +30,7 @@ export default function CleanerJobs() {
   const paidNow = hero.stage === "paid" ? hero.job?.fee || 0 : 0;
   // The public job board on Arkiv: every escrow the building opened, with its status
   const board = useArkiv(() => fetchCleaningJobs({ limit: 10 }), null, [hero.stage]);
-  const arkJobs = board.live && board.data.length ? board.data : null;
+  const arkJobs = (board.live || board.limited) && board.data?.length ? board.data : null;
 
   return (
     <div className="flex flex-col gap-3">

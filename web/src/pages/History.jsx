@@ -2,7 +2,7 @@ import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import Proof from "../components/Proof.jsx";
 import { panelWeek, timeline } from "../data/demo.js";
-import { fetchBills, fetchDailyOutput, fetchDecisions, fetchMaintenance, short, useArkiv } from "../lib/arkiv.js";
+import { ARKIV_BUSY_TEXT, fetchBills, fetchDailyOutput, fetchDecisions, fetchMaintenance, short, useArkiv } from "../lib/arkiv.js";
 import { useRole } from "../lib/role.jsx";
 
 const KIND_TITLE = { plan: "AI plan", ask: "Ask Dyna", dust: "Dust alert", clean: "Panel cleaned" };
@@ -42,15 +42,18 @@ export default function History() {
   const mnt = useArkiv(() => fetchMaintenance(10), null);
   const bil = useArkiv(() => fetchBills(who.role === "resident" ? { flat: who.flat, limit: 3 } : { limit: 3 }), null, [who.flat]);
   const daily = useArkiv(() => fetchDailyOutput(7), null);
-  const live = dec.live && mnt.live;
-  const items = live ? fromArkiv(dec.data, mnt.data, bil.live ? bil.data : []) : timeline;
+  // a rate-limited read keeps the real data it had: still real, not demo
+  const real = (s) => s.live || (s.limited && Array.isArray(s.data));
+  const live = real(dec) && real(mnt);
+  const busy = dec.limited || mnt.limited;
+  const items = live ? fromArkiv(dec.data, mnt.data, real(bil) ? bil.data : []) : timeline;
   // Arkiv daily totals, oldest first; bars scale to the best day of the week
   const days = daily.live && daily.data.length ? [...daily.data].reverse() : null;
   const best = days ? Math.max(...days.map((d) => d.panelWh), 1) : 1;
   return (
     <div className="flex flex-col gap-3">
       <PageHeader
-        kicker={live ? "Read live from Arkiv · every AI step has a 0G proof" : "Demo data · Arkiv not connected"}
+        kicker={live ? `Read live from Arkiv · every AI step has a 0G proof${busy ? ` · ${ARKIV_BUSY_TEXT}` : ""}` : busy ? `${ARKIV_BUSY_TEXT} · demo data meanwhile` : "Demo data · Arkiv not connected"}
         title="History"
       />
 
