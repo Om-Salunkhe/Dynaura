@@ -9,6 +9,7 @@ import { cleaner } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
 import { ARC_READY, errText, short, useWallet, write } from "../lib/arc.js";
 import { fetchCleaningJobs, useArkiv } from "../lib/arkiv.js";
+import { verifyPayout } from "../lib/verify.js";
 import { stageIndex, useHero } from "../lib/hero.js";
 
 const STEPS = [
@@ -79,22 +80,7 @@ export default function CleanerJobs() {
           <span className="text-base font-medium">Job board on Arkiv</span>
           <span className="pb-1 text-xs text-muted">Every cleaning escrow the building opened. Anyone can check it.</span>
           {arkJobs.map((j) => (
-            <div key={j.key} className="flex flex-col gap-1.5 border-t border-line py-2.5 text-sm first-of-type:border-0">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Job #{j.jobId}</span>
-                <span className={`chip py-0.5 text-[11px] ${j.status === "paid" ? "bg-[rgba(47,158,106,0.16)] text-good" : j.status === "refunded" ? "bg-[rgba(180,35,24,0.12)] text-bad" : "bg-sun-soft text-sun-ink"}`}>
-                  {j.status} · {j.feeUsdc.toFixed(2)} USDC
-                </span>
-              </div>
-              <span className="flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="text-muted">
-                  {Math.round(j.outputBefore)}%{j.outputAfter != null ? ` → ${Math.round(j.outputAfter)}%` : ""} output
-                </span>
-                <Proof kind="arc" id={j.arcTx} />
-                <Proof kind="og" id={j.ogStorageRoot} />
-                <Proof kind="arkiv" id={j.key} />
-              </span>
-            </div>
+            <BoardRow key={j.key} j={j} />
           ))}
         </section>
       )}
@@ -114,6 +100,62 @@ export default function CleanerJobs() {
             </div>
           ))}
         </section>
+      )}
+    </div>
+  );
+}
+
+// One job on the Arkiv board. Works with the v2 and v3 cleaning_job fields: a v3 case has no
+// Arc id or fee until the committee approves it.
+const GOOD = new Set(["paid", "resolved"]);
+const BAD = new Set(["refunded", "rejected", "disputed", "no_check"]);
+function BoardRow({ j }) {
+  const [res, setRes] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const fee = Number(j.feeUsdc) || 0;
+  const before = j.dustyPct ?? j.outputBefore;
+  const after = j.afterPct ?? j.outputAfter;
+  const tx = j.releaseTx || j.refundTx || j.openTx || j.arcTx;
+  const canVerify = j.status === "paid" && j.jobId != null && ARC_READY.escrow;
+  const verify = async () => {
+    setBusy(true);
+    try {
+      setRes(await verifyPayout({ id: j.jobId, proofWindow: j.proofWindow }));
+    } catch (e) {
+      setRes({ ok: false, why: e.shortMessage || e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-line py-2.5 text-sm first-of-type:border-0">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium">{j.jobId != null ? `Job #${j.jobId}` : j.caseId != null ? `Case ${j.caseId}` : "Cleaning request"}</span>
+        <span className={`chip py-0.5 text-[11px] ${GOOD.has(j.status) ? "bg-[rgba(47,158,106,0.16)] text-good" : BAD.has(j.status) ? "bg-[rgba(180,35,24,0.12)] text-bad" : "bg-sun-soft text-sun-ink"}`}>
+          {j.status}
+          {fee > 0 ? ` · ${fee.toFixed(2)} USDC` : ""}
+        </span>
+      </div>
+      <span className="flex flex-wrap items-center gap-2 text-[11px]">
+        {before != null && (
+          <span className="text-muted">
+            {Math.round(before)}%{after != null ? ` → ${Math.round(after)}%` : ""} output
+          </span>
+        )}
+        {j.coveragePct != null && <span className="text-muted">0G: ~{Math.round(j.coveragePct)}% covered</span>}
+        <Proof kind="arc" id={tx} />
+        <Proof kind="og" id={j.ogStorageRoot} />
+        <Proof kind="arkiv" id={j.key} />
+        {canVerify && (
+          <button type="button" className="text-[11px] text-link underline-offset-2 hover:underline" onClick={verify} disabled={busy}>
+            {busy ? "verifying…" : "Verify payout"}
+          </button>
+        )}
+      </span>
+      {res && (
+        <span className={`text-[11.5px] ${res.ok ? "text-good" : "text-bad"}`}>
+          {res.ok ? "✓ The proof on Arc matches the signed readings on Arkiv" : `✗ ${res.why || "Doesn't match the proof on Arc"}`}
+        </span>
       )}
     </div>
   );
