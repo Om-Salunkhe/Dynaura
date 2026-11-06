@@ -3,12 +3,12 @@ import { ConnectionPill } from "./Connection.jsx";
 
 export default function PageHeader({ kicker, title, right }) {
   return (
-    <header className="mb-3 flex items-center justify-between gap-3">
+    <header className="mb-4 flex items-center justify-between gap-3">
       <div className="flex min-w-0 flex-col gap-0.5">
-        {kicker && <span className="text-[13px] text-muted">{kicker}</span>}
-        <h1 className="h-title m-0">{title}</h1>
+        {kicker && <span className="truncate text-[12.5px] text-muted">{kicker}</span>}
+        <h1 className="h-title m-0 truncate">{title}</h1>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-none items-center gap-2">
         <ConnectionPill />
         {right}
         <AccountButton />

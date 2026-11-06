@@ -2,10 +2,10 @@
 export default function DemoBadge({ demo }) {
   return (
     <span
-      className={`chip py-1 text-[11px] ${demo ? "bg-inner text-muted" : "bg-sun-soft text-sun-ink"}`}
+      className={`chip py-0.5 text-[11px] ${demo ? "border border-line text-muted" : "bg-sun-soft text-sun-ink"}`}
       title={demo ? "Pi not reachable: showing demo data" : "Live from the Pi"}
     >
-      <span className={`h-2 w-2 rounded-full ${demo ? "bg-idle" : "animate-pulse bg-sun"}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${demo ? "bg-[color:var(--muted)]" : "animate-pulse bg-sun"}`} />
       {demo ? "Demo" : "Live"}
     </span>
   );

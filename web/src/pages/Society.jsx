@@ -72,22 +72,22 @@ export default function Society() {
       />
 
       {noAi && (
-        <section className="card flex flex-col gap-1 rounded-[22px] border-bad">
-          <span className="text-[11px] font-extrabold tracking-wider text-bad">NO-AI MODE</span>
-          <span className="text-sm font-bold">0G could not be reached, so nothing was moved. Every flat is on grid.</span>
+        <section className="card flex flex-col gap-1 rounded-[14px] border-bad">
+          <span className="text-[11px] font-semibold tracking-wider text-bad">NO-AI MODE</span>
+          <span className="text-sm font-semibold">0G could not be reached, so nothing was moved. Every flat is on grid.</span>
           <span className="text-xs text-muted">{api.data.reason}</span>
         </section>
       )}
 
-      <section className="card flex flex-col gap-3 rounded-[26px]">
+      <section className="card flex flex-col gap-3 rounded-[14px]">
         {!isAdmin && (
-          <span className="chip w-fit border border-line bg-card-solid py-1.5 text-xs font-semibold">
+          <span className="chip w-fit border border-line bg-card-solid py-1.5 text-xs font-medium">
             <Icon name="lock" size={14} /> Set by committee · view only
           </span>
         )}
         <div className="flex items-baseline justify-between">
           <span className="text-sm text-muted">Solar forecast for the day</span>
-          <span className="text-2xl font-extrabold">{plan.forecastKwh} kWh</span>
+          <span className="text-2xl font-semibold">{plan.forecastKwh} kWh</span>
         </div>
         <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
           <span className="bg-sun" style={{ width: `${(plan.split.flats / total) * 100}%` }} />
@@ -101,9 +101,9 @@ export default function Society() {
         </div>
       </section>
 
-      <section className="card flex flex-col gap-2 rounded-[26px]">
+      <section className="card flex flex-col gap-2 rounded-[14px]">
         <div className="flex items-center justify-between">
-          <span className="text-base font-bold">Planned by 0G</span>
+          <span className="text-base font-semibold">Planned by 0G</span>
           <span className="mono text-[11px] text-muted" title={plan.requestId}>{shortId(plan.requestId)}</span>
         </div>
         {plan.summary && <span className="text-xs text-ink-2">{plan.summary}</span>}
@@ -118,7 +118,7 @@ export default function Society() {
 
         {plan.groups.map((g, gi) => (
           <div key={g.name} className="flex flex-col gap-1.5">
-            <span className="pt-1 text-[11px] font-extrabold uppercase tracking-wider text-muted">
+            <span className="pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
               {gi + 1} · {g.name}
             </span>
             {g.jobs.map((j, ji) => {
@@ -129,8 +129,8 @@ export default function Society() {
                 <div key={j.name} className="flex flex-col gap-1">
                   <div className="grid grid-cols-[112px_1fr] items-center gap-2">
                     <span className="flex flex-col">
-                      <span className="text-[13px] font-bold leading-tight">{j.name}</span>
-                      <span className={`text-[11px] ${j.running ? "font-bold text-sun-ink" : "text-muted"}`}>{j.label}</span>
+                      <span className="text-[13px] font-semibold leading-tight">{j.name}</span>
+                      <span className={`text-[11px] ${j.running ? "font-semibold text-sun-ink" : "text-muted"}`}>{j.label}</span>
                     </span>
                     <span className="relative h-7 rounded-lg bg-inner">
                       <span
@@ -141,7 +141,7 @@ export default function Society() {
                         <button
                           type="button"
                           onClick={() => setEditing(editing === key ? null : key)}
-                          className="absolute -right-1 -top-1 rounded-full border border-line bg-card-solid px-2 text-[11px] font-bold"
+                          className="absolute -right-1 -top-1 rounded-full border border-line bg-card-solid px-2 text-[11px] font-semibold"
                         >
                           Edit
                         </button>

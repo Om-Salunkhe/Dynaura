@@ -36,7 +36,7 @@ export default function AccountButton() {
       </button>
       {open && (
         <div className="absolute right-0 top-12 z-30 w-60 rounded-2xl border border-line bg-card-solid p-2 shadow-nav">
-          <p className="px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wider text-muted">Sign in as</p>
+          <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted">Sign in as</p>
           {ROLES.map((r) => {
             const active = r.role === who.role && (r.role !== "resident" || r.flat === who.flat);
             return (
@@ -48,7 +48,7 @@ export default function AccountButton() {
                   setOpen(false);
                   go(r.home);
                 }}
-                className={`flex min-h-[44px] w-full items-center justify-between rounded-xl px-3 text-left text-sm font-semibold ${
+                className={`flex min-h-[44px] w-full items-center justify-between rounded-xl px-3 text-left text-sm font-medium ${
                   active ? "bg-inner" : "hover:bg-inner"
                 }`}
               >
@@ -64,7 +64,7 @@ export default function AccountButton() {
               setOpen(false);
               openConnection();
             }}
-            className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 text-sm font-semibold hover:bg-inner"
+            className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 text-sm font-medium hover:bg-inner"
           >
             <Icon name="lock" size={16} />
             Connection & admin key
@@ -72,7 +72,7 @@ export default function AccountButton() {
           <button
             type="button"
             onClick={toggleTheme}
-            className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 text-sm font-semibold hover:bg-inner"
+            className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 text-sm font-medium hover:bg-inner"
           >
             <Icon name={theme === "dark" ? "sun" : "moon"} size={16} />
             {theme === "dark" ? "Light glass" : "Black glass"}

@@ -1,12 +1,13 @@
 import { NavLink } from "react-router-dom";
 import Icon from "./Icon.jsx";
 
+/** Phone navigation: a plain tab bar pinned to the bottom edge. */
 export default function BottomNav({ items }) {
   if (items.length < 2) return null;
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-4 bottom-5 z-20 mx-auto grid h-[68px] max-w-[398px] gap-1 rounded-[24px] border border-line bg-nav p-1.5 shadow-nav backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-20 grid border-t border-line bg-nav pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
     >
       {items.map((it) => (
@@ -15,12 +16,14 @@ export default function BottomNav({ items }) {
           to={it.to}
           end={it.end ?? it.to === "/"}
           className={({ isActive }) =>
-            `flex flex-col items-center justify-center gap-[3px] rounded-[18px] text-[11px] font-semibold ${
-              isActive ? "bg-btn text-btn-ink shadow-lg" : "text-muted hover:text-ink"
+            `relative flex h-[58px] flex-col items-center justify-center gap-1 text-[10.5px] font-medium ${
+              isActive
+                ? "text-ink before:absolute before:left-1/2 before:top-0 before:h-[2px] before:w-6 before:-translate-x-1/2 before:rounded-full before:bg-sun"
+                : "text-muted"
             }`
           }
         >
-          <Icon name={it.icon} />
+          <Icon name={it.icon} size={19} />
           {it.label}
         </NavLink>
       ))}

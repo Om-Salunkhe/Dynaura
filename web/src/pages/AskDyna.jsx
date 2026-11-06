@@ -57,7 +57,7 @@ export default function AskDyna() {
           <Icon name="spark" size={22} />
         </span>
         <span className="flex flex-1 flex-col gap-0.5">
-          <span className="text-lg font-extrabold">Dyna</span>
+          <span className="text-lg font-semibold">Dyna</span>
           <span className="text-xs text-muted">Knows your meter, bills and the sun · 1 iAI per answer</span>
         </span>
       </header>
@@ -66,7 +66,7 @@ export default function AskDyna() {
         <span className="self-center text-[11px] text-muted">Today</span>
         {msgs.map((m, i) =>
           m.from === "me" ? (
-            <div key={i} className="max-w-[78%] self-end rounded-[20px_20px_6px_20px] bg-btn px-3.5 py-3 text-sm font-semibold leading-snug text-btn-ink">
+            <div key={i} className="max-w-[78%] self-end rounded-[20px_20px_6px_20px] bg-btn px-3.5 py-3 text-sm font-medium leading-snug text-btn-ink">
               {m.text}
             </div>
           ) : (
@@ -100,7 +100,7 @@ export default function AskDyna() {
             key={s}
             type="button"
             onClick={() => ask(s)}
-            className="min-h-[44px] flex-none rounded-full border border-line bg-card-solid px-3.5 text-[13px] font-semibold"
+            className="min-h-[44px] flex-none rounded-full border border-line bg-card-solid px-3.5 text-[13px] font-medium"
           >
             {s}
           </button>

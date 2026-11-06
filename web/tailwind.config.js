@@ -26,7 +26,10 @@ export default {
         nav: v("nav"),
       },
       boxShadow: { nav: v("shadow") },
-      fontFamily: { sans: ["Urbanist", "Inter", "system-ui", "sans-serif"] },
+      fontFamily: {
+        sans: ["Instrument Sans", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        mono: ["IBM Plex Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+      },
     },
   },
   plugins: [],

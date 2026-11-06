@@ -12,15 +12,21 @@ export default function Layout({ nav }) {
   const { pathname } = useLocation();
   const live = useLive();
   return (
-    <div className="flex min-h-screen gap-6 px-5 pb-32 pt-6 lg:px-6 lg:pb-6">
+    <div className="flex min-h-screen">
       <Sidebar items={nav} />
-      <main className={`mx-auto w-full max-w-md ${WIDE.has(pathname) ? "lg:max-w-none" : "lg:max-w-3xl"}`}>
-        <ConnectionBar />
-        <MixedContentBanner />
-        {isOffline(live) && <OfflineBanner />}
-        <SafeStopBanner live={live} />
-        <Outlet />
-      </main>
+      <div className={`relative min-w-0 flex-1 ${pathname === "/" ? "wash" : ""}`}>
+        <main
+          className={`mx-auto w-full min-w-0 max-w-md px-4 pb-28 pt-5 sm:px-5 lg:px-8 lg:pb-10 lg:pt-7 ${
+            WIDE.has(pathname) ? "lg:max-w-[1280px]" : "lg:max-w-3xl"
+          }`}
+        >
+          <ConnectionBar />
+          <MixedContentBanner />
+          {isOffline(live) && <OfflineBanner />}
+          <SafeStopBanner live={live} />
+          <Outlet />
+        </main>
+      </div>
       <BottomNav items={nav} />
       <ConnectionDialog />
     </div>

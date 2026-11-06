@@ -54,9 +54,9 @@ export default function History() {
         title="History"
       />
 
-      <section className="card flex flex-col gap-3 rounded-[26px]">
+      <section className="card flex flex-col gap-3 rounded-[14px]">
         <div className="flex items-baseline justify-between">
-          <span className="text-base font-bold">Panel output, 7 days</span>
+          <span className="text-base font-semibold">Panel output, 7 days</span>
           <span className="text-xs text-muted">{days ? "Wh per day · Arkiv" : "% of forecast · demo"}</span>
         </div>
         {days ? (
@@ -96,7 +96,7 @@ export default function History() {
         )}
       </section>
 
-      <section className="card flex flex-col gap-1 rounded-[26px]">
+      <section className="card flex flex-col gap-1 rounded-[14px]">
         {items.length === 0 && <span className="text-sm text-muted">No records on Arkiv yet.</span>}
         {items.map((t, i) => {
           const k = KIND[t.kind];
@@ -109,7 +109,7 @@ export default function History() {
                 <span className="text-xs text-muted">
                   {t.when} · {t.title}
                 </span>
-                <span className="text-sm font-bold">{t.text}</span>
+                <span className="text-sm font-semibold">{t.text}</span>
                 {t.ids ? (
                   <span className="flex flex-wrap gap-1.5 pt-0.5 text-[11px]">
                     {t.proof && <span className="mono py-1 text-muted">{t.proof}</span>}
@@ -118,7 +118,7 @@ export default function History() {
                     ))}
                   </span>
                 ) : (
-                  <span className="mono text-[11px] font-bold text-muted">{t.proof} · demo</span>
+                  <span className="mono text-[11px] font-semibold text-muted">{t.proof} · demo</span>
                 )}
               </span>
             </div>

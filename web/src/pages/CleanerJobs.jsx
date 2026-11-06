@@ -36,35 +36,35 @@ export default function CleanerJobs() {
 
       {!hero.live && (
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="card flex flex-col gap-0.5 rounded-[20px] p-3.5">
+          <div className="card flex flex-col gap-0.5 rounded-[14px] p-3.5">
             <span className="text-xs text-muted">Earned this month</span>
-            <span className="text-xl font-extrabold">{(cleaner.earned + paidNow).toFixed(2)} USDC</span>
+            <span className="text-xl font-semibold">{(cleaner.earned + paidNow).toFixed(2)} USDC</span>
           </div>
-          <div className="card flex flex-col gap-0.5 rounded-[20px] p-3.5">
+          <div className="card flex flex-col gap-0.5 rounded-[14px] p-3.5">
             <span className="text-xs text-muted">Jobs done</span>
-            <span className="text-xl font-extrabold">{cleaner.done + (paidNow ? 1 : 0)}</span>
+            <span className="text-xl font-semibold">{cleaner.done + (paidNow ? 1 : 0)}</span>
           </div>
         </div>
       )}
 
       <JobCard hero={hero} onChain={onChain} me={w.address} />
 
-      <section className="card flex flex-col gap-2.5 rounded-[26px]">
-        <span className="text-base font-bold">How you get paid</span>
+      <section className="card flex flex-col gap-2.5 rounded-[14px]">
+        <span className="text-base font-semibold">How you get paid</span>
         {STEPS.map(([t, sub], n) => {
           const done = i >= 2 && (n < step || hero.stage === "paid");
           const now = i >= 2 && n === step && hero.stage !== "paid";
           return (
             <div key={t} className={`flex items-center gap-3 text-sm ${!done && !now && i >= 2 ? "opacity-50" : ""}`}>
               <span
-                className={`grid h-8 w-8 flex-none place-items-center rounded-full text-xs font-extrabold ${
+                className={`grid h-8 w-8 flex-none place-items-center rounded-full text-xs font-semibold ${
                   done ? "bg-good text-white" : now ? "animate-pulse bg-sun text-[#111418]" : "bg-btn text-btn-ink"
                 }`}
               >
                 {done ? <Icon name="check" size={14} /> : n + 1}
               </span>
               <span className="flex flex-col">
-                <span className="font-bold">{t}</span>
+                <span className="font-semibold">{t}</span>
                 <span className="text-xs text-muted">{sub}</span>
               </span>
             </div>
@@ -73,13 +73,13 @@ export default function CleanerJobs() {
       </section>
 
       {arkJobs && (
-        <section className="card flex flex-col gap-1 rounded-[26px]">
-          <span className="text-base font-bold">Job board on Arkiv</span>
+        <section className="card flex flex-col gap-1 rounded-[14px]">
+          <span className="text-base font-semibold">Job board on Arkiv</span>
           <span className="pb-1 text-xs text-muted">Every cleaning escrow the building opened. Anyone can check it.</span>
           {arkJobs.map((j) => (
             <div key={j.key} className="flex flex-col gap-1.5 border-t border-line py-2.5 text-sm first-of-type:border-0">
               <div className="flex items-center justify-between">
-                <span className="font-bold">Job #{j.jobId}</span>
+                <span className="font-semibold">Job #{j.jobId}</span>
                 <span className={`chip py-0.5 text-[11px] ${j.status === "paid" ? "bg-[rgba(47,158,106,0.16)] text-good" : j.status === "refunded" ? "bg-[rgba(180,35,24,0.12)] text-bad" : "bg-sun-soft text-sun-ink"}`}>
                   {j.status} · {j.feeUsdc.toFixed(2)} USDC
                 </span>
@@ -98,17 +98,17 @@ export default function CleanerJobs() {
       )}
 
       {!hero.live && !arkJobs && (
-        <section className="card flex flex-col gap-1 rounded-[26px]">
-          <span className="pb-1 text-base font-bold">Paid jobs</span>
+        <section className="card flex flex-col gap-1 rounded-[14px]">
+          <span className="pb-1 text-base font-semibold">Paid jobs</span>
           {cleaner.paid.map((p) => (
             <div key={p.id} className="flex items-center justify-between py-1.5 text-sm">
               <span className="flex flex-col">
-                <span className="font-bold">
+                <span className="font-semibold">
                   Job #{p.id} · {p.when}
                 </span>
                 <span className="text-xs text-muted">{p.text}</span>
               </span>
-              <span className="text-xs font-bold text-muted">{p.amount.toFixed(2)} USDC</span>
+              <span className="text-xs font-semibold text-muted">{p.amount.toFixed(2)} USDC</span>
             </div>
           ))}
         </section>
@@ -126,9 +126,9 @@ function JobCard({ hero, onChain, me }) {
 
   if (["clean", "dusty"].includes(hero.stage) || !j) {
     return (
-      <section className="card flex flex-col gap-2 rounded-[26px] text-sm">
-        <span className="text-[11px] font-extrabold tracking-wider text-muted">{hero.stage === "dusty" ? "A JOB IS OPENING" : "NO JOBS RIGHT NOW"}</span>
-        <span className="text-base font-bold">
+      <section className="card flex flex-col gap-2 rounded-[14px] text-sm">
+        <span className="text-[11px] font-semibold tracking-wider text-muted">{hero.stage === "dusty" ? "A JOB IS OPENING" : "NO JOBS RIGHT NOW"}</span>
+        <span className="text-base font-semibold">
           {hero.stage === "dusty" ? "A panel near you just got dusty. The escrow is being locked on Arc." : "All panels near you are clean."}
         </span>
         <span className="text-muted">A job appears here when a panel drops under {hero.dustPct}% of its clean output.</span>
@@ -162,11 +162,11 @@ function JobCard({ hero, onChain, me }) {
   if (hero.stage === "paid" || hero.stage === "refunded") {
     const paid = hero.stage === "paid";
     return (
-      <section className={`card flex flex-col gap-3 rounded-[26px] ${paid ? "border-2 border-good" : ""}`}>
-        <span className={`text-[11px] font-extrabold tracking-wider ${paid ? "text-good" : "text-bad"}`}>
+      <section className={`card flex flex-col gap-3 rounded-[14px] ${paid ? "border-2 border-good" : ""}`}>
+        <span className={`text-[11px] font-semibold tracking-wider ${paid ? "text-good" : "text-bad"}`}>
           {paid ? "PAID BY THE SUN" : "REFUNDED TO THE SOCIETY"} · JOB #{j.id}
         </span>
-        <span className="text-4xl font-extrabold">{paid ? `+${j.fee.toFixed(2)} USDC` : `${j.fee.toFixed(2)} USDC`}</span>
+        <span className="text-4xl font-semibold">{paid ? `+${j.fee.toFixed(2)} USDC` : `${j.fee.toFixed(2)} USDC`}</span>
         <span className="text-sm text-muted">
           {paid
             ? `The panel went from ${Math.round(j.outputBefore)}% to ${Math.round(j.outputAfter ?? pct)}%. The Pi released the escrow by itself.`
@@ -182,22 +182,22 @@ function JobCard({ hero, onChain, me }) {
   }
 
   return (
-    <section className="card flex flex-col gap-3 rounded-[26px]">
+    <section className="card flex flex-col gap-3 rounded-[14px]">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-extrabold tracking-wider text-sun-ink">
+        <span className="text-[11px] font-semibold tracking-wider text-sun-ink">
           {hero.stage === "open" ? "NEW JOB NEAR YOU" : mine ? "YOUR JOB" : "TAKEN"} · #{j.id}
         </span>
         <span className="text-xs text-muted">Ends {ends(j.deadline)}</span>
       </div>
       <span className="flex flex-col gap-0.5">
-        <span className="text-lg font-extrabold">Sunrise Apartments</span>
+        <span className="text-lg font-semibold">Sunrise Apartments</span>
         <span className="text-sm text-muted">Andheri East · 1 roof panel · was at {Math.round(j.outputBefore)}% output</span>
       </span>
       <div className="inner flex items-center justify-between p-3">
         <span className="flex items-center gap-2 text-sm">
           <Icon name="lock" size={16} /> Locked in escrow on Arc
         </span>
-        <span className="text-lg font-extrabold">{j.fee.toFixed(2)} USDC</span>
+        <span className="text-lg font-semibold">{j.fee.toFixed(2)} USDC</span>
       </div>
       {j.openTx && <Proof kind="arc" id={j.openTx} label="Escrow on Arc" className="self-start text-xs" />}
 
@@ -222,8 +222,8 @@ function JobCard({ hero, onChain, me }) {
       {(hero.stage === "cleaning" || (hero.stage === "accepted" && !mine)) && (
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between">
-            <span className="text-sm font-bold">{mine ? "The meter is checking your work" : `Another cleaner (${short(j.cleaner)}) took this job`}</span>
-            <span className={`text-3xl font-extrabold ${pct != null && pct >= hero.cleanPct ? "text-good" : ""}`}>{pct ?? "–"}%</span>
+            <span className="text-sm font-semibold">{mine ? "The meter is checking your work" : `Another cleaner (${short(j.cleaner)}) took this job`}</span>
+            <span className={`text-3xl font-semibold ${pct != null && pct >= hero.cleanPct ? "text-good" : ""}`}>{pct ?? "–"}%</span>
           </div>
           <div className="relative h-4 overflow-hidden rounded-full bg-inner">
             <span className="absolute inset-y-0 left-0 rounded-full bg-sun transition-[width] duration-300" style={{ width: `${Math.min(pct ?? 0, 100)}%` }} />
