@@ -169,7 +169,7 @@ class FakeArc:
         self.calls = []
 
     def credits_status(self, period_id):
-        return {"posted": True, "total_in_usdc": 1.0, "period_id": None}
+        return {"posted": any(c[0] == "post" for c in self.calls), "total_in_usdc": 1.0, "period_id": None}
 
     def credit_claims(self, period_id):
         self.calls.append(("claims", period_id))
@@ -300,6 +300,58 @@ def test_settle_through_dy_arcs_credits_settle_and_status():
     assert arc.status_calls == 1, "status is cached for 20 s"
     led.settle(arc, "2026-11")  # a month works too (dy-arc's keys)
     assert arc.settles[1][0] == "2026-11"
+
+
+def test_settle_resumes_from_the_chain_never_posts_or_funds_twice():
+    day0 = int(time.mktime(time.strptime("2026-11-07", "%Y-%m-%d")))
+    m = day0 + 12 * 3600
+    rows = [{"minute": m, "meter": "panel", "wh": 0.06, "solar_wh": 0.06, "sig": "s"},
+            {"minute": m, "meter": "A", "wh": 0.02, "solar_wh": 0.02, "sig": "s"},
+            {"minute": m, "meter": "B", "wh": 0.04, "solar_wh": 0.04, "sig": "s"}]
+
+    class Chain:
+        enabled, credits = True, object()
+
+        def __init__(self, fail_fund=False):
+            self.posted, self.funded, self.calls, self.fail_fund = False, False, [], fail_fund
+
+        def credits_status(self, pid):
+            return {"posted": self.posted}
+
+        def credit_txs(self, pid):
+            return {"post_tx": "0xpost" if self.posted else None, "fund_tx": "0xfund" if self.funded else None, "claims": {}}
+
+        def post_credits(self, *a):
+            assert not self.posted, "AlreadyPosted"
+            self.posted = True
+            self.calls.append("post")
+            return "0xpost"
+
+        def fund_credits(self, *a):
+            if self.fail_fund:
+                raise OSError("rpc down")
+            self.funded = True
+            self.calls.append("fund")
+            return "0xfund"
+
+        def credit_claims(self, pid):
+            return {}
+
+    arc = Chain(fail_fund=True)
+    led = credits.Ledger(FakeStore(rows), FakeHw(6.0), path=str(Path(tempfile.mkdtemp()) / "c.db"), shares="A:1,B:1,C:0")
+    for i in range(13):
+        led.sample(5, now=m + i * 5)
+    try:
+        led.settle(arc, "2026-11-07")
+    except OSError:
+        pass
+    assert arc.calls == ["post"], "posted, then the fund failed"
+    arc.fail_fund = False
+    chain = led.settle(arc, "2026-11-07")
+    assert arc.calls == ["post", "fund"] and chain["post_tx"] == "0xpost" and chain["fund_tx"] == "0xfund"
+    fresh = credits.Ledger(FakeStore(rows), FakeHw(6.0), path=str(Path(tempfile.mkdtemp()) / "c2.db"), shares="A:1,B:1,C:0")
+    fresh.settle(arc, "2026-11-07")  # a wiped credits.db: the chain still says posted and funded
+    assert arc.calls == ["post", "fund"], "never posted or funded twice"
 
 
 def test_real_board_available_sun_never_hammers_a_dead_forecast():

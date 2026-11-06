@@ -360,8 +360,9 @@ class Ledger:
     # ---- on chain (SolarCredits, helpers in arc.py) ----------------------------------------
     def settle(self, arc, period: str = "today") -> dict:
         """Post a period (a day, or a month) to SolarCredits and fund it with the shop + grid
-        revenue, through arc.py's credits_settle (dy-arc: it posts once and funds only what is
-        missing, so settling twice is safe). Neighbours pay in themselves (payIn); flats claim."""
+        revenue. Safe to call twice: it posts once and funds once, as the chain shows. A posted
+        period can't change, so settle a day when it's over. Neighbours pay in themselves (payIn);
+        flats claim their share."""
         if not hasattr(arc, "credits_settle") and not all(hasattr(arc, f) for f in ("post_credits", "fund_credits")):
             raise RuntimeError("SolarCredits helpers are not in this build (arc.credits_settle)")
         if not getattr(arc, "enabled", False) or getattr(arc, "credits", None) is None:
@@ -373,26 +374,37 @@ class Ledger:
         if hasattr(arc, "credits_settle"):
             flats = {f: x for f, x in p["flats"].items() if self.weights.get(f, 0) > 0}
             chain = arc.credits_settle(p["period"], flats, p["pool"]["prices"]["neighbor"], fund_usdc, p["readings_hash"])
-        else:  # the earlier, lower-level helpers
-            if p["chain"] and p["chain"].get("post_tx"):
-                return p["chain"]
+        else:  # post_credits + fund_credits (arc.py on pawan/arc-credits)
             pid = hashlib.sha256(f"dynaura-credits:{p['period']}".encode()).digest()
-            scale = _f("BILL_SCALE", 1000)
-            flats = [f for f in FLATS if self.weights.get(f, 0) > 0]
-            post_tx = arc.post_credits(pid, flats, [int(round(p["flats"][f]["unused_wh"] * scale)) for f in flats],
-                                       [int(round(p["flats"][f]["over_wh"] * scale)) for f in flats],
-                                       int(round(p["pool"]["prices"]["neighbor"] * 1e6)), bytes.fromhex(p["readings_hash"][2:]))
+            # The chain decides, not our local file: a posted period is immutable (postPeriod reverts
+            # AlreadyPosted), and it is funded once. So a settle after a crash, a wiped credits.db or
+            # a fund that failed after the post picks up where the last one stopped.
+            posted = bool(arc.credits_status(pid).get("posted")) if hasattr(arc, "credits_status") else False
+            txs = arc.credit_txs(pid) if hasattr(arc, "credit_txs") else {}
+            post_tx = txs.get("post_tx") or (p["chain"] or {}).get("post_tx")
+            if not posted and not post_tx:
+                scale = _f("BILL_SCALE", 1000)
+                flats = [f for f in FLATS if self.weights.get(f, 0) > 0]
+                post_tx = arc.post_credits(pid, flats, [int(round(p["flats"][f]["unused_wh"] * scale)) for f in flats],
+                                           [int(round(p["flats"][f]["over_wh"] * scale)) for f in flats],
+                                           int(round(p["pool"]["prices"]["neighbor"] * 1e6)), bytes.fromhex(p["readings_hash"][2:]))
+                self._save(p["period"], {"period_id": "0x" + pid.hex(), "post_tx": post_tx})  # before funding
+            fund_tx = txs.get("fund_tx") or (p["chain"] or {}).get("fund_tx")
             amount = int(round(fund_usdc * 1e6))
-            chain = {"period_id": "0x" + pid.hex(), "post_tx": post_tx,
-                     "fund_tx": arc.fund_credits(pid, amount) if amount > 0 else None,
-                     "claims": arc.credit_claims(pid) if hasattr(arc, "credit_claims") else {f: None for f in flats}}
+            if amount > 0 and not fund_tx:
+                fund_tx = arc.fund_credits(pid, amount)
+            chain = {"period_id": "0x" + pid.hex(), "post_tx": post_tx, "fund_tx": fund_tx,
+                     "claims": arc.credit_claims(pid) if hasattr(arc, "credit_claims") else {}}
         chain = {**chain, "fund_usdc": fund_usdc, "settled_at": int(time.time())}
-        with self._lock:
-            self._db.execute("INSERT OR REPLACE INTO settled (period, chain) VALUES (?, ?)", (p["period"], json.dumps(chain)))
+        self._save(p["period"], chain)
         self._status.pop(p["period"], None)
         if len(p["period"]) == 10:  # a day: its Arkiv record gets the period id and post tx
             self.post_period(p["period"])
         return chain
+
+    def _save(self, period: str, chain: dict) -> None:
+        with self._lock:
+            self._db.execute("INSERT OR REPLACE INTO settled (period, chain) VALUES (?, ?)", (period, json.dumps(chain)))
 
     # ---- Arkiv -------------------------------------------------------------------------
     def arkiv_body(self, p: dict) -> dict:
