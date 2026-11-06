@@ -1,0 +1,212 @@
+# Friction log: building Dynaura on Arkiv
+
+Everything here happened while we built Dynaura at ETHGlobal Mumbai (5–7 Nov 2026), on
+**Rabdi** (chain 7794095) with **`@arkiv-network/sdk` 1.0.1**, **viem 2.57.16** and Node 22/25. Each item
+says what we hit, how to reproduce it, what it cost us, what we did about it, and what would have
+helped. Transaction hashes are on the [Rabdi explorer](https://rabdi.explorer.arkiv.network).
+
+Severity: **High** = broke a write or could silently mislead. **Medium** = cost real time or
+performance. **Low** = papercut.
+
+---
+
+## 1. The SDK's gas estimate ran out of gas when renewing an entity right after the previous renewal (High)
+
+**What happened.** Our heartbeat entity is renewed with one batch, a patch plus
+`extensions: [{ expiration: ExpirationTime.fromMinutes(2) }]`. When two renewals went out back to
+back, the second one **reverted out of gas**: `gasUsed == gasLimit`, and the fee was spent with
+nothing applied.
+
+**Evidence.**
+- [`0x348bfb0b…fdbd`](https://rabdi.explorer.arkiv.network/tx/0x348bfb0b83122d25f3e8dd20dee9c72b866f1218686c4d42a1befbb7592fdcbd):
+  renewal, success. `gasUsed` 70,693 of a limit of 89,445.
+- [`0x94772a58…462a`](https://rabdi.explorer.arkiv.network/tx/0x94772a581a8baf0397b6164519bbe367077498c0863a1939d7012ac4e0d3462a):
+  the next renewal, 3 blocks later. **Reverted. `gasUsed` 54,946 = limit 54,946.**
+
+**Why (our reading of the SDK source).** `sendArkivTransaction` estimates gas at the latest
+block and adds 25%. In that block the previous renewal has just set the expiry to
+`latest + 60 blocks`. So the estimate sees an extension that resolves to the current expiry: a
+no-op, and cheap. The real transaction lands a block or more later, where the extension is a real
+write. 44k + 25% was not enough for ~71k.
+
+**Reproduce (rerun as a minimal script, 6 Nov).** Create an entity with
+`ExpirationTime.fromMinutes(2)`. Then send four
+`executeBatch({ patches: [...], extensions: [{ entityKey, expiration: ExpirationTime.fromMinutes(2) }] })`
+calls in a row, each as soon as the previous receipt arrives, with the SDK's default gas.
+**Every other one runs out of gas:**
+
+| Renewal | Result | Gas used / limit | Tx |
+|---|---|---|---|
+| 1 (right after the create) | **out of gas** | 41,432 / 41,432 | [`0xc5cbfeae…`](https://rabdi.explorer.arkiv.network/tx/0xc5cbfeae15d3640ef36cf13cb54a83ac4212af39798b7842f96724715f17b8fb) |
+| 2 | ok | 52,635 / 66,783 | [`0x87cc3360…`](https://rabdi.explorer.arkiv.network/tx/0x87cc33603950c6f8ad36880fc68b5f9b7afc400b4494cb8c23602111f34b6230) |
+| 3 | **out of gas** | 41,432 / 41,432 | [`0xed0049df…`](https://rabdi.explorer.arkiv.network/tx/0xed0049df3d00dae23547ec166b0b6815fd06d7d9165c1e566b6c3098eec90596) |
+| 4 | ok | 52,635 / 66,783 | [`0x067d1280…`](https://rabdi.explorer.arkiv.network/tx/0x067d1280218326e898870bd3ba358c0244c2ddefbf8478235ace1c7f482836ff) |
+
+A failed renewal leaves the expiry where it was, so the next estimate sees a real extension and
+gets enough gas. Then the one after that fails again. For a heartbeat this means half the renewals
+are wasted fees.
+
+**Workaround.** We pass an explicit `gas` on every write: 1,000,000 + 400,000 per extra operation,
+the floor from Arkiv's own `arkiv-write-safety` skill. Only gas used is charged (1 gwei on
+Rabdi), so this costs nothing extra. We also retry exactly once, with double the gas, when a
+receipt shows out-of-gas.
+
+**Suggestion.** Make the SDK's default safe for extensions: estimate with the expiry resolved
+against `latest + 1`, or add more headroom when a batch carries extensions. At least, say in the
+README that the default can under-estimate extensions sent back to back.
+
+## 2. `rabdi()` doesn't set `blockTime`, so viem polls for receipts every 4 seconds (Medium)
+
+**What happened.** viem derives its polling interval from `chain.blockTime` and assumes 12 s when
+a chain doesn't set it. So `waitForTransactionReceipt` polls every 4 s on a chain that makes a
+block every 2 s. Every write came back late.
+
+**Evidence.** We measured Rabdi's block time as exactly 2 s over 1,800 blocks. Earlier in the
+hackathon, on another Arkiv app, writes went from about 8 s to about 4 s after we set it. In the
+final bridge, the average write over 15 writes is 3.7 s.
+
+**Reproduce.** `createPublicClient({ chain: rabdi({ accessKey }), transport: http() }).pollingInterval`
+is `4000`.
+
+**Workaround.** `{ ...rabdi({ accessKey }), blockTime: 2000 }` plus `pollingInterval: 1000` on both
+clients.
+
+**Suggestion.** Set `blockTime: 2000` in the `rabdi()` chain definition. It is a one-line change
+that halves write latency for everyone.
+
+## 3. An explicit RPC URL silently drops the access key (Medium)
+
+**What happened.** `rabdi({ accessKey })` puts the key in the RPC URL's path. Our team's `.env`
+had `ARKIV_RPC_URL=https://rpc.rabdi.db-chain.testnet.arkiv.network` (the bare host, as written in
+docs), and the bridge passed it to `http(url)`. That overrides the chain's URL, so every request
+went to the **heavily rate-limited public endpoint**, even though a valid access key was set.
+Nothing warned us. We found it while auditing the config.
+
+**Reproduce.** `http("https://rpc.rabdi.db-chain.testnet.arkiv.network")` with
+`chain: rabdi({ accessKey: "…" })`, then look at the request URL in `onFetchRequest`: there's no
+key.
+
+**Workaround.** The bridge ignores `ARKIV_RPC_URL` when it points at Rabdi and always uses
+`rabdi({ accessKey })`. It warns at start-up when there is no key.
+
+**Suggestion.** Accept the key as a header or option as well as the URL path. Or have the SDK warn
+when a Rabdi client's transport URL has no key.
+
+## 4. Natural expiry has no event, so "offline when the heartbeat expires" needs polling (Medium)
+
+**What happened.** Our "Building offline" alarm is the heartbeat entity expiring. The app polls
+for it every 30 s, because natural expiry emits no event. `watchEntityEvents` has events for
+creates, patches, extensions, transfers and deletes, but nothing fires when an entity simply runs
+out. We first saw this earlier in the hackathon, and Arkiv's expiration skill says the same.
+
+**Workaround.** Poll a query: `heartbeat` where `building = …`, ordered by `updated`, limit 1. No
+row means offline.
+
+**Suggestion.** An `EntityExpired` event, or a subscription to "entities matching this query that
+expire", would make expiry-driven product logic push-based.
+
+## 5. `.ownedBy()` alone can be spoofed with an ownership transfer; the README teaches it alone (Medium)
+
+**What happened.** The README's query example scopes by `.ownedBy(account.address)`, and so did
+our first version of the web app. But `changeOwnership` lets anyone create an entity with our
+schema tag and then **hand it to our wallet**. It then matches `.ownedBy(ourWallet)`. The creator,
+on the other hand, never changes.
+
+**Evidence (live, 6 Nov).** A fresh wallet `0x8013…877b` created a `dynaura.decision` saying
+"FAKE: pay the cleaner twice" for our building
+([`0xf9daf2ef…8f3c`](https://rabdi.explorer.arkiv.network/tx/0xf9daf2efa0bfeb8ea682671e0dd631ef446f9dc223968cc902efe62971c68f3c))
+and transferred it to our building wallet
+([`0x5c8872c6…e717`](https://rabdi.explorer.arkiv.network/tx/0x5c8872c653e66e664cd0eaef2c6ac4a1e3e2c84568091f35cf3b61f2369ee717)).
+- `.ownedBy(building)`: **the fake is returned.**
+- `.createdBy(building).ownedBy(building)`: the fake is not returned.
+
+**Workaround.** Every Dynaura read uses `.createdBy(wallet).ownedBy(wallet)`
+([`arkivReads.js`](../web/src/lib/arkivReads.js)). Our smoke test checks that reading as another
+owner returns nothing.
+
+**Suggestion.** Use `.createdBy()` in the README's first query example, with one sentence on why.
+Arkiv's `arkiv-security-trust` skill says it, but the README is what people copy.
+
+## 6. Entities can't be sorted by `$createdAt` (Low)
+
+**What happened.** We wanted "newest maintenance visits first". `orderBy(desc("$createdAt"))` is
+rejected; only `$key`, `$owner`, `$creator`, `$expiresAt` and columns can be sorted. Several
+visits on the same `date` came back in arbitrary order. Our smoke test caught that.
+
+**Workaround.** We added our own unindexed `at: u64()` column (sorting doesn't need an index) and
+sort on it.
+
+**Suggestion.** Allow sorting on `$createdAt` / `$updatedAt`. Almost every list UI wants it.
+
+## 7. On Node 25, the first query prints a `--localstorage-file` warning (Low)
+
+**What happened.** The SDK's debug logger checks `"localStorage" in globalThis` to read `DEBUG` in
+browsers. Node 25 has a global `localStorage`, and touching it prints
+`Warning: --localstorage-file was provided without a valid path` on every process's first query.
+It looks like an error in our service logs.
+
+**Reproduce.** On Node 25.2.1, run any `select(...).from(Schema).where(eq(...)).fetch()`.
+
+**Suggestion.** Check `typeof window !== "undefined"` (or `process.versions.node`) before touching
+`localStorage`.
+
+## 8. A JavaScript exception doesn't say whether a write landed (Medium, a design note)
+
+**What happened.** When `createEntity` throws, the transaction may or may not be on chain. If
+`EntityMutationError.txHash` is set, the receipt decides. If not, the send may still have gone
+through: the response was lost, or the estimate failed. The SDK can't know. A naive
+"retry on error" creates duplicates. Arkiv's `arkiv-write-safety` skill explains this well, but
+it's a lot to absorb in a hackathon.
+
+**What we built** ([`bridge/writer.mjs`](../bridge/writer.mjs)):
+- One queue and an explicit nonce per write.
+- On failure: settle by receipt when we have a hash, or find the transaction by sender + nonce
+  when the nonce was used.
+- Retry once **on the same nonce** only when the nonce is unused, so at most one copy can land.
+- Anything else is marked "uncertain" in `/health` and never resent.
+- 10 offline tests cover these paths.
+
+**Suggestion.** A small `safeWrite()` helper in the SDK that does this, or that at least returns
+`{ txHash, nonce }` before waiting for the receipt, would save every team from building it.
+
+## 9. The public endpoint returns 429s under modest load; even with a key, latency is about 0.5 s per call from Mumbai (Low)
+
+Without a key, our earlier app got 429s under load. With a key we saw no 429s tonight, but 10 sequential `eth_blockNumber` calls took 5.5 s from the venue. A write needs about 5
+round trips: nonce, block number, send, receipt polls. So it takes 3–5 s even though blocks are 2 s,
+and slow periods pushed single writes to 10–15 s. We cache `eth_gasPrice`, skip viem's fee lookups
+by passing `gasPrice`, and add jittered backoff on reads.
+
+**Suggestion.** An Asia-region RPC, or support for JSON-RPC batch requests through the SDK's write
+path.
+
+## 10. Small things that cost minutes
+
+- **A patch keeps the expiry.** This is in the `patchEntity` TSDoc ("a patch never moves … the
+  expiry") but not in the README. We verified it live before relying on it: a `daily_output` and a
+  `cleaning_job`, patched 1–2 times, kept their exact `$expiresAt` block.
+- **"Readonly" entities can still be deleted by their owner** (found earlier in the hackathon), so
+  `readonly` is not an audit guarantee. Our meter readings carry the device's signature instead.
+- **A bare `bigint` is a `u256`, even for a `u64` column.** `decision_id: 999n` fails with
+  `Column "decision_id": a u64 column, but the value is a u256`. The schema knows the column is
+  `u64`, so it could coerce. The message does say exactly what to write (`u64(...)`), which helped.
+- **`where(undefined)`** throws `Cannot read properties of undefined (reading 'kind')` instead of a
+  message about the missing predicate. We hit it while building a query conditionally.
+
+---
+
+### What worked well
+
+- **Typed schemas** (`defineSchema` with `str().indexed()` and friends) caught bad values before
+  sending, and made the read code obvious.
+- **`ExpirationTime.atDate()`** let "the offer expires when the solar window closes" be one line.
+- **Atomic `executeBatch`**: patch + extend in one transaction is exactly what a heartbeat needs.
+- **Error messages for engine reverts** (`describeEntityRevert`) are excellent: "entity 0x… expired
+  at block N" told us exactly what happened.
+- **Arkiv's agent skills** (github.com/Arkiv-Network/skills): the write-safety and expiration
+  guides shaped our bridge.
+
+### Issues to file upstream
+
+Items 1, 2, 3, 5, 6 and 7 are ready to file at
+[Arkiv-Network/reported-issues](https://github.com/Arkiv-Network/reported-issues). **TODO (Pawan):**
+approve filing them and add the links here.
