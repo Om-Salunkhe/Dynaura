@@ -115,8 +115,10 @@ function JobCard({ hero, onChain, me }) {
 
   // no wallet connected (the demo laptop): treat the job as yours
   const mine = !onChain || !me || !j.cleaner || j.cleaner.toLowerCase() === me.toLowerCase();
+  // live Pi but no escrow address in this app: the job is real, but this screen can't sign for it
+  const canAccept = onChain || !hero.live;
   const accept = async () => {
-    if (!onChain) return hero.actions.accept();
+    if (!onChain) return hero.actions.accept?.();
     setBusy(true);
     setErr(null);
     try {
@@ -171,9 +173,12 @@ function JobCard({ hero, onChain, me }) {
       {j.openTx && <Proof kind="arc" id={j.openTx} label="Escrow on Arc" className="self-start text-xs" />}
 
       {hero.stage === "open" && (
-        <button type="button" className="btn min-h-[56px] text-base" disabled={busy} onClick={accept}>
-          {busy ? "Confirm in your wallet…" : "Accept job"}
-        </button>
+        <>
+          <button type="button" className="btn min-h-[56px] text-base" disabled={busy || !canAccept} onClick={accept}>
+            {busy ? "Confirm in your wallet…" : "Accept job"}
+          </button>
+          {!canAccept && <span className="text-center text-xs text-muted">This app has no escrow contract address set (VITE_ARC_ESCROW), so it can't accept on Arc.</span>}
+        </>
       )}
 
       {hero.stage === "accepted" && mine && (

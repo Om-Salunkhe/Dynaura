@@ -55,8 +55,13 @@ export default function Demo() {
     dust: [
       { label: hero.live ? "Dust on (SIM)" : "Tracing paper on", fn: hero.actions.dust, when: ["clean", "paid", "refunded"] },
       ...(hero.live ? [] : [{ label: "Cleaner accepts", fn: hero.actions.accept, when: ["open"] }]),
-      { label: hero.live ? "Paper off (SIM)" : "Paper off", fn: hero.actions.done, when: ["accepted"] },
-      { label: "Reset", fn: hero.actions.reset, when: ["dusty", "open", "accepted", "cleaning", "paid", "refunded"], quiet: true },
+      // Live: only the SIM's own buttons; the Pi and the cleaner's wallet move the escrow, not us
+      ...(hero.live
+        ? [{ label: "Paper off (SIM)", fn: hero.actions.reset, when: ["dusty", "accepted", "cleaning"] }]
+        : [
+            { label: "Paper off", fn: hero.actions.done, when: ["accepted"] },
+            { label: "Reset", fn: hero.actions.reset, when: ["dusty", "open", "accepted", "cleaning", "paid", "refunded"], quiet: true },
+          ]),
     ],
     settle: [
       connected

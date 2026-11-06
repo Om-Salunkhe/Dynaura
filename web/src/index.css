@@ -86,10 +86,10 @@ a {
     @apply rounded-2xl bg-inner;
   }
   .btn {
-    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-btn px-4 text-[13px] font-extrabold text-btn-ink transition active:scale-[0.98];
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-btn px-4 text-[13px] font-extrabold text-btn-ink transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:scale-100;
   }
   .btn-ghost {
-    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-line bg-inner px-4 text-[13px] font-semibold text-ink;
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-line bg-inner px-4 text-[13px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-45;
   }
   .chip {
     @apply inline-flex items-center gap-2 rounded-full px-3 py-2 text-[13px] font-bold;
