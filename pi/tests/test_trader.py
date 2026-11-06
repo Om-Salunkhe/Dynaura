@@ -96,7 +96,8 @@ def test_trader(tmp):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     point_router(f"http://127.0.0.1:{srv.server_port}/v1")
     config.GRID_RATE_USDC, config.SHOP_PRICE_USDC = 0.02, 0.08
-    trader.EXPORT_RATE_USDC, trader.NEIGHBOR_RATE_USDC = 0.006, None
+    config.EXPORT_RATE_USDC, config.NEIGHBOR_RATE_USDC = 0.006, None
+    assert config.TRADE_MIN_WH == 0.01 and config.TRADE_THINKING is False  # defaults
     px = trader.prices()
     assert px == {"export": 0.006, "import": 0.02, "shop": 0.08, "neighbor": 0.013}, px
 
@@ -207,7 +208,9 @@ def test_trader(tmp):
     answer([{"to": "B", "wh": 5}])
     r = loop.run_now()
     assert r["mode"] == "ai" and by(r["routes"]) == {"B": (5, 0.013), "grid": (25, 0.006)}, r
-    snap["spare_wh"] = 0.2
+    snap["spare_wh"] = 0.08  # a 1-minute sim window at noon: still worth a trade
+    assert loop.run_now()["mode"] == "ai"
+    snap["spare_wh"] = 0.005
     assert "skipped" in loop.run_now()
 
     # 9b. credits.py's window() as it is: since/until (unix), prices.neighbor_default, unused

@@ -98,5 +98,11 @@ DUST_RECHECK_S = float(os.getenv("DUST_RECHECK_S", "120") or 120)  # wait before
 BILL_SCALE = float(os.getenv("BILL_SCALE", "1000") or 1000)
 SOLAR_RATE_USDC = float(os.getenv("SOLAR_RATE_USDC", "0.008") or 0.008)  # per kWh of the building's solar
 GRID_RATE_USDC = float(os.getenv("GRID_RATE_USDC", "0.02") or 0.02)      # per kWh of grid power
+# Fair share + solar credits: the 0G trader (pi/trader.py). Prices in USDC per real kWh.
+EXPORT_RATE_USDC = float(os.getenv("EXPORT_RATE_USDC", "0.006") or 0.006)  # feed-in: the grid pays this for spare sun
+NEIGHBOR_RATE_USDC = float(os.getenv("NEIGHBOR_RATE_USDC") or 0) or None     # empty = midpoint of export..import
+TRADE_EVERY_MIN = float(os.getenv("TRADE_EVERY_MIN", "15") or 15)
+TRADE_MIN_WH = float(os.getenv("TRADE_MIN_WH", "0.01") or 0.01)  # least spare (model Wh) worth a 0G trade
+TRADE_THINKING = os.getenv("TRADE_THINKING", "false").lower() == "true"  # 0gm-1.0 thinking: ~80 s vs ~5 s
 # Optional: only this wallet may pay a flat's bill. "A=0x..,B=0x..". Empty = anyone may pay for the flat.
 FLAT_WALLETS = dict(x.split("=", 1) for x in os.getenv("FLAT_WALLETS", "").replace(" ", "").split(",") if "=" in x)
