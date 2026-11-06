@@ -1,7 +1,7 @@
 // The routes the Pi calls. Each one writes Arkiv entities owned by the building wallet.
 // Every write goes through write() (one queue, explicit nonce, reconcile, never resend blindly).
 import { ExpirationTime } from "@arkiv-network/sdk"
-import { and, desc, eq, lte } from "@arkiv-network/sdk/query"
+import { and, desc, eq, gte, lte } from "@arkiv-network/sdk/query"
 import { addr, u64 } from "@arkiv-network/sdk/schema"
 import { hexToBytes, isAddress, stringToBytes } from "viem"
 import { account, addHealth, BUILDING, publicClient, read, route, walletClient, write } from "./bridge.mjs"
@@ -25,26 +25,48 @@ const ours = (q) => q.createdBy(account.address).ownedBy(account.address)
 // POST /readings  {"summaries": [{minute, meter, avg_w, wh, solar_wh, samples, signer, sig}, ...]}
 // One transaction per minute for all meters (a batch is all-or-nothing).
 route("POST", "/readings", async (body) => {
-  const rows = body.summaries || []
-  if (!rows.length) return { created: 0 }
-  const creates = rows.map((s) => ({
-    schema: Reading,
-    values: {
-      building: BUILDING,
-      meter: String(s.meter),
-      minute: u64(BigInt(s.minute)),
-      avg_w: d(s.avg_w),
-      wh: d(s.wh),
-      solar_wh: d(s.solar_wh),
-      samples: u64(BigInt(s.samples)),
-      signer: addr(s.signer),
-      sig: hexToBytes(s.sig),
+  const all = body.summaries || []
+  if (!all.length) return { created: 0 }
+  const minutes = all.map((s) => Number(s.minute))
+  return write(
+    "readings",
+    async (tx) => {
+      // Idempotent: the Pi resends after a lost reply, so (meter, minute) pairs already on Arkiv
+      // are skipped. Checked inside the queue, so a resend waiting behind the original sees it.
+      const have = await read(() =>
+        ours(
+          publicClient
+            .select({ meter: true, minute: true })
+            .from(Reading)
+            .where(and(eq("building", BUILDING), gte("minute", u64(BigInt(Math.min(...minutes)))), lte("minute", u64(BigInt(Math.max(...minutes)))))),
+        )
+          .limit(100)
+          .fetch(),
+      )
+      const seen = new Set(have.entities.map((e) => `${e.meter.value}@${e.minute.value}`))
+      const rows = all.filter((s) => !seen.has(`${s.meter}@${BigInt(s.minute)}`))
+      if (!rows.length) return { created: 0, existing: all.length }
+      const creates = rows.map((s) => ({
+        schema: Reading,
+        values: {
+          building: BUILDING,
+          meter: String(s.meter),
+          minute: u64(BigInt(s.minute)),
+          avg_w: d(s.avg_w),
+          wh: d(s.wh),
+          solar_wh: d(s.solar_wh),
+          samples: u64(BigInt(s.samples)),
+          signer: addr(s.signer),
+          sig: hexToBytes(s.sig),
+        },
+        expiration: days(7),
+        flags: SEALED,
+      }))
+      const r = await walletClient.executeBatch({ creates }, tx)
+      return { created: r.createdEntities.length, txHash: r.txHash, keys: r.createdEntities, existing: all.length - rows.length }
     },
-    expiration: days(7),
-    flags: SEALED,
-  }))
-  const r = await write("readings", (tx) => walletClient.executeBatch({ creates }, tx), { ops: creates.length })
-  return { created: r.createdEntities.length, txHash: r.txHash, keys: r.createdEntities }
+    { ops: all.length },
+  )
 })
 
 // POST /heartbeat  {mode, flats: {A: "solar", ...}, pump: true, solar_w, used_w}
@@ -154,8 +176,25 @@ route("POST", "/decision", async (b) => {
     summary: stringToBytes(String(b.summary || "")),
   }
   const opts = { expiration: days(30), ...(root ? { flags: SEALED } : {}) }
-  const r = await write("decision", (tx) => walletClient.createEntity(Decision, values, opts, tx))
-  return { key: r.entityKey, txHash: r.txHash, sealed: Boolean(root) }
+  return write("decision", async (tx) => {
+    // Idempotent: the Pi resends after a lost reply, so a decision_id already on Arkiv is not
+    // created again. If it lacks a root that this post carries, the root is filled in (once).
+    const found = await read(() =>
+      ours(publicClient.select({ $key: true, og_storage_root: true, $creationFlags: true }).from(Decision).where(and(eq("building", BUILDING), eq("decision_id", values.decision_id))))
+        .limit(1)
+        .fetch(),
+    )
+    const e = found.entities[0]
+    if (e) {
+      if (root && !e.og_storage_root?.value && !e.$creationFlags?.readonly) {
+        const r = await walletClient.patchEntity(Decision, e.$key, { set: { og_storage_root: root } }, tx)
+        return { key: e.$key, txHash: r.txHash, patched: true, existing: true }
+      }
+      return { key: e.$key, existing: true }
+    }
+    const r = await walletClient.createEntity(Decision, values, opts, tx)
+    return { key: r.entityKey, txHash: r.txHash, sealed: Boolean(root) }
+  })
 })
 
 // POST /daily  {day, panel_wh, flats_wh, solar_pct}: one entity per day, patched as the day goes on

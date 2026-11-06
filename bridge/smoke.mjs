@@ -87,6 +87,12 @@ const rd = await step("write readings (4 meters, 1 batch tx)", async () => {
   return { ...r, note: r.txHash }
 })
 
+await step("same readings posted again (a resend after a lost reply) create nothing", async () => {
+  const r = await post("/readings", { summaries })
+  expect(r.created === 0 && r.existing === 4, JSON.stringify(r))
+  return { note: "0 created, 4 already there" }
+})
+
 const hb1 = await step("write heartbeat", () => post("/heartbeat", { mode: "plan", flats: { A: "solar", B: "grid", C: "solar" }, pump: true, solar_w: 3.2, used_w: 2.9 }))
 const hb1Expiry = hb1 && (await entity(hb1.key)).$expiresAt
 await step("read heartbeat (web: Admin online badge)", async () => {
@@ -120,6 +126,12 @@ const dec = await step("write decision (0G plan with proof)", () =>
     summary: "Smoke test: pump at 12:00, Flat B away so its share goes to A. ".repeat(4),
   }),
 )
+
+await step("same decision posted again is not created twice", async () => {
+  const r = await post("/decision", { decision_id: decisionId, kind: "plan", mode: "ai", day: today, summary: "resend" })
+  expect(r.existing && r.key === dec?.key, JSON.stringify(r))
+  return { note: "existing key returned" }
+})
 
 // 0G Storage was offline: the decision goes to Arkiv without its root, and the root is patched in
 // once when the upload lands (DECISIONS 01:30). A second, different root is refused.
