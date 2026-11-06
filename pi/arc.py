@@ -46,6 +46,9 @@ class Arc:
     def __init__(self):
         self.enabled = bool(config.ARC_PRIVATE_KEY)
         self._lock = threading.Lock()  # one transaction at a time keeps the nonce simple
+        # Unset contracts are None, so need() answers ArcUnavailable (never AttributeError) on a Pi
+        # without an Arc key or without one of the addresses.
+        self.escrow = self.shop = self.billing = self.credits = None
         if not self.enabled:
             log.info("Arc is off (no ARC_PRIVATE_KEY)")
             return

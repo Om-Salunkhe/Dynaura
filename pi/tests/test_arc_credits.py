@@ -141,6 +141,24 @@ def main():
         check("length mismatch refused before sending", True)
     check("nothing extra was sent", a.credits.sent == ["postPeriod", "fund"], a.credits.sent)
 
+    print("a Pi without Arc (no key, no ARC_CREDITS)")
+    key, config.ARC_PRIVATE_KEY = config.ARC_PRIVATE_KEY, ""
+    try:
+        off = arc.Arc()
+    finally:
+        config.ARC_PRIVATE_KEY = key
+    check("contracts are None, not missing", off.credits is None and off.escrow is None and off.billing is None)
+    for name, call in (("post_credits", lambda: off.post_credits(pid, ["A"], [1], [0], 13_000, readings)),
+                       ("fund_credits", lambda: off.fund_credits(pid, 1)),
+                       ("credits_status", lambda: off.credits_status(pid)),
+                       ("claim_credits", lambda: off.claim_credits(pid, "A"))):
+        try:
+            call()
+            check(f"{name} without Arc raises ArcUnavailable", False)
+        except arc.ArcUnavailable:
+            check(f"{name} without Arc raises ArcUnavailable (the API turns it into 503)", True)
+    check("credit_claims without Arc is empty, no crash", off.credit_claims(pid) == {})
+
     print("arc credits: all checks passed")
 
 
