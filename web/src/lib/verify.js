@@ -31,7 +31,7 @@ export async function sha256Hex(text) {
 
 /**
  * Verify a paid job.
- * job: { id (Arc job id), proofWindow? [fromMinute, toMinute], proofMinutes?, releasedAt? (unix s) }
+ * job: { id (Arc job id), proofWindow? [fromMinute, toMinute] (arc.proof_window), releasedAt? (unix s) }
  * Returns { ok, computed, onChain, rows, window, ogRequestId, ogStorageRoot, why? }
  */
 export async function verifyPayout(job) {
@@ -49,13 +49,6 @@ export async function verifyPayout(job) {
     rows = all.filter((r) => r.minute >= from && r.minute <= to).sort((a, b) => b.minute - a.minute);
     window = "the proof window the Pi recorded";
     if (!rows.length) return { ok: false, onChain, rows, why: "The proof window's readings aren't on Arkiv yet." };
-  } else if (job.proofMinutes?.length) {
-    // the Pi says exactly which minutes it hashed
-    const since = Math.min(...job.proofMinutes);
-    const all = await fetchReadings({ meter: "panel", since, limit: 60 });
-    rows = job.proofMinutes.map((m) => all.find((r) => r.minute === m)).filter(Boolean);
-    window = "the minutes the Pi recorded";
-    if (rows.length !== job.proofMinutes.length) return { ok: false, onChain, rows, why: "Some of the proof's readings aren't on Arkiv yet." };
   } else {
     // older Pi: the 3 newest panel minutes at release time
     const t = job.releasedAt || Math.floor(Date.now() / 1000);

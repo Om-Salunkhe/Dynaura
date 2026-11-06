@@ -86,8 +86,7 @@ function fromV3(api, live) {
       refundTx: j.arc?.refund_tx,
       proof: j.arc?.proof_hash,
       requestId: j.og?.request_id,
-      proofWindow: j.arc?.proof_window, // [from, to] minutes the proof hashed, if the Pi says
-      proofMinutes: j.arc?.proof_minutes,
+      proofWindow: j.arc?.proof_window, // [from_minute, to_minute] the proof hashed, if the Pi says
       releasedAt: j.state === "paid" ? j.updated_at : null,
     },
     og: j && { open: j.og?.storage_root, paid: ["paid", "resolved"].includes(j.state) ? j.og?.storage_root : null },

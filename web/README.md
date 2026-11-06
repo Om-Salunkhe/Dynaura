@@ -18,7 +18,7 @@ Every value is public: no secrets go in `VITE_` variables, because they end up i
 | Variable | What it is | Default |
 |---|---|---|
 | `VITE_API_URL` | Default Pi address (can be changed in the app at runtime, or with `?pi=`) | `http://localhost:8000` |
-| `VITE_ARKIV_OWNER` | The building wallet that writes the Arkiv records (bridge `/health`) | none: Arkiv screens show demo data |
+| `VITE_ARKIV_OWNER` | The building wallet that writes the Arkiv records (bridge `/health`) | `0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd` (the live building) |
 | `VITE_BUILDING_ID` | Which building's records to read | `sunrise-apartments` |
 | `VITE_OG_WALLET` | The Pi's 0G Storage wallet, the fallback link for 0G proofs not indexed yet | none |
 | `VITE_ARC_RPC_URL` | Arc testnet RPC | `https://rpc.testnet.arc.io` |

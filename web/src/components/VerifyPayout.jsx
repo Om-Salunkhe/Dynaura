@@ -28,7 +28,7 @@ export default function VerifyPayout({ hero }) {
     setBusy(true);
     setRes(null);
     try {
-      setRes(await verifyPayout({ id: j.id, proofWindow: j.proofWindow, proofMinutes: j.proofMinutes, releasedAt: j.releasedAt }));
+      setRes(await verifyPayout({ id: j.id, proofWindow: j.proofWindow, releasedAt: j.releasedAt }));
     } catch (e) {
       setRes({ ok: false, why: e.shortMessage || e.message });
     } finally {
