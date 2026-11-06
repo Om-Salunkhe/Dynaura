@@ -43,25 +43,30 @@ The same queries run in our live smoke test
 
 ## Reads from the browser, and the access key
 
-The web app reads Arkiv **without an access key**. `rabdi()` puts a key in the RPC URL, so a key
-in the bundle is public. Arkiv's security guidance keeps operator keys server-side; only the bridge
-on the Pi has ours. The app reads the public endpoint with jittered backoff
-([`arkivReads.js`](../web/src/lib/arkivReads.js)), and prints errors only after redacting them.
+The web app queries Arkiv from the browser. `rabdi()` puts an access key in the RPC URL, so any key
+in the bundle is public. Arkiv's security guidance keeps operator keys server-side, so **the
+bridge's key never goes to the browser**. The app uses either:
 
-We checked that this is enough. The web app's own five queries (decisions, maintenance, heartbeat,
-offers, open jobs) were fired together as one "page load" against the keyless endpoint from one
-machine, 6 Nov 2026:
+- a **separate, public, read-only key made just for the web app** (`VITE_ARKIV_PUBLIC_READ_KEY`),
+  restricted to the app's origin if the Arkiv hub allows it, and revoked after the event; or
+- no key: the public endpoint.
 
-| Load | Queries | Succeeded | 429s | Page load p50 / p95 |
-|---|---|---|---|---|
-| 20 page loads, 3 s apart | 100 | **100%** | 0 | 953 ms / 4.4 s (slow spell on the RPC) |
-| 30 page loads back to back (~13 queries/s) | 150 | **100%** | 0 | 340 ms / 565 ms |
-| 4 viewers at once, 25 loads each (~40 queries/s, one IP) | 500 | **100%** | 0 | 425–461 ms / 599–887 ms |
+Either way, reads back off with jitter and errors are redacted before they're shown
+([`arkivReads.js`](../web/src/lib/arkivReads.js)).
 
-The app's real load is 1–3 queries per screen, plus one heartbeat query every 30 s on the admin
-screen: far below what we tested. If the venue's shared IP ever gets rate limited, the fix is a
-**separate** key made only for the public app, origin-restricted and revocable. It would never be
-the bridge's key.
+We measured why the separate key is worth it. These are the web app's own five queries (decisions,
+maintenance, heartbeat, offers, open jobs), fired together as one "page load", from one machine:
+
+| When (6 Nov 2026) | Endpoint | Load | Succeeded | 429s | Page load p50 / p95 |
+|---|---|---|---|---|---|
+| 09:00, quiet | keyless | 20 loads, 3 s apart | **100/100** | 0 | 953 ms / 4.4 s |
+| 09:00, quiet | keyless | 4 viewers × 25 loads at once (~40 queries/s) | **500/500** | 0 | 425–461 ms / 599–887 ms |
+| 22:40, venue busy | keyless | 12 loads, 2 s apart | **4/60** | 223 of 228 requests | 6.3 s / 16 s |
+| 22:40, venue busy | with a key | 12 loads, 2 s apart | **60/60** | 0 | 686 ms / 1.0 s |
+
+The 429s say `ANON_COST_LIMITED: unauthenticated query budget exhausted`: anonymous reads share
+a cost budget, and once it's spent they fail until it resets. During judging the whole venue shares
+a few IPs, so the demo uses the public-app key.
 
 ## Trust and edit rights
 

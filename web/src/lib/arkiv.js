@@ -9,13 +9,16 @@ export const BUILDING = import.meta.env.VITE_BUILDING_ID || "sunrise-apartments"
 export const ARKIV_READY = /^0x[0-9a-fA-F]{40}$/.test(OWNER);
 export const EXPLORER = "https://rabdi.explorer.arkiv.network";
 
-// No access key in the browser, ever. rabdi() puts the key in the RPC URL, so anything in this
-// bundle is public, and Arkiv's guidance keeps operator keys server-side (the bridge has ours).
-// Keyless reads on the public endpoint, with jittered backoff, measured fine for our volume:
-// 500/500 queries, 0 rate limits, at ~40 queries/s from one IP (arkiv/how-you-use-arkiv.md).
+// Reads use a SEPARATE, public, read-only access key made just for this app
+// (VITE_ARKIV_PUBLIC_READ_KEY), never the bridge's key. rabdi() puts the key in the RPC URL, so
+// whatever is set here is public: create it for the web app alone, restrict it to the app's origin
+// if the Arkiv hub allows, and revoke it after the event. Without it the app reads the keyless
+// public endpoint, which is fine when quiet but was rate limited at the venue (4/60 queries got
+// through on 6 Nov evening, 60/60 with a key): see arkiv/how-you-use-arkiv.md.
+const PUBLIC_READ_KEY = import.meta.env.VITE_ARKIV_PUBLIC_READ_KEY || "";
 let ctx;
 function arkiv() {
-  if (!ctx) ctx = { client: reads.arkivClient(""), owner: OWNER, building: BUILDING };
+  if (!ctx) ctx = { client: reads.arkivClient(PUBLIC_READ_KEY), owner: OWNER, building: BUILDING };
   return ctx;
 }
 
