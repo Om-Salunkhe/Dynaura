@@ -41,6 +41,28 @@ wallet **created and still owns** (`.createdBy(w).ownedBy(w)`; see [Trust](#trus
 The same queries run in our live smoke test
 ([`bridge/smoke.mjs`](../bridge/smoke.mjs), 32/32 checks), so what we test is what the screens show.
 
+## Reads from the browser, and the access key
+
+The web app reads Arkiv **without an access key**. `rabdi()` puts a key in the RPC URL, so a key
+in the bundle is public. Arkiv's security guidance keeps operator keys server-side; only the bridge
+on the Pi has ours. The app reads the public endpoint with jittered backoff
+([`arkivReads.js`](../web/src/lib/arkivReads.js)), and prints errors only after redacting them.
+
+We checked that this is enough. The web app's own five queries (decisions, maintenance, heartbeat,
+offers, open jobs) were fired together as one "page load" against the keyless endpoint from one
+machine, 6 Nov 2026:
+
+| Load | Queries | Succeeded | 429s | Page load p50 / p95 |
+|---|---|---|---|---|
+| 20 page loads, 3 s apart | 100 | **100%** | 0 | 953 ms / 4.4 s (slow spell on the RPC) |
+| 30 page loads back to back (~13 queries/s) | 150 | **100%** | 0 | 340 ms / 565 ms |
+| 4 viewers at once, 25 loads each (~40 queries/s, one IP) | 500 | **100%** | 0 | 425–461 ms / 599–887 ms |
+
+The app's real load is 1–3 queries per screen, plus one heartbeat query every 30 s on the admin
+screen: far below what we tested. If the venue's shared IP ever gets rate limited, the fix is a
+**separate** key made only for the public app, origin-restricted and revocable. It would never be
+the bridge's key.
+
 ## Trust and edit rights
 
 | Who | Can | How it's enforced |

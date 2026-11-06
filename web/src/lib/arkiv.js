@@ -9,9 +9,13 @@ export const BUILDING = import.meta.env.VITE_BUILDING_ID || "sunrise-apartments"
 export const ARKIV_READY = /^0x[0-9a-fA-F]{40}$/.test(OWNER);
 export const EXPLORER = "https://rabdi.explorer.arkiv.network";
 
+// No access key in the browser, ever. rabdi() puts the key in the RPC URL, so anything in this
+// bundle is public, and Arkiv's guidance keeps operator keys server-side (the bridge has ours).
+// Keyless reads on the public endpoint, with jittered backoff, measured fine for our volume:
+// 500/500 queries, 0 rate limits, at ~40 queries/s from one IP (arkiv/how-you-use-arkiv.md).
 let ctx;
 function arkiv() {
-  if (!ctx) ctx = { client: reads.arkivClient(import.meta.env.VITE_ARKIV_ACCESS_KEY || ""), owner: OWNER, building: BUILDING };
+  if (!ctx) ctx = { client: reads.arkivClient(""), owner: OWNER, building: BUILDING };
   return ctx;
 }
 

@@ -32,7 +32,7 @@ curl -s https://rpc.rabdi.db-chain.testnet.arkiv.network \
   -H 'Content-Type: application/json' --data @- <<'EOF'
 {"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":[
   "arkiv.schema = str('dynaura.decision') AND building = str('test-dyarkiv-1') AND $creator = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) AND $owner = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) ORDER BY decision_id:u64 DESC",
-  {"select":{"key":true,"expiresAt":true,"attributes":{"kind":true,"day":true,"request_id":true,"storage_root":true}},"limit":"0x3"}]}
+  {"select":{"key":true,"expiresAt":true,"attributes":{"kind":true,"day":true,"og_request_id":true,"og_storage_root":true}},"limit":"0x3"}]}
 EOF
 ```
 
