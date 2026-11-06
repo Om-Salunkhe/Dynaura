@@ -310,15 +310,23 @@ export function dailyOutput(ctx, days = 7) {
   });
 }
 
-/** Signed 1-minute readings of one meter ("panel", "A", "B", "C") since a unix time. */
-export function readings(ctx, { meter, since = 0, limit = 60 } = {}) {
+/** Signed 1-minute readings of one meter ("panel", "A", "B", "C"), newest first, with minute in
+ *  [since, until]. A paid job's proof window is exactly that range. */
+export function readings(ctx, { meter, since = 0, until, limit = 60 } = {}) {
   return withBackoff(async () => {
     const page = await scoped(
       ctx,
       ctx.client
         .select({ $key: true, meter: true, minute: true, avg_w: true, wh: true, solar_wh: true, samples: true, signer: true, sig: true })
         .from(Reading)
-        .where(and(eq("building", ctx.building), eq("meter", meter), gte("minute", u64(BigInt(since))))),
+        .where(
+          and(
+            eq("building", ctx.building),
+            eq("meter", meter),
+            gte("minute", u64(BigInt(since))),
+            ...(until != null ? [lte("minute", u64(BigInt(until)))] : []),
+          ),
+        ),
     )
       .orderBy(desc("minute"))
       .limit(limit)
