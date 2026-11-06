@@ -6,6 +6,10 @@ import { useEffect, useState } from "react";
 const SCAN = "https://storagescan-galileo.0g.ai";
 const CHAIN = "https://chainscan-galileo.0g.ai";
 const isRoot = (r) => /^0x[0-9a-fA-F]{64}$/.test(r || "");
+// Optional, public (not a secret): the Pi's 0G Storage wallet. Its storagescan page lists every
+// upload, so it is the fallback link while a root isn't indexed yet.
+const WALLET = /^0x[0-9a-fA-F]{40}$/.test(import.meta.env.VITE_OG_WALLET || "") ? import.meta.env.VITE_OG_WALLET : null;
+const fallback = WALLET ? `${SCAN}/address/${WALLET}` : null;
 const cache = new Map(); // root -> Promise<url | null>
 
 export const ogTxUrl = (hash) => `${CHAIN}/tx/${hash}`;
@@ -30,13 +34,13 @@ export function resolveOgRoot(root) {
   return cache.get(root);
 }
 
-/** storagescan page for a 0G Storage root, or null until it's indexed. */
+/** storagescan page for a 0G Storage root; until it's indexed, the Pi wallet's page (or null). */
 export function useOgRootUrl(root, on = true) {
   const [url, setUrl] = useState(null);
   useEffect(() => {
     if (!on || !isRoot(root)) return undefined;
     let alive = true;
-    resolveOgRoot(root).then((u) => alive && setUrl(u));
+    resolveOgRoot(root).then((u) => alive && setUrl(u || fallback));
     return () => {
       alive = false;
     };
