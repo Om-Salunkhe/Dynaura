@@ -200,7 +200,8 @@ class CleaningWatch:
             "fee_usdc": config.CLEAN_FEE_USDC, "deadline": None, "created_at": now, "updated_at": now,
             "dusty_pct": lvl, "after_pct": None, "done_at": None, "cleaner": None, "resolution": None,
             "og": og, "arc": {"job_id": None, "cleaner": None, "open_tx": None, "release_tx": None, "refund_tx": None,
-                              "proof_hash": None, "proof_window": None, "link_tx": None},
+                              "proof_hash": None, "proof_input": None, "proof_minutes": None, "proof_window": None,
+                              "link_tx": None},
             "arkiv_key": None,
         }
         cov = og.get("coverage_pct")
@@ -308,9 +309,10 @@ class CleaningWatch:
 
     # ---- 5. money moves only from what the meter measured ---------------------
     def _release(self, job: dict, after: float) -> None:
-        proof, window = self._proof()
+        proof, blob, minutes = self._proof()
         tx = self.arc.release_cleaning(job["arc"]["job_id"], after, proof)
-        job["arc"].update(release_tx=tx, proof_hash="0x" + proof.hex(), proof_window=window)
+        job["arc"].update(release_tx=tx, proof_hash="0x" + proof.hex(), proof_input=blob, proof_minutes=minutes,
+                          proof_window=[min(minutes), max(minutes)] if minutes else None)
         job["after_pct"] = after
         self._finish(job, "paid", f"Panel back at {after:.0f}% (was {job.get('dusty_pct') or 0:.0f}%): "
                                   f"paid {job['fee_usdc']:.2f} USDC to the cleaner")
@@ -340,13 +342,13 @@ class CleaningWatch:
             else:
                 self._finish(job, "refunded", f"Escrow #{job['arc']['job_id']} was {cs} on Arc")
 
-    def _proof(self) -> tuple[bytes, list[int] | None]:
-        """sha256 of the last 3 signed 1-minute panel summaries, and the minutes they cover
-        ([from_minute, to_minute]): anyone can fetch those readings from Arkiv and re-check the hash."""
+    def _proof(self) -> tuple[bytes, str, list[int]]:
+        """sha256 of the last 3 signed 1-minute panel summaries (newest first). Returns the hash, the
+        exact string hashed (Python json.dumps: "[[minute, avg_w, sig], ...]") and the minutes, so a
+        verifier checks sha256(string) == proofHash and then each (minute, sig) against Arkiv."""
         rows = self.store.summaries(meter="panel", limit=3)
         blob = json.dumps([(r["minute"], r["avg_w"], r.get("sig")) for r in rows], sort_keys=True)
-        window = [min(r["minute"] for r in rows), max(r["minute"] for r in rows)] if rows else None
-        return hashlib.sha256(blob.encode()).digest(), window
+        return hashlib.sha256(blob.encode()).digest(), blob, [r["minute"] for r in rows]
 
     # ---- 0G Storage root of the dust check -------------------------------------
     def _refresh_root(self, job: dict) -> str | None:

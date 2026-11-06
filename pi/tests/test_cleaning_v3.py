@@ -228,6 +228,10 @@ def main():
           and paid["arc"]["proof_hash"] == "0x" + rel[3].hex(), (rel, paid["arc"]))
     check("proof window = the minutes the hash covers", paid["arc"]["proof_window"] == [1_800_000_000, 1_800_000_120],
           paid["arc"])
+    check("proof minutes, newest first", paid["arc"]["proof_minutes"] == [1_800_000_120, 1_800_000_060, 1_800_000_000])
+    import hashlib
+    check("sha256(proof_input) == proof_hash", "0x" + hashlib.sha256(paid["arc"]["proof_input"].encode()).hexdigest()
+          == paid["arc"]["proof_hash"], paid["arc"]["proof_input"])
     check("paid sent to Arkiv with the proof", w.arkiv[-1]["state"] == "paid" and w.arkiv[-1]["arc"]["release_tx"])
     w.set_arkiv_key(paid["id"], "0xkey")
     check("the bridge's key is kept as arkiv_key", w.history[0]["arkiv_key"] == "0xkey")
