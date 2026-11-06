@@ -12,7 +12,7 @@ Built from scratch at ETHGlobal Mumbai (5–7 Nov 2026) by Om Salunkhe, Devang G
 |---|---|
 | Demo video | **TBD** |
 | Live app | **TBD** (Vercel; the Pi-backed parts are live only on the venue network, see [Run it](#run-it)) |
-| Arc Studio project | **TBD** |
+| Arc Studio project | [studio.arc.io/app/63db67fa…](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852) |
 | Arc contracts | [`contracts/deployments.json`](contracts/deployments.json) (Arc testnet, chain 5042002) |
 | Arkiv building wallet | **TBD** (Rabdi testnet, chain 7794095) |
 | Prize tracks | 0G: Physical AI · Arc: Best Smart Contracts with Advanced Stablecoin Logic, In Arc Studio · Arkiv: Build on Arkiv (from scratch) |
@@ -116,7 +116,7 @@ Three contracts, deployed from **Arc Studio** to Arc testnet. They use USDC (the
 | [`SolarBilling`](contracts/SolarBilling.sol) | **Payment splitting:** each month the oracle posts every flat's bill from its own meter (solar vs grid), with a hash of the signed readings behind it. The resident pays in USDC straight to the society treasury | TBD |
 | [`ShopTrade`](contracts/ShopTrade.sol) | **Multi-step settlement:** a nearby shop prepays for spare noon sun. After the window the oracle settles by the Wh actually delivered, and the shop gets the rest back in the same transaction | TBD |
 
-**Built in Arc Studio:** <!-- TODO(dy-arc): what was done in Studio vs locally, Studio URL, screenshots --> TBD.
+**Built in Arc Studio:** [our Studio project](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852). <!-- TODO(dy-arc): what was done in Studio vs locally, screenshots --> More detail TBD.
 
 **Reusable by other builders:** `CleaningEscrow` is a generic "pay when a device proves the job is done" escrow. Swap the panel meter for any sensor (a water-tank level, a lift's uptime, an air-quality reading) and it works unchanged.
 
