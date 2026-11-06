@@ -38,6 +38,10 @@ BUILDING_KWP = float(os.getenv("BUILDING_KWP", "2.0") or 2.0)
 ZG_ROUTER_URL = os.getenv("ZG_ROUTER_URL", "").strip()
 ZG_API_KEY = os.getenv("ZG_API_KEY", "").strip()
 ZG_MODEL = os.getenv("ZG_MODEL", "0gm-1.0-35b-a3b").strip()
+# Longest wait for an answer (connecting gives up after 5 s), and no automatic retry: if 0G fails,
+# the building goes to its safe stop instead of waiting. Tune ZG_TIMEOUT_S to the measured latency.
+ZG_TIMEOUT_S = float(os.getenv("ZG_TIMEOUT_S", "30") or 30)
+ZG_MAX_RETRIES = int(os.getenv("ZG_MAX_RETRIES", "0") or 0)
 
 # Society job runner
 PLAN_HOUR = int(os.getenv("PLAN_HOUR", "20") or 20)          # make tomorrow's plan at 8 PM
@@ -51,6 +55,9 @@ ZG_STORAGE_CLI = os.getenv("ZG_STORAGE_CLI", "0g-storage-client").strip()
 ZG_RPC = os.getenv("ZG_RPC", "https://evmrpc-testnet.0g.ai").strip()
 ZG_INDEXER = os.getenv("ZG_INDEXER", "https://indexer-storage-testnet-turbo.0g.ai").strip()
 ZG_PRIVATE_KEY = os.getenv("ZG_PRIVATE_KEY", "").strip()
+# EpisodeRegistry on 0G Chain (zerog/deployments.json). The ZG_PRIVATE_KEY wallet must be its device.
+ZG_REGISTRY = os.getenv("ZG_REGISTRY", "").strip()
+ZG_CHAIN_ID = int(os.getenv("ZG_CHAIN_ID", "16602") or 16602)
 
 # Arkiv bridge (bridge/bridge.mjs)
 ARKIV_BRIDGE_URL = os.getenv("ARKIV_BRIDGE_URL", "http://127.0.0.1:5100").strip()
@@ -76,6 +83,7 @@ CLEAN_PCT = float(os.getenv("CLEAN_PCT", "90") or 90)
 CLEAN_FEE_USDC = float(os.getenv("CLEAN_FEE_USDC", "2") or 2)
 CLEAN_DEADLINE_MIN = int(os.getenv("CLEAN_DEADLINE_MIN", "60") or 60)
 CLEAN_AUTO = os.getenv("CLEAN_AUTO", "true").lower() == "true"  # open the escrow by itself when dusty
+DUST_RECHECK_S = float(os.getenv("DUST_RECHECK_S", "120") or 120)  # wait before asking 0G about the dust again
 
 # Monthly bills (SolarBilling). 1 Wh on the model = BILL_SCALE/1000 kWh in the real building.
 BILL_SCALE = float(os.getenv("BILL_SCALE", "1000") or 1000)

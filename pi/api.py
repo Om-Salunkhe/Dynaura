@@ -27,6 +27,7 @@ from jobs import JobRunner, PlanScheduler
 from meter import MeterLoop
 from sales import ShopSettler
 from og_storage import Uploader
+from zg_registry import Registry
 from signer import DeviceSigner
 from store import Store
 
@@ -59,7 +60,9 @@ async def lifespan(_: FastAPI):
     App.loop = MeterLoop(App.hw, App.store, App.signer)
     App.loop.tick()
     App.loop.start()
-    App.uploader = Uploader(App.store)
+    App.uploader = Uploader(App.store, registry=Registry())
+    # Each episode log also records what the building looked like when Dyna decided
+    App.uploader.snapshot = lambda: {**App.loop.state, "runner": App.runner.status if App.runner else None}
     App.brain = Brain(App.hw, App.store, App.uploader)
     App.runner = JobRunner(App.hw, App.loop, App.brain)
     App.runner.start()
@@ -103,8 +106,13 @@ async def lifespan(_: FastAPI):
 def on_cleaning_job(job: dict) -> None:
     """Every escrow change goes to Arkiv; a paid job also becomes a maintenance record."""
     tx = job.get("release_tx") or job.get("refund_tx") or job.get("open_tx")
+    # The 0G dust check behind this job (once the confirm hook is on). Its episode root arrives after
+    # the 0G Storage upload, so it is read again on every status change.
+    if job.get("og_decision_id") and not job.get("og_storage_root"):
+        job["og_storage_root"] = (App.store.decision(job["og_decision_id"]) or {}).get("storage_root")
     App.arkiv.post("/cleaning_job", {**{k: job.get(k) for k in
-                   ("job_id", "status", "fee_usdc", "deadline", "output_before", "output_after")}, "arc_tx": tx})
+                   ("job_id", "status", "fee_usdc", "deadline", "output_before", "output_after",
+                    "og_request_id", "og_storage_root")}, "arc_tx": tx})
     if job["status"] == "paid":
         App.arkiv.post("/maintenance", {
             "title": "Panel cleaned",
@@ -124,7 +132,21 @@ def health():
              "error": App.arkiv.last_error if App.arkiv else None}
     arc = {"enabled": App.arc.enabled, "wallet": App.arc.address if App.arc.enabled else None}
     return {"ok": True, "hw": config.HW, "device": App.signer.address, "arkiv": arkiv, "arc": arc,
-            "zg_storage_ready": App.uploader.ready() if App.uploader else False}
+            "zg_storage_ready": App.uploader.ready() if App.uploader else False,
+            "zg_storage": App.uploader.status() if App.uploader else None}
+
+
+@app.get("/api/episodes")
+def episodes():
+    """The 0G Storage queue: how many episode logs wait for 0G (e.g. while it is offline)."""
+    return App.uploader.status()
+
+
+@app.post("/api/admin/episodes/retry")
+def retry_episodes(x_admin_key: str | None = Header(default=None)):
+    """Upload the waiting episode logs now (demo: right after the internet is back)."""
+    require_admin(x_admin_key)
+    return App.uploader.retry_now()
 
 
 def live() -> dict:

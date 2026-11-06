@@ -1,14 +1,18 @@
 """0G Compute Router client (OpenAI-compatible).
 
 Every call returns the answer plus the proof details judges ask for:
-the request ID (ZG-Res-Key header), the model, and any TEE verification
-fields the Router sends back.
+the request ID (ZG-Res-Key header), the model, the provider, how long 0G took,
+and the Router's TEE check (x_0g_trace.tee_verified, asked for with verify_tee).
+A response whose TEE signature did not verify is refused, like 0G being down.
 """
 import json
 import logging
 import re
+import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 
+import httpx
 from openai import OpenAI
 
 import config
@@ -27,9 +31,26 @@ class ZGReply:
     model: str
     tee: dict = field(default_factory=dict)
     usage: dict = field(default_factory=dict)
+    trace: dict = field(default_factory=dict)  # the Router's x_0g_trace block
+    latency_ms: int | None = None
+
+    @property
+    def tee_verified(self) -> bool | None:
+        """True / False from the Router's TEE check; None if it did not report one."""
+        v = self.trace.get("tee_verified")
+        return v if isinstance(v, bool) else None
 
     def proof(self) -> dict:
-        return {"request_id": self.request_id, "model": self.model, "tee": self.tee, "provider": "0G Compute Router"}
+        return {"request_id": self.request_id, "router_request_id": self.trace.get("request_id"),
+                "model": self.model, "provider": self.trace.get("provider"), "tee_verified": self.tee_verified,
+                "latency_ms": self.latency_ms, "usage": self.usage, "via": "0G Compute Router"}
+
+
+_proofs: OrderedDict[str, dict] = OrderedDict()  # recent proofs by request ID, for the episode log
+
+
+def proof_for(request_id: str | None) -> dict | None:
+    return _proofs.get(request_id) if request_id else None
 
 
 _client: OpenAI | None = None
@@ -40,7 +61,10 @@ def client() -> OpenAI:
     if not config.ZG_ROUTER_URL or not config.ZG_API_KEY:
         raise ZGUnavailable("ZG_ROUTER_URL and ZG_API_KEY must be set in .env")
     if _client is None:
-        _client = OpenAI(base_url=config.ZG_ROUTER_URL, api_key=config.ZG_API_KEY, timeout=60, max_retries=1)
+        # Connecting fails fast when the internet is gone (the offline demo); the answer itself
+        # may take longer because the model thinks first.
+        _client = OpenAI(base_url=config.ZG_ROUTER_URL, api_key=config.ZG_API_KEY,
+                         timeout=httpx.Timeout(config.ZG_TIMEOUT_S, connect=5.0), max_retries=config.ZG_MAX_RETRIES)
     return _client
 
 
@@ -61,6 +85,7 @@ def _find_tee(obj, out=None, path=""):
 
 
 def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2) -> ZGReply:
+    t0 = time.monotonic()
     try:
         raw = client().chat.completions.with_raw_response.create(
             model=config.ZG_MODEL,
@@ -74,15 +99,26 @@ def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2)
     except Exception as e:  # network, auth, 402 no balance, 404 model
         raise ZGUnavailable(f"0G call failed: {e}") from e
 
+    latency_ms = round((time.monotonic() - t0) * 1000)
     request_id = raw.headers.get("ZG-Res-Key") or raw.headers.get("zg-res-key")
     resp = raw.parse()
     body = json.loads(raw.text) if raw.text else {}
+    trace = body.get("x_0g_trace") if isinstance(body.get("x_0g_trace"), dict) else {}
+    if trace.get("tee_verified") is False:  # 0G: "treat the response as untrusted"
+        raise ZGUnavailable(f"0G answer refused: the provider's TEE signature did not verify ({request_id})")
     text = (resp.choices[0].message.content or "").strip() if resp.choices else ""
     if not text:
         raise ZGUnavailable("0G returned an empty answer")
     usage = resp.usage.model_dump() if resp.usage else {}
-    return ZGReply(text=text, request_id=request_id or body.get("id"), model=resp.model or config.ZG_MODEL,
-                   tee=_find_tee(body), usage=usage)
+    reply = ZGReply(text=text, request_id=request_id or body.get("id"), model=resp.model or config.ZG_MODEL,
+                    tee=_find_tee(body), usage=usage, trace=trace, latency_ms=latency_ms)
+    if reply.request_id:
+        _proofs[reply.request_id] = reply.proof()
+        while len(_proofs) > 100:
+            _proofs.popitem(last=False)
+    log.info("0G answered in %d ms (request %s, provider %s, tee_verified %s)",
+             latency_ms, reply.request_id, trace.get("provider"), reply.tee_verified)
+    return reply
 
 
 def extract_json(text: str) -> dict:
