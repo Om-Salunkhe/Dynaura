@@ -64,20 +64,20 @@ case "${1:-}" in
     (cd "$OUT/drafts" && turn build "$HERE/01-build-and-test.md" \
       --file CleaningEscrow.sol --file ShopTrade.sol --file SolarBilling.sol) ;;
   accept)
-    # Our tests, with import paths for Studio's layout (contracts/ for sources, test/ for tests).
+    # Our tests, with import paths for Studio's layout (sources in contracts/, tests in contracts/test/).
     rm -rf "$OUT/stage" && mkdir -p "$OUT/stage"
     for t in CleaningEscrow ShopTrade SolarBilling; do
-      sed -e 's|"\.\./src/|"../../contracts/|' -e 's|MockUSDC|AcceptanceUSDC|g' "$HERE/../test/$t.t.sol" >"$OUT/stage/$t.t.sol"
+      sed -e 's|"\.\./src/|"../../|' -e 's|MockUSDC|AcceptanceUSDC|g' "$HERE/../test/$t.t.sol" >"$OUT/stage/$t.t.sol"
     done
     sed -e 's|contract MockUSDC|contract AcceptanceUSDC|' "$HERE/../test/MockUSDC.sol" >"$OUT/stage/AcceptanceUSDC.sol"
     (cd "$OUT/stage" && turn accept "$HERE/01b-acceptance.md" \
-      --file CleaningEscrow.t.sol:test/acceptance/ --file ShopTrade.t.sol:test/acceptance/ \
-      --file SolarBilling.t.sol:test/acceptance/ --file AcceptanceUSDC.sol:test/acceptance/) ;;
+      --file CleaningEscrow.t.sol:contracts/test/acceptance/ --file ShopTrade.t.sol:contracts/test/acceptance/ \
+      --file SolarBilling.t.sol:contracts/test/acceptance/ --file AcceptanceUSDC.sol:contracts/test/acceptance/) ;;
   pull)
     rm -rf "$OUT/pulled"
-    "$AS" pull --session "$SESSION" --out "$OUT/pulled" --paths "contracts/**" "test/**" "foundry.toml" "remappings.txt"
+    "$AS" pull --session "$SESSION" --out "$OUT/pulled" --paths "contracts/*.sol" "contracts/test/**" "foundry.toml" "remappings.txt" "README.md"
     for c in CleaningEscrow ShopTrade SolarBilling; do
-      f=$(find "$OUT/pulled/contracts" -name "$c.sol" | head -1)
+      f="$OUT/pulled/contracts/$c.sol"; [ -f "$f" ] || f=""
       if [ -z "$f" ]; then echo "missing $c.sol in Studio's workspace"; continue; fi
       echo "=== $c: Studio vs src/ ==="
       diff -u "$HERE/../src/$c.sol" "$f" | head -400 || true

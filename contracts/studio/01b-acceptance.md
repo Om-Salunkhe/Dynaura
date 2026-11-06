@@ -1,4 +1,4 @@
-Our own acceptance tests are now in `test/acceptance/`, together with `test/acceptance/AcceptanceUSDC.sol` (a 6-decimal mock for tests only). We wrote them independently from the same spec. Our Raspberry Pi and React code call the contracts with exactly the names these tests use.
+Our own acceptance tests are now in `contracts/test/acceptance/`, together with `contracts/test/acceptance/AcceptanceUSDC.sol` (a 6-decimal mock for tests only). We wrote them independently from the same spec. Our Raspberry Pi and React code call the contracts with exactly the names these tests use.
 
 Run `forge test` on everything: your tests and ours. Where an acceptance test fails:
 
