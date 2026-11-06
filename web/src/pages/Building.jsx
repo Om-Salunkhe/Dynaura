@@ -23,7 +23,7 @@ export default function Building() {
         title="Building"
       />
 
-      <section className="card flex flex-col gap-2 rounded-[26px]">
+      <section className="card flex flex-col gap-2 rounded-[14px]">
         <Row
           icon="panel"
           title="Roof panel"
@@ -49,16 +49,16 @@ export default function Building() {
       </section>
 
       {mine && (
-        <section className="card flex flex-col gap-2.5 rounded-[26px]">
+        <section className="card flex flex-col gap-2.5 rounded-[14px]">
           <div className="flex items-baseline justify-between">
-            <span className="text-base font-bold">Your day so far</span>
-            <span className="text-lg font-extrabold">{day.kwh.toFixed(2)} kWh</span>
+            <span className="text-base font-medium">Your day so far</span>
+            <span className="text-lg font-medium">{day.kwh.toFixed(2)} kWh</span>
           </div>
           <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
             <span className="bg-sun" style={{ width: `${day.solarPct}%` }} />
             <span className="bg-grid" style={{ width: `${100 - day.solarPct}%` }} />
           </div>
-          <div className="flex justify-between text-xs font-semibold">
+          <div className="flex justify-between text-xs font-medium">
             <span className="text-sun-ink">{day.solarPct}% solar</span>
             <span className="text-ink-2">{100 - day.solarPct}% grid</span>
           </div>
@@ -66,12 +66,12 @@ export default function Building() {
       )}
 
       {(away.length > 0 || story.reason) && (
-        <section className="card flex items-start gap-3 rounded-[26px]">
+        <section className="card flex items-start gap-3 rounded-[14px]">
           <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-sun-soft text-sun-ink">
             <Icon name="sun" />
           </span>
           <span className="flex flex-col gap-0.5">
-            <span className="text-sm font-bold">{story.text}</span>
+            <span className="text-sm font-medium">{story.text}</span>
             {story.reason && (
               <span className="text-xs text-ink-2">
                 Dyna: “{story.reason}”{story.requestId ? <span className="mono text-muted"> · 0G {shortId(story.requestId)}</span> : null}
@@ -97,10 +97,10 @@ function Row({ icon, title, value, tone, highlight, extra }) {
         <Icon name={icon} />
       </span>
       <span className="flex flex-1 flex-col">
-        <span className="text-sm font-bold">{title}</span>
+        <span className="text-sm font-medium">{title}</span>
         {extra && <span className="text-xs text-muted">{extra}</span>}
       </span>
-      <span className={`text-sm font-extrabold ${tone === "sun" ? "text-sun-ink" : tone === "idle" ? "text-muted" : ""}`}>{value}</span>
+      <span className={`text-sm font-medium ${tone === "sun" ? "text-sun-ink" : tone === "idle" ? "text-muted" : ""}`}>{value}</span>
     </div>
   );
 }

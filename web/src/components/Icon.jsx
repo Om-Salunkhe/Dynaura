@@ -84,7 +84,7 @@ const PATHS = {
   ),
 };
 
-export default function Icon({ name, size = 20, stroke = 2, className = "" }) {
+export default function Icon({ name, size = 20, stroke = 1.75, className = "" }) {
   return (
     <svg
       width={size}

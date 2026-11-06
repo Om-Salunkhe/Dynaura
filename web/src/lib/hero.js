@@ -1,12 +1,94 @@
-// The hero moment as one state every screen reads:
-//   clean -> dusty -> open (escrow on Arc) -> accepted -> cleaning (meter climbing) -> paid
-// Live from the Pi's /api/stream `cleaning` block when it is there, otherwise the demo scene.
+// The hero moment as one state every screen reads (cleaning flow v3):
+//   clean -> dusty -> flagged (0G says dirty, waiting for the committee) -> open (escrow on Arc)
+//   -> accepted -> cleaning (marked done, meter checking) -> paid; or refunded / disputed -> resolved
+// Live from the Pi's /api/cleaning (v3) or its older /api/stream block, otherwise the demo scene.
 import { useEffect, useState } from "react";
-import { getJSON, postJSON } from "./api.js";
+import { getJSON, postJSON, useLive } from "./api.js";
+import { cleaningApi, useCleaningApi } from "./cleaningApi.js";
 import { demoHero, heroActions, useClock, useScene } from "./scene.js";
 
 export const STAGES = ["clean", "dusty", "open", "accepted", "cleaning", "paid"];
-export const stageIndex = (s) => (s === "refunded" ? STAGES.length : STAGES.indexOf(s));
+// flagged sits on the "dusty" step (escrow not open yet); a dispute waits where the meter would
+const EXTRA = { flagged: 1, disputed: 4, resolved: 5, refunded: STAGES.length };
+export const stageIndex = (s) => EXTRA[s] ?? STAGES.indexOf(s);
+
+// Pi v3 job state -> hero stage
+const V3_STAGE = {
+  flagged: "flagged",
+  approved: "open",
+  open: "open",
+  accepted: "accepted",
+  cleaned: "cleaning",
+  paid: "paid",
+  refunded: "refunded",
+  disputed: "disputed",
+  resolved: "resolved",
+  rejected: "clean",
+  no_check: "clean",
+};
+
+const verdictOf = (og) =>
+  og && {
+    dirty: og.dirty,
+    coverage: og.coverage_pct,
+    reason: og.reason,
+    requestId: og.request_id,
+    tee: og.tee,
+    input: og.input,
+    decisionId: og.decision_id,
+    storageRoot: og.storage_root,
+    frameUrl: og.frame_url,
+  };
+
+function fromV3(api, live) {
+  const sse = live.cleaning || {};
+  const cur = api.job || null;
+  const last = (api.history || []).find((h) => ["paid", "refunded", "resolved"].includes(h.state));
+  let j = cur;
+  let stage;
+  if (cur) stage = V3_STAGE[cur.state] || "clean";
+  else if (last && Date.now() / 1000 - (last.updated_at || 0) < 6 * 3600) {
+    j = last; // the latest finished job stays on screen for a while
+    stage = V3_STAGE[last.state];
+  } else stage = sse.pct != null && sse.dust_pct != null && sse.pct < sse.dust_pct ? "dusty" : "clean";
+  return {
+    live: true,
+    v3: true,
+    state: j?.state ?? null,
+    stage,
+    pct: sse.pct ?? j?.after_pct ?? j?.dusty_pct ?? null,
+    dustPct: sse.dust_pct ?? 70,
+    cleanPct: sse.clean_pct ?? 90,
+    minGain: 15,
+    fee: j?.fee_usdc ?? sse.fee_usdc ?? 2,
+    flagged: !["clean", "dusty"].includes(stage),
+    arc: sse.arc ?? true,
+    error: sse.error || api.error,
+    actualW: live.meters?.panel?.w ?? live.solar_w ?? null,
+    verdict: verdictOf(j?.og),
+    dustyPct: j?.dusty_pct ?? null,
+    afterPct: j?.after_pct ?? null,
+    updatedAt: j?.updated_at,
+    job: j && {
+      id: j.arc?.job_id ?? null, // the Arc escrow id (null until the committee approves)
+      piId: j.id,
+      fee: j.fee_usdc,
+      outputBefore: j.dusty_pct,
+      outputAfter: j.after_pct,
+      deadline: j.deadline ? j.deadline * 1000 : null,
+      cleaner: j.cleaner || j.arc?.cleaner,
+      openTx: j.arc?.open_tx,
+      releaseTx: j.arc?.release_tx,
+      refundTx: j.arc?.refund_tx,
+      proof: j.arc?.proof_hash,
+      requestId: j.og?.request_id,
+      proofWindow: j.arc?.proof_window, // [from, to] minutes the proof hashed, if the Pi says
+      proofMinutes: j.arc?.proof_minutes,
+      releasedAt: j.state === "paid" ? j.updated_at : null,
+    },
+    og: j && { open: j.og?.storage_root, paid: ["paid", "resolved"].includes(j.state) ? j.og?.storage_root : null },
+  };
+}
 
 // What the cleaner tapped "Mark done" on, per job, so a reload keeps it
 const DONE_KEY = "dynaura.cleaner.done";
@@ -87,22 +169,33 @@ function fromLive(c, live, done) {
   };
 }
 
+/** Is a cleaning request waiting for the committee? (for the admin nav dot; no clock) */
+export function useCleaningAlert() {
+  const live = useLive();
+  const api = useCleaningApi(!live.demo);
+  const scene = useScene();
+  if (!live.demo) return api.supported === true && api.job?.state === "flagged";
+  return demoHero(scene).stage === "flagged";
+}
+
 /**
  * The hero flow for any screen. Pass the page's `useLive()` result.
  * `hero.og` holds the 0G Storage roots of the episode logs (open / paid) when the Pi has them.
  */
 export function useHero(live) {
   const scene = useScene();
+  const api = useCleaningApi(!live.demo);
+  const v3 = !live.demo && api.supported === true;
   const c = !live.demo ? live.cleaning : null;
   const [done, setDone] = useState(doneJobs);
-  const demo = !c;
+  const demo = !c && !v3;
   // tick while the demo timeline is moving
   const moving = demo && scene.dustAt && !(scene.doneAt && Date.now() - scene.doneAt > 8000);
   const now = useClock(150, !!moving);
-  const h = c ? fromLive(c, live, done) : demoHero(scene, now);
-  const roots = useCleaningRoots(!!c, `${h.job?.id}:${h.stage}`);
+  const h = v3 ? fromV3(api, live) : c ? fromLive(c, live, done) : demoHero(scene, now);
+  const roots = useCleaningRoots(!!c && !v3, `${h.job?.id}:${h.stage}`);
 
-  if (c && h.job) {
+  if (c && !v3 && h.job) {
     const id = h.job.id;
     h.og = { open: roots[`${id}:open`], paid: roots[`${id}:paid`], openTx: roots[`${id}:open:tx`], paidTx: roots[`${id}:paid:tx`] };
   }
@@ -115,7 +208,19 @@ export function useHero(live) {
 
   h.actions = demo
     ? heroActions
-    : {
+    : v3
+      ? {
+          accept: null, // a wallet transaction (CleanerJobs)
+          // "Mark done" is not a chain tx and moves no money: it asks the Pi to start the
+          // confirm window. The Pi pays only if the meter proves the panel is clean again.
+          done: () => cleaningApi.done(),
+          scan: () => cleaningApi.scan(),
+          approve: (fee) => cleaningApi.approve(fee),
+          reject: () => cleaningApi.reject(),
+          dust: () => postJSON("/api/moment/dust", {}, { admin: true }),
+          reset: () => postJSON("/api/moment/clean", {}, { admin: true }),
+        }
+      : {
         accept: null, // live accept is a wallet transaction (CleanerJobs)
         // "Mark done" is not a chain tx and pays nothing: it only switches this screen to the live
         // meter. The Pi samples the panel every 5 s and releases the escrow itself once output

@@ -7,11 +7,12 @@ import { arcTestnet } from "viem/chains";
 const RPC = import.meta.env.VITE_ARC_RPC_URL || "https://rpc.testnet.arc.io";
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || "");
 
+// Deployed by Arc Studio on Arc testnet (public addresses); a VITE_ARC_* value overrides them
 export const ADDR = {
   usdc: "0x3600000000000000000000000000000000000000",
-  escrow: import.meta.env.VITE_ARC_ESCROW || "",
-  shop: import.meta.env.VITE_ARC_SHOP || "",
-  billing: import.meta.env.VITE_ARC_BILLING || "",
+  escrow: import.meta.env.VITE_ARC_ESCROW || "0xf215116c72784e7490ddf3166dcb53b84855b8b9",
+  shop: import.meta.env.VITE_ARC_SHOP || "0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47",
+  billing: import.meta.env.VITE_ARC_BILLING || "0x5bd5aecc43968994e90f33df7177fb384401902b",
 };
 export const ARC_READY = { escrow: isAddr(ADDR.escrow), shop: isAddr(ADDR.shop), billing: isAddr(ADDR.billing) };
 
@@ -24,6 +25,8 @@ export const ABI = {
   escrow: parseAbi([
     "function accept(uint256 jobId)",
     "function dispute(uint256 jobId, string reason)",
+    "function resolve(uint256 jobId, bool payCleaner)",
+    "function owner() view returns (address)",
     "function cancel(uint256 jobId)",
     "function refund(uint256 jobId)",
     "function claimPayout(uint256 jobId)",

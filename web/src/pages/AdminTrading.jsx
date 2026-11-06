@@ -37,10 +37,10 @@ export default function AdminTrading() {
     <div className="flex flex-col gap-3">
       <PageHeader kicker="Admin · Sunrise Apartments" title="Trading and upkeep" />
 
-      <section className="card flex flex-col gap-2.5 rounded-[24px]">
+      <section className="card flex flex-col gap-2.5 rounded-[14px]">
         <div className="flex items-center justify-between gap-2">
           <span className="flex flex-col gap-0.5">
-            <span className="text-base font-bold">Selling spare solar</span>
+            <span className="text-base font-medium">Selling spare solar</span>
             <span className="text-xs text-muted">To nearby shops and offices, paid in USDC on Arc</span>
           </span>
           {editing ? (
@@ -49,7 +49,7 @@ export default function AdminTrading() {
                 type="number"
                 step="0.01"
                 min="0"
-                className="w-14 bg-transparent text-right font-bold outline-none"
+                className="w-14 bg-transparent text-right font-medium outline-none"
                 value={price}
                 onChange={(e) => setPrice(Number(e.target.value))}
                 onBlur={() => {
@@ -70,12 +70,12 @@ export default function AdminTrading() {
           <div key={s.key} className="inner flex flex-col gap-1.5 px-3 py-2.5">
             <span className="flex items-center gap-2.5">
               <span className="flex flex-1 flex-col gap-0.5">
-                <span className="text-sm font-bold">{s.name || short(s.buyer)}</span>
+                <span className="text-sm font-medium">{s.name || short(s.buyer)}</span>
                 <span className="text-xs text-muted">
                   {s.kwh.toFixed(2)} kWh · order #{s.orderId}
                 </span>
               </span>
-              <span className="text-[13px] font-bold">{s.usdc.toFixed(2)} USDC</span>
+              <span className="text-[13px] font-medium">{s.usdc.toFixed(2)} USDC</span>
             </span>
             <span className="flex flex-wrap gap-1.5 text-[11px]">
               <Proof kind="arc" id={s.arcTx} />
@@ -86,22 +86,22 @@ export default function AdminTrading() {
         {!liveSales && admin.sales.map((s) => (
           <div key={s.buyer} className="inner flex items-center gap-2.5 px-3 py-2.5">
             <span className="flex flex-1 flex-col gap-0.5">
-              <span className="text-sm font-bold">{s.buyer}</span>
+              <span className="text-sm font-medium">{s.buyer}</span>
               <span className="text-xs text-muted">
                 {s.kwh} kWh · {s.when}
               </span>
             </span>
-            <span className="text-[13px] font-bold text-ink-2" title="Demo sale: no transaction">
+            <span className="text-[13px] font-medium text-ink-2" title="Demo sale: no transaction">
               {(s.kwh * s.price).toFixed(2)} USDC
             </span>
           </div>
         ))}
       </section>
 
-      <section className="card flex flex-col gap-1.5 rounded-[24px]">
+      <section className="card flex flex-col gap-1.5 rounded-[14px]">
         <div className="flex items-center justify-between pb-1">
           <span className="flex flex-col gap-0.5">
-            <span className="text-base font-bold">Maintenance records</span>
+            <span className="text-base font-medium">Maintenance records</span>
             <span className="text-xs text-muted">{fromArkiv.live ? "Read live from Arkiv" : "Kept on Arkiv · demo data"}</span>
             {note && <span className="text-xs text-sun-ink">{note}</span>}
           </span>
@@ -132,12 +132,12 @@ export default function AdminTrading() {
           <div key={i} className={`grid grid-cols-[54px_minmax(0,1fr)_auto] items-center gap-2.5 py-2.5 ${i < records.length - 1 ? "border-b border-line" : ""}`}>
             <span className="text-xs text-muted">{m.date}</span>
             <span className="flex flex-col">
-              <span className="text-sm font-bold">{m.title}</span>
+              <span className="text-sm font-medium">{m.title}</span>
               <span className="text-xs text-muted">{m.text}</span>
             </span>
             <span className="flex flex-col items-end gap-1 text-[11px]">
               {m.arcTx && <Proof kind="arc" id={m.arcTx} />}
-              {m.key ? <Proof kind="arkiv" id={m.key} /> : <span className="font-bold text-muted">{m.link || "demo"}</span>}
+              {m.key ? <Proof kind="arkiv" id={m.key} /> : <span className="font-medium text-muted">{m.link || "demo"}</span>}
             </span>
           </div>
         ))}

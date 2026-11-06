@@ -3,18 +3,22 @@ import { useLive } from "../lib/api.js";
 import BottomNav from "./BottomNav.jsx";
 import { ConnectionBar, ConnectionDialog, MixedContentBanner } from "./Connection.jsx";
 import OfflineBanner, { SafeStopBanner, isOffline } from "./OfflineBanner.jsx";
-import Sidebar from "./Sidebar.jsx";
+import TopNav from "./TopNav.jsx";
 
 // Dashboards use the full desktop width; the other pages stay a readable column.
-const WIDE = new Set(["/", "/admin"]);
+const WIDE = new Set(["/home", "/admin"]);
 
 export default function Layout({ nav }) {
   const { pathname } = useLocation();
   const live = useLive();
   return (
-    <div className="flex min-h-screen gap-6 px-5 pb-32 pt-6 lg:px-6 lg:pb-6">
-      <Sidebar items={nav} />
-      <main className={`mx-auto w-full max-w-md ${WIDE.has(pathname) ? "lg:max-w-none" : "lg:max-w-3xl"}`}>
+    <div className="ambient min-h-screen">
+      <TopNav items={nav} />
+      <main
+        className={`mx-auto w-full min-w-0 max-w-md px-4 pb-28 pt-5 sm:px-5 lg:px-8 lg:pb-12 lg:pt-7 ${
+          WIDE.has(pathname) ? "lg:max-w-[1344px]" : "lg:max-w-3xl"
+        }`}
+      >
         <ConnectionBar />
         <MixedContentBanner />
         {isOffline(live) && <OfflineBanner />}

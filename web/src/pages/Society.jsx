@@ -3,6 +3,7 @@ import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { plan as demoPlan } from "../data/demo.js";
 import { planToView } from "../data/society.js";
+import { planStatus } from "../lib/plan.js";
 import { postJSON, shortId, usePi } from "../lib/api.js";
 import { useRole } from "../lib/role.jsx";
 
@@ -63,6 +64,27 @@ export default function Society() {
   };
 
   const noAi = !api.demo && api.data?.mode === "no-ai";
+  // A live Pi without an AI plan: say so, never show the demo plan as if 0G made it
+  const ps = planStatus(api, null);
+  if (ps.mode === "none")
+    return (
+      <div className="flex flex-col gap-3">
+        <PageHeader kicker="Sunrise Apartments" title="Spare sun runs the building." />
+        <section className="card flex flex-col gap-1 rounded-[14px] border-bad">
+          <span className="text-[11px] font-medium tracking-wider text-bad">NO PLAN</span>
+          <span className="text-sm font-medium">{ps.why}. Nothing was moved: every flat stays on grid until Dyna has a plan.</span>
+          {api.data?.reason && <span className="text-xs text-muted">{api.data.reason}</span>}
+        </section>
+        {isAdmin && (
+          <div className="flex flex-col gap-1">
+            <button type="button" className="btn-ghost" onClick={replan} disabled={busy}>
+              {busy ? "Asking 0G…" : "Re-plan today on 0G"}
+            </button>
+            {err && <span className="text-xs text-bad">{err}</span>}
+          </div>
+        )}
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-3">
@@ -72,22 +94,22 @@ export default function Society() {
       />
 
       {noAi && (
-        <section className="card flex flex-col gap-1 rounded-[22px] border-bad">
-          <span className="text-[11px] font-extrabold tracking-wider text-bad">NO-AI MODE</span>
-          <span className="text-sm font-bold">0G could not be reached, so nothing was moved. Every flat is on grid.</span>
+        <section className="card flex flex-col gap-1 rounded-[14px] border-bad">
+          <span className="text-[11px] font-medium tracking-wider text-bad">NO-AI MODE</span>
+          <span className="text-sm font-medium">0G could not be reached, so nothing was moved. Every flat is on grid.</span>
           <span className="text-xs text-muted">{api.data.reason}</span>
         </section>
       )}
 
-      <section className="card flex flex-col gap-3 rounded-[26px]">
+      <section className="card flex flex-col gap-3 rounded-[14px]">
         {!isAdmin && (
-          <span className="chip w-fit border border-line bg-card-solid py-1.5 text-xs font-semibold">
+          <span className="chip w-fit border border-line bg-card-solid py-1.5 text-xs font-medium">
             <Icon name="lock" size={14} /> Set by committee · view only
           </span>
         )}
         <div className="flex items-baseline justify-between">
           <span className="text-sm text-muted">Solar forecast for the day</span>
-          <span className="text-2xl font-extrabold">{plan.forecastKwh} kWh</span>
+          <span className="text-2xl font-medium">{plan.forecastKwh} kWh</span>
         </div>
         <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
           <span className="bg-sun" style={{ width: `${(plan.split.flats / total) * 100}%` }} />
@@ -101,9 +123,9 @@ export default function Society() {
         </div>
       </section>
 
-      <section className="card flex flex-col gap-2 rounded-[26px]">
+      <section className="card flex flex-col gap-2 rounded-[14px]">
         <div className="flex items-center justify-between">
-          <span className="text-base font-bold">Planned by 0G</span>
+          <span className="text-base font-medium">Planned by 0G</span>
           <span className="mono text-[11px] text-muted" title={plan.requestId}>{shortId(plan.requestId)}</span>
         </div>
         {plan.summary && <span className="text-xs text-ink-2">{plan.summary}</span>}
@@ -118,7 +140,7 @@ export default function Society() {
 
         {plan.groups.map((g, gi) => (
           <div key={g.name} className="flex flex-col gap-1.5">
-            <span className="pt-1 text-[11px] font-extrabold uppercase tracking-wider text-muted">
+            <span className="pt-1 text-[11px] font-medium uppercase tracking-wider text-muted">
               {gi + 1} · {g.name}
             </span>
             {g.jobs.map((j, ji) => {
@@ -129,8 +151,8 @@ export default function Society() {
                 <div key={j.name} className="flex flex-col gap-1">
                   <div className="grid grid-cols-[112px_1fr] items-center gap-2">
                     <span className="flex flex-col">
-                      <span className="text-[13px] font-bold leading-tight">{j.name}</span>
-                      <span className={`text-[11px] ${j.running ? "font-bold text-sun-ink" : "text-muted"}`}>{j.label}</span>
+                      <span className="text-[13px] font-medium leading-tight">{j.name}</span>
+                      <span className={`text-[11px] ${j.running ? "font-medium text-sun-ink" : "text-muted"}`}>{j.label}</span>
                     </span>
                     <span className="relative h-7 rounded-lg bg-inner">
                       <span
@@ -141,7 +163,7 @@ export default function Society() {
                         <button
                           type="button"
                           onClick={() => setEditing(editing === key ? null : key)}
-                          className="absolute -right-1 -top-1 rounded-full border border-line bg-card-solid px-2 text-[11px] font-bold"
+                          className="absolute -right-1 -top-1 rounded-full border border-line bg-card-solid px-2 text-[11px] font-medium"
                         >
                           Edit
                         </button>
