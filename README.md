@@ -13,7 +13,7 @@ Built from scratch at ETHGlobal Mumbai (5–7 Nov 2026) by Om Salunkhe, Devang G
 | Demo video | **TBD** |
 | Live app | **TBD** (Vercel; the Pi-backed parts are live only on the venue network, see [Run it](#run-it)) |
 | Arc Studio project | [studio.arc.io/app/63db67fa…](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852) |
-| Arc contracts | [`contracts/deployments.json`](contracts/deployments.json) (Arc testnet, chain 5042002) |
+| Arc contracts | [CleaningEscrow](https://explorer.testnet.arc.io/address/0xf215116c72784e7490ddf3166dcb53b84855b8b9) · [SolarBilling](https://explorer.testnet.arc.io/address/0x5bd5aecc43968994e90f33df7177fb384401902b) · [ShopTrade](https://explorer.testnet.arc.io/address/0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47) (Arc testnet, chain 5042002; [`deployments.json`](contracts/deployments.json)) |
 | Arkiv building wallet | **TBD** (Rabdi testnet, chain 7794095) |
 | Prize tracks | 0G: Physical AI · Arc: Best Smart Contracts with Advanced Stablecoin Logic, In Arc Studio · Arkiv: Build on Arkiv (from scratch) |
 
@@ -65,7 +65,7 @@ flowchart LR
   Web -- "accept job · pay bill · buy sun<br/>(the user's own wallet)" --> Arc
 ```
 
-More detail: [`docs/architecture.md`](docs/architecture.md).
+As an image: [`docs/img/architecture.png`](docs/img/architecture.png), with the escrow steps in [`docs/diagram.md`](docs/diagram.md). Wiring and roles: [`docs/architecture.md`](docs/architecture.md).
 
 ### The hardware
 
@@ -108,19 +108,25 @@ Explorers: [0G Storage (Galileo)](https://storagescan-galileo.0g.ai) · [0G Chai
 
 *Bounty: **Best Smart Contracts with Advanced Stablecoin Logic, In Arc Studio**.*
 
-Three contracts, deployed from **Arc Studio** to Arc testnet. They use USDC (the ERC-20 at `0x3600…0000`, 6 decimals) for both money and gas. The **oracle** is the Pi's wallet: the only address allowed to release a fee, settle a sale or post a bill, and only from what its own meters measured.
+Three USDC contracts, **written, tested and deployed in [Arc Studio](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852)** to Arc testnet (chain 5042002), with the source verified on the explorer. They use USDC (the ERC-20 at `0x3600…0000`, 6 decimals) for both money and gas. The **oracle** is the Pi's wallet: the only address allowed to release a fee, settle a sale or post a bill, and only from what its own meters measured. The **owner** is the society committee: it can change the oracle and treasury and settle disputes.
 
 | Contract | Stablecoin logic | Address |
 |---|---|---|
-| [`CleaningEscrow`](contracts/CleaningEscrow.sol) | **Conditional escrow with automatic release:** the fee is locked when the panel is dusty, the cleaner accepts, and the oracle releases only when output is ≥ 90% (checked on chain). Anyone can refund the society after the deadline | TBD |
-| [`SolarBilling`](contracts/SolarBilling.sol) | **Payment splitting:** each month the oracle posts every flat's bill from its own meter (solar vs grid), with a hash of the signed readings behind it. The resident pays in USDC straight to the society treasury | TBD |
-| [`ShopTrade`](contracts/ShopTrade.sol) | **Multi-step settlement:** a nearby shop prepays for spare noon sun. After the window the oracle settles by the Wh actually delivered, and the shop gets the rest back in the same transaction | TBD |
+| [`CleaningEscrow`](contracts/src/CleaningEscrow.sol) | **Conditional escrow with on-chain dispute and automatic release.** A dusty panel locks the fee together with the 0G request ID of the AI decision that flagged it. A cleaner accepts, and the oracle releases the fee only when output is back to 90–100% (checked on chain), storing the hash of the meter readings that proved it. The cleaner can dispute (on a cloudy day, say), and the committee resolves it. After the deadline anyone can refund the society. `linkEpisode` ties each job to the 0G Storage root of its episode log | [`0xf215…b8b9`](https://explorer.testnet.arc.io/address/0xf215116c72784e7490ddf3166dcb53b84855b8b9) |
+| [`SolarBilling`](contracts/src/SolarBilling.sol) | **Payment splitting.** Each month the oracle posts every flat's bill from its own meter, with the hash of the signed readings behind it. One payment is split by where the power came from: the solar part goes to the society treasury and the grid part to the electricity board, in the same transaction | [`0x5bd5…902b`](https://explorer.testnet.arc.io/address/0x5bd5aecc43968994e90f33df7177fb384401902b) |
+| [`ShopTrade`](contracts/src/ShopTrade.sol) | **Multi-step settlement.** A nearby shop prepays for spare noon sun. After the window the oracle settles by the Wh actually delivered: the society is paid and the shop gets the rest back in one transaction. If the meter never settles, the shop takes its deposit back after the deadline | [`0x17b2…ef47`](https://explorer.testnet.arc.io/address/0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47) |
 
-**Built in Arc Studio:** [our Studio project](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852). <!-- TODO(dy-arc): what was done in Studio vs locally, screenshots --> More detail TBD.
+Deploy transactions: [escrow](https://explorer.testnet.arc.io/tx/0x7bc2adcd3d0ef6e07fa149b7bad08fc9e62a52bccb23cbded3c393b82c649063) · [billing](https://explorer.testnet.arc.io/tx/0x7588f283b6e87e6c74b8d1b990b890f71b5156bf5bfd4b5fc3edf6aae29101bb) · [shop trade](https://explorer.testnet.arc.io/tx/0xc31cf4804ad4fae68b765af046fe043ff88af0ab555d570526b7e700f811bb3f). All addresses and settings: [`contracts/deployments.json`](contracts/deployments.json).
+
+**What was done in Arc Studio and what was done locally** (full story: [`contracts/STUDIO.md`](contracts/STUDIO.md)):
+- **In Studio:** Studio wrote the three contracts from our spec prompt ([`contracts/studio/`](contracts/studio/)), with our first drafts as read-only context. It ran three rounds of its own security and functional review plus static analysis, and wrote 161 Foundry tests (fuzz and invariant). It then passed our 50 acceptance tests without changing them, 211/211 green. Studio deployed all three contracts from its Circle smart wallet (ERC-4337, gas paid by a paymaster) and verified the source.
+- **Locally:** we wrote the first drafts, the spec and prompts, the 50 acceptance tests and a reference implementation to check Studio's output against. We pulled Studio's code into [`contracts/src/`](contracts/src/) byte for byte, re-ran all 211 tests, and checked that the deployed bytecode matches a local build (only the metadata hash differs). We also wired the contracts into the Pi (Python) and the web app (viem).
+
+**Safety:** OpenZeppelin `SafeERC20`, `ReentrancyGuard` and `Ownable2Step` (ownership can't be renounced), nothing `payable`, and an event for every state change. Neither the oracle nor the committee can accept a cleaning job, so neither can pay itself. A payout to a frozen USDC address doesn't block the job: the amount waits for its recipient to claim.
+
+**For the demo,** the oracle, the committee and the treasury are all the Pi's wallet. In a real building the committee would be the society's multisig.
 
 **Reusable by other builders:** `CleaningEscrow` is a generic "pay when a device proves the job is done" escrow. Swap the panel meter for any sensor (a water-tank level, a lift's uptime, an air-quality reading) and it works unchanged.
-
-Explorer: [Arc testnet](https://explorer.testnet.arc.io).
 
 ## Arkiv: the record book
 
