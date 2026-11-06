@@ -194,6 +194,25 @@ The web app on Vercel is served over https, so it can't call the Pi's plain-http
 
 We used AI coding assistants. [`docs/ai-usage/`](docs/ai-usage/) says where and how, part by part, with the prompts and plans we worked from.
 
-## License
+## Arkiv
+
+Records live on Arkiv's Rabdi testnet (chain 7794095), written by one building wallet and read by
+the app straight from the browser. Schemas, judging notes and more queries are in [`arkiv/`](arkiv/README.md).
+
+- Building wallet (demo, `sunrise-apartments`): **TODO** address from the Pi bridge's `/health`
+- Test wallet (`test-dyarkiv-1`): [`0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd`](https://rabdi.explorer.arkiv.network/address/0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd)
+
+The building's latest AI decisions, with their 0G proofs (no key or SDK needed):
+
+```bash
+curl -s https://rpc.rabdi.db-chain.testnet.arkiv.network \
+  -H 'Content-Type: application/json' --data @- <<'EOF'
+{"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":[
+  "arkiv.schema = str('dynaura.decision') AND building = str('test-dyarkiv-1') AND $creator = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) AND $owner = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) ORDER BY decision_id:u64 DESC",
+  {"select":{"key":true,"expiresAt":true,"attributes":{"kind":true,"day":true,"og_request_id":true,"og_storage_root":true}},"limit":"0x3"}]}
+EOF
+```
+
+## Status
 
 [MIT](LICENSE)

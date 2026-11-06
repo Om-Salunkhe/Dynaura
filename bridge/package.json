@@ -4,9 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Writes Dynaura records to Arkiv for the Pi",
-  "engines": { "node": ">=22.10" },
+  "engines": {
+    "node": ">=22.10"
+  },
   "scripts": {
-    "start": "node --env-file=../.env main.mjs"
+    "start": "node --env-file=../.env main.mjs",
+    "smoke": "node --env-file-if-exists=../.env smoke.mjs",
+    "test": "node --test writer.test.mjs"
   },
   "dependencies": {
     "@arkiv-network/sdk": "1.0.1",

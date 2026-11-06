@@ -1,4 +1,5 @@
 import AccountButton from "./AccountButton.jsx";
+import { ConnectionPill } from "./Connection.jsx";
 
 export default function PageHeader({ kicker, title, right }) {
   return (
@@ -8,6 +9,7 @@ export default function PageHeader({ kicker, title, right }) {
         <h1 className="h-title m-0">{title}</h1>
       </div>
       <div className="flex items-center gap-2">
+        <ConnectionPill />
         {right}
         <AccountButton />
       </div>

@@ -1,86 +1,42 @@
 // Reads Dynaura's records straight from Arkiv in the browser: no server in between,
-// so anyone can check what the app shows. Only entities owned by the building wallet count.
-import { createPublicClient } from "@arkiv-network/sdk";
-import { rabdi } from "@arkiv-network/sdk/chains";
-import { desc, eq } from "@arkiv-network/sdk/query";
+// so anyone can check what the app shows. Only entities the building wallet created and still
+// owns count (see arkivReads.js for the queries themselves).
 import { useEffect, useState } from "react";
-import { hexToString, http } from "viem";
-import { Decision, Heartbeat, Maintenance } from "./arkivSchemas.js";
+import * as reads from "./arkivReads.js";
 
 export const OWNER = import.meta.env.VITE_ARKIV_OWNER || "";
 export const BUILDING = import.meta.env.VITE_BUILDING_ID || "sunrise-apartments";
 export const ARKIV_READY = /^0x[0-9a-fA-F]{40}$/.test(OWNER);
+export const EXPLORER = "https://rabdi.explorer.arkiv.network";
 
-let client;
+// No access key in the browser, ever. rabdi() puts the key in the RPC URL, so anything in this
+// bundle is public, and Arkiv's guidance keeps operator keys server-side (the bridge has ours).
+// Keyless reads on the public endpoint, with jittered backoff, measured fine for our volume:
+// 500/500 queries, 0 rate limits, at ~40 queries/s from one IP (arkiv/how-you-use-arkiv.md).
+let ctx;
 function arkiv() {
-  if (!client) {
-    client = createPublicClient({
-      chain: rabdi({ accessKey: import.meta.env.VITE_ARKIV_ACCESS_KEY || "" }),
-      transport: http(),
-    });
-  }
-  return client;
+  if (!ctx) ctx = { client: reads.arkivClient(""), owner: OWNER, building: BUILDING };
+  return ctx;
 }
 
-const text = (v) => {
-  try {
-    return hexToString(v);
-  } catch {
-    return "";
-  }
-};
-
-export async function fetchDecisions(limit = 20) {
-  const page = await arkiv()
-    .select({ $key: true, kind: true, mode: true, decision_id: true, day: true, request_id: true, storage_root: true, summary: true })
-    .from(Decision)
-    .where(eq("building", BUILDING))
-    .ownedBy(OWNER)
-    .orderBy(desc("decision_id"))
-    .limit(limit)
-    .fetch();
-  return page.entities.map((e) => ({
-    key: e.$key,
-    kind: e.kind.value,
-    mode: e.mode.value,
-    id: Number(e.decision_id.value),
-    day: e.day.value,
-    requestId: e.request_id?.value,
-    storageRoot: e.storage_root?.value,
-    summary: text(e.summary.value),
-  }));
-}
-
-export async function fetchMaintenance(limit = 20) {
-  const page = await arkiv()
-    .select({ $key: true, date: true, title: true, details: true, arc_tx: true })
-    .from(Maintenance)
-    .where(eq("building", BUILDING))
-    .ownedBy(OWNER)
-    .orderBy(desc("date"))
-    .limit(limit)
-    .fetch();
-  return page.entities.map((e) => ({
-    key: e.$key,
-    date: e.date.value,
-    title: e.title.value,
-    text: text(e.details.value),
-    arcTx: e.arc_tx?.value,
-  }));
-}
-
+export const fetchDecisions = (limit = 20) => reads.decisions(arkiv(), limit);
+export const fetchMaintenance = (limit = 20) => reads.maintenance(arkiv(), limit);
 /** The building's heartbeat entity: if it expired (Pi off > 2 min), there is none. */
-export async function fetchHeartbeat() {
-  const page = await arkiv()
-    .select({ $key: true, mode: true, flats: true, pump: true, updated: true, $expiresAt: true })
-    .from(Heartbeat)
-    .where(eq("building", BUILDING))
-    .ownedBy(OWNER)
-    .limit(1)
-    .fetch();
-  const e = page.entities[0];
-  return e ? { key: e.$key, mode: e.mode.value, flats: e.flats.value, pump: e.pump.value, updated: Number(e.updated.value) } : null;
-}
+export const fetchHeartbeat = () => reads.heartbeat(arkiv());
+/** The 0G decision behind a request ID (e.g. a cleaning job's og_request_id), or null. */
+export const fetchDecisionByOgRequest = (ogRequestId) => reads.decisionByOgRequest(arkiv(), ogRequestId);
+/** Live offers of spare solar. Expired ones (solar window closed) are simply not returned. */
+export const fetchOffers = (limit = 20) => reads.offers(arkiv(), limit);
+/** Cleaner job board: fetchCleaningJobs({ status: "open" }) */
+export const fetchCleaningJobs = (opts) => reads.cleaningJobs(arkiv(), opts);
+/** Resident bills: fetchBills({ flat: "A" }) or fetchBills({ month: "2026-11" }) */
+export const fetchBills = (opts) => reads.bills(arkiv(), opts);
+/** Shop sales settled on Arc: fetchSales({ buyer: "0x..." }) */
+export const fetchSales = (opts) => reads.sales(arkiv(), opts);
+/** Daily totals (the same rows Dyna's planner reads), newest first. */
+export const fetchDailyOutput = (days = 7) => reads.dailyOutput(arkiv(), days);
+/** Signed 1-minute readings: fetchReadings({ meter: "panel", since: unixSeconds }) */
+export const fetchReadings = (opts) => reads.readings(arkiv(), opts);
 
 /** Run an Arkiv read; fall back to demo data when Arkiv isn't configured or reachable. */
 export function useArkiv(fn, fallback, deps = []) {
@@ -90,7 +46,7 @@ export function useArkiv(fn, fallback, deps = []) {
     let alive = true;
     fn()
       .then((data) => alive && setState({ data, live: true, error: null }))
-      .catch((error) => alive && setState({ data: fallback, live: false, error: String(error?.shortMessage || error) }));
+      .catch((error) => alive && setState({ data: fallback, live: false, error: reads.redact(error?.shortMessage || error) }));
     return () => {
       alive = false;
     };
@@ -100,23 +56,6 @@ export function useArkiv(fn, fallback, deps = []) {
 }
 
 export const short = (h) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : "");
-
-/** Live offers of spare solar. Expired ones (solar window closed) are simply not returned. */
-export async function fetchOffers() {
-  const { Offer } = await import("./arkivSchemas.js");
-  const page = await arkiv()
-    .select({ $key: true, day: true, kwh: true, price_usdc: true, window_end: true, request_id: true, $expiresAt: true })
-    .from(Offer)
-    .where(eq("building", BUILDING))
-    .ownedBy(OWNER)
-    .limit(20)
-    .fetch();
-  return page.entities.map((e) => ({
-    key: e.$key,
-    day: e.day.value,
-    kwh: Number(e.kwh.value),
-    price: Number(e.price_usdc.value),
-    windowEnd: Number(e.window_end.value),
-    requestId: e.request_id?.value,
-  }));
-}
+/** Explorer links for an Arkiv entity or transaction. */
+export const entityUrl = (key) => `${EXPLORER}/entity/${key}`;
+export const txUrl = (hash) => `${EXPLORER}/tx/${hash}`;

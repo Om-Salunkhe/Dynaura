@@ -48,5 +48,5 @@ def ask(store, brain, flat: str, question: str) -> dict:
         "answer": answer,
         "request_id": reply.request_id,
         "decision_id": did,
-        "proof": f"Answered on 0G · {'TEE verified · ' if reply.tee else ''}{short}",
+        "proof": f"Answered on 0G · {'TEE verified · ' if reply.tee_verified else ''}{short}",
     }
