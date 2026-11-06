@@ -13,7 +13,8 @@ export const isPiDevice = (a) => /^0x1eadd213[0-9a-f]{26}52ed$/i.test(a || "");
 async function windowFor(job) {
   if (job.proofWindow?.length === 2) return { window: job.proofWindow, how: "the proof window the Pi recorded" };
   const t = job.releasedAt || Math.floor(Date.now() / 1000);
-  const rows = (await fetchReadings({ meter: "panel", since: t - 15 * 60, limit: 60 })).filter((r) => r.minute <= t).sort((a, b) => b.minute - a.minute).slice(0, 3);
+  // bounded on both sides: an unbounded query returns the newest minutes, long after the payout
+  const rows = (await fetchReadings({ meter: "panel", since: t - 15 * 60, until: t, limit: 60 })).sort((a, b) => b.minute - a.minute).slice(0, 3);
   if (rows.length < 3) return { window: null, how: null };
   return { window: [rows[2].minute, rows[0].minute], how: "the 3 newest panel minutes at release time" };
 }

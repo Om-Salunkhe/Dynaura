@@ -8,7 +8,7 @@ import VerifyPayout from "../components/VerifyPayout.jsx";
 import { cleaner } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
 import { ARC_READY, errText, short, useWallet, write } from "../lib/arc.js";
-import { fetchCleaningJobs, useArkiv } from "../lib/arkiv.js";
+import { fetchCleaningJobs, fetchWorkReceipts, useArkiv } from "../lib/arkiv.js";
 import { verifyPayout } from "../lib/verify.js";
 import { stageIndex, useHero } from "../lib/hero.js";
 
@@ -85,6 +85,8 @@ export default function CleanerJobs() {
         </section>
       )}
 
+      {w.address && <WorkReceipts address={w.address} />}
+
       {!hero.live && !arkJobs && (
         <section className="card flex flex-col gap-1 rounded-[14px]">
           <span className="pb-1 text-base font-medium">Paid jobs</span>
@@ -102,6 +104,38 @@ export default function CleanerJobs() {
         </section>
       )}
     </div>
+  );
+}
+
+/** The cleaner's work history: Arkiv receipts the building created but the cleaner's wallet owns. */
+function WorkReceipts({ address }) {
+  const r = useArkiv(() => fetchWorkReceipts({ cleaner: address }), null, [address]);
+  const list = (r.live || r.limited) && Array.isArray(r.data) ? r.data : null;
+  return (
+    <section className="card flex flex-col gap-1 rounded-[14px]">
+      <span className="text-base font-medium">Your work history</span>
+      <span className="pb-1 text-xs text-muted">Receipts on Arkiv that your wallet owns: the building creates them, you keep them, the committee can't delete them.</span>
+      {!list && <span className="text-xs text-muted">{r.limited ? "Arkiv busy, retrying" : r.error ? "Couldn't read Arkiv right now." : "Loading…"}</span>}
+      {list?.length === 0 && <span className="text-sm text-muted">No receipts yet. One is minted to your wallet when a job pays out.</span>}
+      {list?.map((w) => (
+        <div key={w.key} className="flex flex-col gap-1.5 border-t border-line py-2.5 text-sm first-of-type:border-0">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium">{w.jobId != null ? `Job #${w.jobId}` : `Case ${w.caseId ?? ""}`}</span>
+            <span className="text-[13px] font-medium">{(Number(w.feeUsdc) || 0).toFixed(2)} USDC</span>
+          </div>
+          <span className="flex flex-wrap items-center gap-2 text-[11px]">
+            {w.dustyPct != null && (
+              <span className="text-muted">
+                {Math.round(w.dustyPct)}%{w.afterPct != null ? ` → ${Math.round(w.afterPct)}%` : ""} output
+              </span>
+            )}
+            {w.paidAt && <span className="text-muted">{new Date(w.paidAt * 1000).toLocaleDateString([], { day: "numeric", month: "short" })}</span>}
+            <Proof kind="arc" id={w.releaseTx} />
+            <Proof kind="arkiv" id={w.key} label="Owned by you" />
+          </span>
+        </div>
+      ))}
+    </section>
   );
 }
 
