@@ -197,7 +197,7 @@ class Arc:
         rate = int(round(int(neighbor_rate) / 1000))
         if rate * 1000 != int(neighbor_rate):
             log.warning("neighbour rate %s per kWh rounded to %s per Wh on chain", neighbor_rate, rate)
-        rcpt = self.send(c.functions.postPeriod(as_bytes32(period_id), list(flats), [int(x) for x in unused_wh],
+        rcpt = self.send(c.functions.postPeriod(period_bytes(period_id), list(flats), [int(x) for x in unused_wh],
                                                 [int(x) for x in over_wh], rate, as_bytes32(readings_hash)))
         return self.tx_hash(rcpt)
 
@@ -205,17 +205,17 @@ class Arc:
         """Put shop and grid revenue (USDC base units) into the period's pool. The Pi is the treasury."""
         c = self.need(self.credits)
         self.ensure_allowance(c.address, int(amount))
-        return self.tx_hash(self.send(c.functions.fund(as_bytes32(period_id), int(amount))))
+        return self.tx_hash(self.send(c.functions.fund(period_bytes(period_id), int(amount))))
 
     def claim_credits(self, period_id, flat: str) -> str:
         """Pay a flat its share now. Anyone may trigger it: the USDC goes to the flat's registered wallet."""
         c = self.need(self.credits)
-        return self.tx_hash(self.send(c.functions.claim(as_bytes32(period_id), flat)))
+        return self.tx_hash(self.send(c.functions.claim(period_bytes(period_id), flat)))
 
     def credits_status(self, period_id) -> dict:
         """What SolarCredits holds for one period: posted?, the pool, and per flat what's claimable/claimed."""
         c = self.need(self.credits)
-        pid = as_bytes32(period_id)
+        pid = period_bytes(period_id)
         posted, rate, rhash, total_unused, total_in, total_claimed = c.functions.periodInfo(pid).call()
         out = {"period_id": "0x" + pid.hex(), "posted": posted, "neighbor_rate": rate * 1000,
                "readings_hash": "0x" + bytes(rhash).hex(), "total_unused_wh": total_unused,
@@ -231,6 +231,31 @@ class Arc:
                                   "wallet": None if int(wallet, 16) == 0 else wallet}
         return out
 
+    def credits_settle(self, key: str, flats: dict, neighbor_rate_usdc: float, fund_usdc: float,
+                       readings_hash) -> dict:
+        """POST /api/admin/credits/settle (pi/credits.py): post the period once and fund it with the
+        shop + grid revenue, only what the Pi hasn't put in yet, so settling again is safe.
+        key "2026-11-07" or "2026-11"; flats = GET /api/credits flats, in model Wh;
+        neighbor_rate_usdc in USDC per real kWh. Returns chain{}."""
+        pid = period_bytes(key)
+        st = self.credits_status(pid)
+        post_tx = fund_tx = None
+        if not st["posted"]:
+            names = sorted(flats)
+            wh = lambda f, k: int(round(max(float(flats[f].get(k) or 0), 0.0) * config.BILL_SCALE))
+            post_tx = self.post_credits(pid, names, [wh(f, "unused_wh") for f in names],
+                                        [wh(f, "over_wh") for f in names], int(round(neighbor_rate_usdc * 1e6)),
+                                        readings_hash)
+            st = self.credits_status(pid)
+        paid_in = sum(to_units(f["owes_usdc"]) for f in st["flats"].values() if f["paid_in"])
+        missing = to_units(fund_usdc) - (to_units(st["total_in_usdc"]) - paid_in)
+        if missing > 0 and st["total_unused_wh"] > 0:
+            fund_tx = self.fund_credits(pid, missing)
+            st = self.credits_status(pid)
+        txs = self.credit_txs(pid)
+        return {**st, "key": key, "post_tx": post_tx or txs["post_tx"], "fund_tx": fund_tx or txs["fund_tx"],
+                "claims": {f: txs["claims"].get(f) for f in st["flats"]}}
+
     def credit_claims(self, period_id) -> dict:
         """{flat: tx of its latest claim, or None}, from CreditClaimed events (best effort)."""
         return self.credit_txs(period_id)["claims"]
@@ -242,7 +267,7 @@ class Arc:
         c = self.credits
         if not (self.enabled and c is not None):
             return out
-        pid = as_bytes32(period_id)
+        pid = period_bytes(period_id)
         try:
             for name, slot in (("PeriodPosted", "post_tx"), ("PeriodFunded", "fund_tx"), ("CreditClaimed", "claims")):
                 for ev in getattr(c.events, name)().get_logs(from_block=config.ARC_CREDITS_FROM_BLOCK,
@@ -262,6 +287,14 @@ def credit_period_id(key: str) -> str:
     """bytes32 id of a credits period, as pi/credits.py makes it: sha256("dynaura-credits:<key>"),
     key "2026-11-07" for a day."""
     return "0x" + hashlib.sha256(f"dynaura-credits:{key}".encode()).hexdigest()
+
+
+def period_bytes(key_or_id) -> bytes:
+    """A period as bytes32: a key ("2026-11-07") becomes sha256("dynaura-credits:<key>"); a 32-byte id
+    (bytes or 0x-hex) is used as it is."""
+    if isinstance(key_or_id, (bytes, bytearray)) or (isinstance(key_or_id, str) and key_or_id.startswith("0x")):
+        return as_bytes32(key_or_id)
+    return as_bytes32(credit_period_id(key_or_id))
 
 
 def as_bytes32(h) -> bytes:

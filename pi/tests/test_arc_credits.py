@@ -141,6 +141,25 @@ def main():
         check("length mismatch refused before sending", True)
     check("nothing extra was sent", a.credits.sent == ["postPeriod", "fund"], a.credits.sent)
 
+    print("credits_settle(key, ...), as pi/credits.py calls it")
+    config.BILL_SCALE = 1000.0
+    a = make()
+    flats = {"B": {"unused_wh": 10, "over_wh": 0}, "A": {"unused_wh": 30, "over_wh": 0},
+             "C": {"unused_wh": 0, "over_wh": 20}}
+    out = a.credits_settle("2026-11-08", flats, 0.013, 0.14, readings)
+    check("a date key maps to sha256('dynaura-credits:<key>')", out["period_id"] == arc.credit_period_id("2026-11-08"), out)
+    check("posted (model Wh x BILL_SCALE, rate per Wh) and funded", a.credits.sent == ["postPeriod", "fund"]
+          and a.credits.periods[arc.period_bytes("2026-11-08")]["unused"] == {"A": 30_000, "B": 10_000, "C": 0}
+          and a.credits.periods[arc.period_bytes("2026-11-08")]["rate"] == 13, a.credits.sent)
+    check("chain{} has the txs, the pool and the claims", out["post_tx"] and out["fund_tx"] and out["total_in_usdc"] == 0.14
+          and out["claims"] == {"A": None, "B": None, "C": None} and out["key"] == "2026-11-08", out)
+    a.credits_settle("2026-11-08", flats, 0.013, 0.14, readings)
+    check("settling again sends nothing", a.credits.sent == ["postPeriod", "fund"], a.credits.sent)
+    a.credits_settle("2026-11-08", flats, 0.013, 0.20, readings)
+    check("more revenue later: only the difference is funded", a.credits.sent == ["postPeriod", "fund", "fund"]
+          and a.credits_status("2026-11-08")["total_in_usdc"] == 0.2, a.credits.sent)
+    check("credits_status takes the key or the id", a.credits_status("2026-11-08") == a.credits_status(out["period_id"]))
+
     print("a Pi without Arc (no key, no ARC_CREDITS)")
     key, config.ARC_PRIVATE_KEY = config.ARC_PRIVATE_KEY, ""
     try:
