@@ -154,7 +154,9 @@ function BoardRow({ j }) {
       </span>
       {res && (
         <span className={`text-[11.5px] ${res.ok ? "text-good" : "text-bad"}`}>
-          {res.ok ? "✓ The proof on Arc matches the signed readings on Arkiv" : `✗ ${res.why || "Doesn't match the proof on Arc"}`}
+          {res.ok
+            ? `✓ Signed by ${res.piSigner ? "the Pi" : "the signer"} (${res.signer.slice(0, 6)}…${res.signer.slice(-4)}) and matches the proof on Arc`
+            : `✗ ${res.why || (!res.signaturesOk ? "A reading isn't signed by the Pi" : "Doesn't match the proof on Arc")}`}
         </span>
       )}
     </div>

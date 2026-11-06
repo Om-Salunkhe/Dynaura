@@ -55,12 +55,24 @@ export default function VerifyPayout({ hero }) {
       {res && (
         <div className={`flex flex-col gap-1.5 rounded-[10px] border p-3 text-[12px] ${res.ok ? "border-good" : "border-bad"}`}>
           <span className={`text-[13px] font-medium ${res.ok ? "text-good" : "text-bad"}`}>
-            {res.ok ? "✓ Matches: the proof on Arc is the hash of the signed readings on Arkiv" : `✗ ${res.why || "Doesn't match the proof on Arc"}`}
+            {res.ok ? "✓ Proven: readings signed by the Pi, and their hash is the proof on Arc" : `✗ ${res.why || "Doesn't check out"}`}
           </span>
+          {res.signer && (
+            <span className={`text-[12px] ${res.signaturesOk ? "text-good" : "text-bad"}`}>
+              {res.signaturesOk ? "✓" : "✗"} {res.signaturesOk ? "All readings signed by" : "Not every reading is signed by"}{" "}
+              {res.piSigner ? "the Pi" : "the signer"} <span className="mono">{short(res.signer)}</span>
+              {res.piSigner ? "" : " (not the Pi's published device key)"}
+            </span>
+          )}
+          {res.computed && (
+            <span className={`text-[12px] ${res.hashOk ? "text-good" : "text-bad"}`}>
+              {res.hashOk ? "✓ Hash matches the escrow's proof on Arc" : "✗ Hash differs from the escrow's proof on Arc"}
+            </span>
+          )}
           {res.rows?.length > 0 && (
             <span className="mono text-[11px] text-muted">
-              {res.rows.length} signed panel minutes ({res.window}):{" "}
-              {res.rows.map((r) => `${new Date(r.minute * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} ${r.avgW.toFixed(3)} W`).join(" · ")}
+              {res.rows.length} panel minutes ({res.how}):{" "}
+              {res.rows.map((r) => `${new Date(r.minute * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} ${Number(r.avgW).toFixed(3)} W${r.signatureOk ? "" : " ✗"}`).join(" · ")}
             </span>
           )}
           {res.computed && <span className="mono text-[11px]">recomputed {short(res.computed)}</span>}
