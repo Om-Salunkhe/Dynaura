@@ -123,6 +123,44 @@ export const WorkReceipt = defineSchema("dynaura.work_receipt", {
   proof_hash: str().optional(), // what the escrow released on
 })
 
+// Fair share + solar credits: one entity per building per day, patched as the day goes on.
+// Each flat's fair share of the sun, what it used, what it left for others and what that earned
+// (revenue * unused / sum unused), next to what an equal split would have paid. 180 days, kept by
+// the keeper. The per-flat numbers are a JSON object in `flats` (A, B, C).
+export const CreditPeriod = defineSchema("dynaura.credit_period", {
+  building: str().indexed(),
+  day: str().indexed(), // YYYY-MM-DD
+  available_wh: dec(), // what the panel could give (model Wh)
+  common_wh: dec(), // solar used by common loads (the pump)
+  spare_wh: dec(), // sum of the flats' unused sun
+  neighbor_wh: dec(), // spare taken by neighbours over their share
+  shop_wh: dec(), // spare sold to the shop (0G trades)
+  grid_wh: dec(), // spare exported at feed-in
+  revenue_usdc: dec(), // the pool split by unused
+  prices: bytes(), // JSON { neighbor, shop, export }, USDC per real kWh
+  flats: bytes(), // JSON { A: { share_wh, used_wh, unused_wh, over_wh, earned_usdc, owes_usdc, net_usdc, equal_split_usdc }, ... }
+  trade_ids: bytes().optional(), // JSON [0G request ids of the day's trades]
+  readings_hash: str().optional(), // sha256 of the day's signed summaries
+  period_id: str().optional(), // SolarCredits period on Arc, once settled
+  post_tx: str().optional(), // Arc: postPeriod
+  updated: u64(), // unix s
+})
+
+// One 0G trade decision: where a window's spare sun went (neighbours, shop, grid) and why.
+// mode ai (0G routed it) or no-ai (0G unreachable: all to the grid at feed-in, never invented).
+// Sealed, 30 days.
+export const Trade = defineSchema("dynaura.trade", {
+  building: str().indexed(),
+  decision_id: u64().indexed(),
+  at: u64().indexed(), // unix s
+  mode: str().indexed(), // ai | no-ai
+  og_request_id: str().indexed().optional(), // the 0G Router request
+  spare_wh: dec().optional(),
+  neighbor_price: dec().optional(), // USDC per real kWh, inside the export..import band
+  routes: bytes(), // JSON [{ to: A|B|C|shop|grid, wh, price }]
+  reason: bytes(), // 0G's reason, UTF-8
+})
+
 // Maintenance history of the solar asset. Lives ~6 months (extend).
 export const Maintenance = defineSchema("dynaura.maintenance", {
   building: str().indexed(),
@@ -144,4 +182,4 @@ export const Bill = defineSchema("dynaura.bill", {
   arc_tx: str().optional(),
 })
 
-export const ALL = { Reading, Heartbeat, DailyOutput, Decision, Offer, Sale, CleaningJob, WorkReceipt, Maintenance, Bill }
+export const ALL = { Reading, Heartbeat, DailyOutput, Decision, Offer, Sale, CleaningJob, WorkReceipt, Maintenance, Bill, CreditPeriod, Trade }

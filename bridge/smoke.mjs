@@ -282,6 +282,40 @@ await step("job -> its 0G decision by og_request_id (web: proof chip)", async ()
   expect(d && d.key === late?.key && d.storageRoot === "0x" + "cd".repeat(32), `decision ${JSON.stringify(d)}`)
   return { note: `decision #${d.id}` }
 })
+// Fair share + solar credits: Pawan's example as a day on Arkiv, then one 0G trade.
+const creditDay = `2099-01-${String(1 + (run % 28)).padStart(2, "0")}` // a test day of its own
+const pawansFlats = {
+  A: { share_wh: 50, used_wh: 20, unused_wh: 30, over_wh: 0, earned_usdc: 0.18, owes_usdc: 0, net_usdc: 0.18, equal_split_usdc: 0.12 },
+  B: { share_wh: 50, used_wh: 40, unused_wh: 10, over_wh: 0, earned_usdc: 0.06, owes_usdc: 0, net_usdc: 0.06, equal_split_usdc: 0.12 },
+}
+const cp1 = await step("credit period: Pawan's 100 / A 20 / B 40 (create)", () =>
+  post("/credit_period", { day: creditDay, available_wh: 100, common_wh: 0, spare_wh: 40, neighbor_wh: 0, shop_wh: 0, grid_wh: 40, revenue_usdc: 0.24,
+    prices: { neighbor: 0.013, shop: 0.08, export: 0.006 }, flats: pawansFlats, trade_ids: [] }),
+)
+await step("credit period posted again the same day (patch, not a second entity)", async () => {
+  const r = await post("/credit_period", { day: creditDay, available_wh: 100, common_wh: 0, spare_wh: 40, neighbor_wh: 0, shop_wh: 25, grid_wh: 15,
+    revenue_usdc: 2.09, prices: { neighbor: 0.013, shop: 0.08, export: 0.006 }, flats: pawansFlats, trade_ids: [`smoke-trade-${run}`] })
+  expect(r.key === cp1?.key && r.patched, JSON.stringify(r))
+  return r
+})
+const tr = await step("0G trade decision (sealed)", () =>
+  post("/trade", { decision_id: decisionId + 5, at: now, mode: "ai", og_request_id: `smoke-trade-${run}`, spare_wh: 40, neighbor_price: 0.013,
+    routes: [{ to: "shop", wh: 25, price: 0.08 }, { to: "grid", wh: 15, price: 0.006 }], reason: "Smoke: the shop pays most, the rest to the grid" }),
+)
+await step("same trade posted again is not created twice", async () => {
+  const r = await post("/trade", { decision_id: decisionId + 5, at: now, mode: "ai", routes: [], reason: "resend" })
+  expect(r.existing && r.key === tr?.key, JSON.stringify(r))
+  return { note: "existing" }
+})
+await step("read credit periods + trades (web: Bill, Building)", async () => {
+  const days = await reads.creditPeriods(ctx, { limit: 50 })
+  const cp = days.find((x) => x.day === creditDay)
+  expect(cp && cp.flats.A.unused_wh === 30 && cp.flats.B.unused_wh === 10 && cp.pool.shopWh === 25 && cp.tradeIds[0] === `smoke-trade-${run}`, JSON.stringify(cp))
+  const t = (await reads.trades(ctx, { mode: "ai" })).find((x) => x.id === decisionId + 5)
+  expect(t && t.routes[0].to === "shop" && t.requestId === `smoke-trade-${run}` && /shop pays most/.test(t.reason), JSON.stringify(t))
+  return { note: `A earns ${cp.flats.A.earned_usdc} vs equal ${cp.flats.A.equal_split_usdc}` }
+})
+
 await step("read maintenance (web: Admin upkeep, History)", async () => {
   const rows = await reads.maintenance(ctx, 5)
   expect(rows.some((x) => x.key === mnt?.key && x.text.includes("52%")), "maintenance row")

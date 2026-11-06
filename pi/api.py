@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 import billing
 import config
+import credits
 import dyna
 import zg
 from arc import Arc, ArcUnavailable
@@ -48,6 +49,7 @@ class App:
     arc = None
     cleaning = None
     sales = None
+    credits = None  # fair-share ledger (credits.py), None when CREDITS_ENABLED=false
 
 
 @asynccontextmanager
@@ -88,10 +90,15 @@ async def lifespan(_: FastAPI):
     App.sales.start()
     App.scheduler = PlanScheduler(App.brain)
     App.scheduler.start()
+    if credits.ENABLED:  # fair share + solar credits (dy-arkiv); off = no change
+        App.credits = credits.Ledger(App.store, App.hw, App.arkiv)
+        App.credits.start()
     log.info("Dynaura up: hw=%s device=%s", config.HW, App.signer.address)
     try:
         yield
     finally:
+        if App.credits:
+            App.credits.stop()
         if App.arkiv:
             App.arkiv.stop()
         App.scheduler.stop()
@@ -388,9 +395,35 @@ def decisions(kind: str | None = None, limit: int = 20):
     return rows
 
 
+# ---- fair share + solar credits (pi/credits.py) ---------------------------------------------
+@app.get("/api/credits")
+def get_credits(period: str = "today"):
+    """period = today | month | YYYY-MM-DD. Each flat's share, use, unused sun and what it earned."""
+    if not App.credits:
+        return {"enabled": False}
+    try:
+        return App.credits.period(period)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/admin/credits/settle")
+def settle_credits(body: dict | None = None, x_admin_key: str | None = Header(default=None)):
+    """Post a day to SolarCredits on Arc and fund it with the shop + grid revenue."""
+    require_admin(x_admin_key)
+    if not App.credits:
+        raise HTTPException(status_code=404, detail="credits are off (CREDITS_ENABLED=false)")
+    try:
+        return App.credits.settle(App.arc, (body or {}).get("period", "today"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except (RuntimeError, ArcUnavailable) as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
 @app.post("/api/moment/{name}")
 def moment(name: str, x_admin_key: str | None = Header(default=None)):
-    """Demo buttons: cloud, sun, dust, clean (SIM only), away-A/B/C, home-A/B/C, pump."""
+    """Demo buttons: cloud, sun, dust, clean, light-A, heavy-B, normal (SIM only), away-A/B/C, home-A/B/C, pump."""
     require_admin(x_admin_key)
     if name == "pump":
         App.runner.run_pump_now()

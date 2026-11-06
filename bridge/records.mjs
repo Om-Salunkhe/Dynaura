@@ -5,9 +5,9 @@ import { and, desc, eq, gte, lte } from "@arkiv-network/sdk/query"
 import { addr, u64 } from "@arkiv-network/sdk/schema"
 import { hexToBytes, isAddress, stringToBytes } from "viem"
 import { account, addHealth, BUILDING, publicClient, read, route, walletClient, write } from "./bridge.mjs"
-import { d, jobColumns, JOB_STATES, ogRequestId, ogStorageRoot, wantedEnd } from "./jobs.mjs"
+import { d, isNum, jobColumns, JOB_STATES, ogRequestId, ogStorageRoot, wantedEnd } from "./jobs.mjs"
 import { redact } from "./retry.mjs"
-import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale, WorkReceipt } from "./schemas.mjs"
+import { Bill, CleaningJob, CreditPeriod, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale, Trade, WorkReceipt } from "./schemas.mjs"
 
 export const days = (n) => ExpirationTime.fromDays(n)
 const nowS = () => Math.floor(Date.now() / 1000)
@@ -426,11 +426,75 @@ route("POST", "/bill", async (b) => {
   return { key: r.entityKey, txHash: r.txHash }
 })
 
+// ---- fair share + solar credits (pi/credits.py) ----------------------------------------------
+// POST /credit_period  { day, available_wh, common_wh, spare_wh, neighbor_wh, shop_wh, grid_wh,
+//   revenue_usdc, prices, flats: { A: {...}, ... }, trade_ids?, readings_hash?, period_id?, post_tx? }
+// One entity per day, created then patched (the Pi posts the day every 10 min and after settling).
+const json = (v) => stringToBytes(JSON.stringify(v ?? null))
+const creditKeys = new Map()
+
+route("POST", "/credit_period", async (b) => {
+  const day = String(b.day || "")
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw Object.assign(new Error("day must be YYYY-MM-DD"), { status: 400 })
+  const values = {
+    available_wh: d(b.available_wh, 4), common_wh: d(b.common_wh, 4), spare_wh: d(b.spare_wh, 4),
+    neighbor_wh: d(b.neighbor_wh, 4), shop_wh: d(b.shop_wh, 4), grid_wh: d(b.grid_wh, 4), revenue_usdc: d(b.revenue_usdc),
+    prices: json(b.prices), flats: json(b.flats), trade_ids: json(b.trade_ids || []),
+    ...(b.readings_hash ? { readings_hash: String(b.readings_hash) } : {}),
+    ...(b.period_id ? { period_id: String(b.period_id) } : {}),
+    ...(b.post_tx ? { post_tx: String(b.post_tx) } : {}),
+    updated: u64(BigInt(nowS())),
+  }
+  return write(`credit_period ${day}`, async (tx) => {
+    let k = creditKeys.get(day)
+    if (!k) {
+      const found = await read(() =>
+        ours(publicClient.select({ $key: true }).from(CreditPeriod).where(and(eq("building", BUILDING), eq("day", day)))).limit(1).fetch(),
+      )
+      k = found.entities[0]?.$key
+    }
+    if (k) {
+      const r = await walletClient.patchEntity(CreditPeriod, k, { set: values }, tx)
+      creditKeys.set(day, k)
+      return { key: k, txHash: r.txHash, patched: true }
+    }
+    const r = await walletClient.createEntity(CreditPeriod, { building: BUILDING, day, ...values }, { expiration: days(180) }, tx)
+    creditKeys.set(day, r.entityKey)
+    return { key: r.entityKey, txHash: r.txHash, patched: false }
+  })
+})
+
+// POST /trade  { decision_id, at, mode, og_request_id?, spare_wh?, neighbor_price?, routes, reason }
+// One 0G trade decision, sealed, 30 days. Idempotent by decision_id (the Pi may resend).
+route("POST", "/trade", async (b) => {
+  if (!isNum(b.decision_id) || !isNum(b.at)) throw Object.assign(new Error("decision_id and at are required"), { status: 400 })
+  const id = u64(BigInt(b.decision_id))
+  const values = {
+    building: BUILDING,
+    decision_id: id,
+    at: u64(BigInt(Math.floor(Number(b.at)))),
+    mode: String(b.mode || "no-ai"),
+    ...(b.og_request_id ? { og_request_id: String(b.og_request_id).slice(0, 120) } : {}),
+    ...(isNum(b.spare_wh) ? { spare_wh: d(b.spare_wh, 4) } : {}),
+    ...(isNum(b.neighbor_price) ? { neighbor_price: d(b.neighbor_price) } : {}),
+    routes: json(b.routes || []),
+    reason: stringToBytes(String(b.reason || "")),
+  }
+  return write(`trade ${b.decision_id}`, async (tx) => {
+    const found = await read(() =>
+      ours(publicClient.select({ $key: true }).from(Trade).where(and(eq("building", BUILDING), eq("decision_id", id)))).limit(1).fetch(),
+    )
+    if (found.entities[0]) return { key: found.entities[0].$key, existing: true }
+    const r = await walletClient.createEntity(Trade, values, { expiration: days(30), flags: SEALED }, tx)
+    return { key: r.entityKey, txHash: r.txHash }
+  })
+})
+
 // ---- keeper: the records worth keeping stay alive while the building runs ------------------
 // Arkiv caps a lifetime at ~182 days, so the long-lived records (maintenance, bills, sales,
 // daily totals) are extended to the maximum again once they get within 30 days of expiring.
 // If the building stops paying for them, they lapse: storage has an owner and a cost.
-const KEEP = [Maintenance, Bill, Sale, DailyOutput]
+const KEEP = [Maintenance, Bill, Sale, DailyOutput, CreditPeriod]
 const KEEP_MARGIN_BLOCKS = BigInt(Number(process.env.ARKIV_KEEP_MARGIN_DAYS || 30)) * 24n * 1800n // days of 2 s blocks
 let keeperLast = null
 
