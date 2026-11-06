@@ -208,11 +208,14 @@ def test_trader(tmp):
 
     # 9. The loop: trades when there is spare, skips when there isn't.
     snap = {"spare_wh": 30, "needs": {"B": 5}, "shop_order_wh": 0, "window": ["13:00", "13:15"]}
-    loop = trader.TradeLoop(lambda: snap, store=store, uploader=up, speed=60)
+    callbacks = []
+    loop = trader.TradeLoop(lambda: snap, store=store, uploader=up, on_trade=lambda trade, window: callbacks.append((trade, window)), speed=60)
     assert loop.interval_s == trader.TRADE_MIN_GAP_S  # sim: never more than one 0G call a minute
     answer([{"to": "B", "wh": 5}])
     r = loop.run_now()
     assert r["mode"] == "ai" and by(r["routes"]) == {"B": (5, 0.013), "grid": (25, 0.006)}, r
+    assert len(callbacks) == 1 and callbacks[0][0] is r and callbacks[0][1]["spare_wh"] == 30, \
+        "the real marketplace receives every completed 0G trade and its normalized snapshot"
     snap["spare_wh"] = 0.08  # a 1-minute sim window at noon: still worth a trade
     assert loop.run_now()["mode"] == "ai"
     snap["spare_wh"] = 0.005

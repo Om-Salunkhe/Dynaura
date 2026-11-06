@@ -55,8 +55,8 @@ function LandingNav() {
           <a href="#live" className="rounded-full px-3 py-1.5 hover:text-white">
             Live
           </a>
-          <Link to="/demo" className="rounded-full px-3 py-1.5 hover:text-white">
-            Demo
+          <Link to="/shop" className="rounded-full px-3 py-1.5 hover:text-white">
+            Marketplace
           </Link>
         </nav>
         <Link
@@ -97,10 +97,10 @@ function Hero() {
             Open the dashboard <Icon name="arrowRight" size={15} stroke={2} />
           </Link>
           <Link
-            to="/demo"
+            to="/shop"
             className="glass flex h-11 items-center gap-2 rounded-[12px] px-5 text-[14px] text-white/85 transition-colors hover:text-white"
           >
-            Watch the live demo
+            Open live marketplace
           </Link>
         </div>
       </div>

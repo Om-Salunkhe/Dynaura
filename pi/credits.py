@@ -384,6 +384,19 @@ class Ledger:
                      for r in t["routes"] if r.get("to") == "shop")
         return round(max(0.0, want - routed) + SHOP_DEMAND_WH, 4)
 
+    def routed_shop_wh(self, day: str, since: float | None = None, until: float | None = None) -> float:
+        """Model Wh that 0G actually routed to a prepaid shop order.
+
+        `since` is when the Pi first observed the open order. This deliberately ignores older shop
+        routes (including rehearsal traffic) and is conservative across a restart: energy that the
+        Pi can no longer prove against the current order is refunded, never charged to the shop.
+        """
+        _, start, end = _range(day)
+        start = max(start, int(since or start))
+        end = min(end, int(until or end))
+        return round(sum(float(r.get("wh") or 0) for t in self.trades(start, end) if t.get("mode") == "ai"
+                         for r in t.get("routes") or [] if r.get("to") == "shop"), 4)
+
     # ---- on chain (SolarCredits, helpers in arc.py) ----------------------------------------
     def settle(self, arc, period: str = "today") -> dict:
         """Post a period (a day, or a month) to SolarCredits and fund it with the shop + grid

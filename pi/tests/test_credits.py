@@ -211,6 +211,8 @@ def test_ledger_end_to_end_with_store_settle_and_arkiv():
     close(p["flats"]["A"]["unused_wh"], 0.03)
     close(p["flats"]["B"]["unused_wh"], 0.01)
     assert p["pool"]["shop_wh"] == 0.03 and p["trades"][0]["request_id"] == "zg-trade-1"
+    assert led.routed_shop_wh("2026-11-07", since=m, until=m + 60) == 0.03
+    assert led.routed_shop_wh("2026-11-07", since=m + 31, until=m + 60) == 0
     close(p["flats"]["A"]["earned_usdc"] / p["flats"]["B"]["earned_usdc"], 3.0)
     assert p["readings_hash"].startswith("0x") and p["chain"] is None
     arc = FakeArc()

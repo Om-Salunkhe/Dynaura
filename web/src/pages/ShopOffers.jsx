@@ -1,88 +1,117 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import Proof from "../components/Proof.jsx";
 import WalletButton from "../components/WalletButton.jsx";
 import { ABI, ADDR, ARC_READY, ensureAllowance, errText, publicClient, txUrl, write } from "../lib/arc.js";
-import { ARKIV_BUSY_TEXT, ARKIV_READY, fetchOffers, short, useArkiv } from "../lib/arkiv.js";
+import { usePi } from "../lib/api.js";
+import { fetchOffers, useArkiv } from "../lib/arkiv.js";
 
-// Demo offer: the plan's solar window closes at 3 PM today
-const demoEnd = () => Math.floor(new Date().setHours(15, 0, 0, 0) / 1000);
-const DEMO = [{ key: "demo", day: "today", kwh: 1.2, price: 0.08, windowEnd: demoEnd(), requestId: "0x7f3a…c21e" }];
+const normalize = (o) =>
+  o && {
+    key: `${o.request_id || "offer"}-${o.published_at || o.window_end}`,
+    day: o.day,
+    kwh: Number(o.kwh),
+    price: Number(o.price_usdc),
+    windowEnd: Number(o.window_end),
+    requestId: o.request_id,
+  };
 
 export default function ShopOffers() {
-  const offers = useArkiv(fetchOffers, DEMO);
-  const [bought, setBought] = useState({}); // offer key -> tx hash (or true in demo)
-  const [busy, setBusy] = useState(null);
+  const market = usePi("/api/marketplace", null);
+  const arkiv = useArkiv(() => fetchOffers(20), []);
+  const [bought, setBought] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  // a rate-limited read keeps the real offers it had: still real, not demo
-  const realOffers = offers.live || (offers.limited && offers.data !== DEMO);
-  const list = realOffers ? offers.data : DEMO;
-  const onChain = realOffers && ARC_READY.shop;
+  const offer = market.demo ? null : normalize(market.data?.offer);
+  const orders = market.demo ? [] : market.data?.orders || [];
+  const open = orders.filter((o) => o.status === "open");
+  const arkivProof = offer && arkiv.data?.find((o) => o.requestId === offer.requestId && o.windowEnd === offer.windowEnd);
+  const onChain = ARC_READY.shop;
 
-  // Prepay on Arc: approve USDC once, then ShopTrade.placeOrder. The Pi settles after the window.
+  useEffect(() => {
+    const timer = setInterval(market.reload, 4000);
+    return () => clearInterval(timer);
+  }, [market.reload]);
+
   const buy = async (o) => {
-    if (!onChain) return setBought({ ...bought, [o.key]: true });
-    setBusy(o.key);
+    if (!onChain) return setErr("ShopTrade is not configured on Arc.");
+    if (Date.now() / 1000 >= o.windowEnd - 15) return setErr("This offer is closing. Wait for the next measured window.");
+    setBusy(true);
     setErr(null);
     try {
       const wh = Math.round(o.kwh * 1000);
       const cost = await publicClient.readContract({ address: ADDR.shop, abi: ABI.shop, functionName: "costOf", args: [wh] });
       await ensureAllowance("shop", cost);
-      const hash = await write("shop", "placeOrder", [o.day, wh, BigInt(o.windowEnd + 2 * 3600)]);
-      setBought({ ...bought, [o.key]: hash });
+      const hash = await write("shop", "placeOrder", [o.day, wh, BigInt(o.windowEnd)]);
+      setBought(hash);
+      market.reload();
     } catch (e) {
       setErr(errText(e));
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   };
 
   return (
     <div className="flex flex-col gap-3">
-      <PageHeader kicker="Corner grocery · Andheri East" title="Solar from next door" right={onChain ? <WalletButton /> : null} />
+      <PageHeader kicker="Corner grocery · Andheri East" title="Live solar marketplace" right={<WalletButton />} />
 
       <section className="card flex flex-col gap-1 rounded-[14px] text-sm">
-        <span className="font-medium">Buy spare rooftop solar from Sunrise Apartments</span>
+        <span className="font-medium">Measured surplus from Sunrise Apartments</span>
         <span className="text-xs text-muted">
-          Offers live on Arkiv and disappear by themselves when the sun window closes. You pay in USDC on Arc, only for the
-          kWh the meter delivers.
+          The Pi publishes only surplus that 0G actually routed to the grid. A prepaid Arc order makes the next 0G window
+          eligible for the shop; the contract refunds every Wh not delivered.
         </span>
-        {!realOffers && <span className="text-xs text-muted">{offers.limited ? `${ARKIV_BUSY_TEXT} · demo offer meanwhile` : ARKIV_READY ? "Arkiv not reachable · demo offer" : "Demo offer"}</span>}
+        <span className={`mt-1 text-xs ${market.demo ? "text-bad" : "text-good"}`}>
+          {market.loading ? "Connecting to the building…" : market.demo ? "Building Pi unreachable — no offer is being invented." : "Live from the building Pi"}
+        </span>
       </section>
 
       {err && <section className="card text-sm text-bad">{err}</section>}
 
-      {list.length === 0 && <section className="card text-sm text-muted">No spare solar right now. Check back at noon.</section>}
+      {offer ? (
+        <section className="card flex flex-col gap-3 rounded-[14px]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-medium tracking-wider text-sun-ink">
+              METERED OFFER · UNTIL {new Date(offer.windowEnd * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toUpperCase()}
+            </span>
+            {arkivProof && <Proof kind="arkiv" id={arkivProof.key} label="Offer" />}
+          </div>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-3xl font-medium">{offer.kwh.toFixed(3)} kWh</span>
+            <span className="text-sm text-muted">{offer.price.toFixed(2)} USDC / kWh</span>
+          </div>
+          <div className="inner flex items-center justify-between p-3 text-sm">
+            <span className="flex items-center gap-2"><Icon name="lock" size={16} /> Prepay on Arc; undelivered energy is refunded</span>
+            <b>{(offer.kwh * offer.price).toFixed(4)} USDC</b>
+          </div>
+          <button type="button" className="btn min-h-[52px] text-[15px]" disabled={busy || !!bought} onClick={() => buy(offer)}>
+            {busy ? "Confirm in your wallet…" : bought ? "Prepaid on Arc" : "Buy this live offer"}
+          </button>
+          {bought && (
+            <a className="text-center text-xs font-medium text-link" href={txUrl(bought)} target="_blank" rel="noreferrer">View prepaid order on Arc</a>
+          )}
+          {offer.requestId && <Proof kind="hash" id={offer.requestId} label="0G request" className="self-start text-[11px]" />}
+        </section>
+      ) : (
+        <section className="card flex flex-col gap-1 rounded-[14px] text-sm">
+          <span className="font-medium">No live offer right now</span>
+          <span className="text-xs text-muted">
+            {open.length ? "A prepaid order is being delivered. The next offer appears after it settles." : "The next offer appears after a real 0G trade measures spare solar going to the grid."}
+          </span>
+        </section>
+      )}
 
-      {list.map((o) => {
-        const ends = new Date(o.windowEnd * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-        return (
-          <section key={o.key} className="card flex flex-col gap-3 rounded-[14px]">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-medium tracking-wider text-sun-ink">SPARE SOLAR · UNTIL {ends.toUpperCase()}</span>
-              <span className="mono text-[11px] text-muted">{o.requestId?.startsWith("0x") && o.requestId.length > 12 ? short(o.requestId) : o.requestId}</span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-3xl font-medium">{o.kwh} kWh</span>
-              <span className="text-sm text-muted">{o.price.toFixed(2)} USDC / kWh</span>
-            </div>
-            <div className="inner flex items-center justify-between p-3 text-sm">
-              <span className="flex items-center gap-2">
-                <Icon name="lock" size={16} /> Prepay, refund what isn't delivered
-              </span>
-              <b>{(o.kwh * o.price).toFixed(2)} USDC</b>
-            </div>
-            <button type="button" className="btn min-h-[52px] text-[15px]" disabled={!!bought[o.key] || busy === o.key} onClick={() => buy(o)}>
-              {busy === o.key ? "Confirm in your wallet…" : bought[o.key] ? (onChain ? "Prepaid on Arc" : "Reserved (demo)") : "Buy this solar"}
-            </button>
-            {typeof bought[o.key] === "string" && (
-              <a className="text-center text-xs font-medium text-link" href={txUrl(bought[o.key])} target="_blank" rel="noreferrer">
-                View on Arc · settled when the window closes, unused USDC comes back
-              </a>
-            )}
-          </section>
-        );
-      })}
+      {open.map((o) => (
+        <section key={o.order_id} className="card flex flex-col gap-2 rounded-[14px] text-sm">
+          <span className="font-medium text-good">Arc order #{o.order_id} · delivery in progress</span>
+          <span className="text-xs text-muted">
+            {(Number(o.want_wh) / 1000).toFixed(3)} kWh prepaid · settles {new Date(Number(o.deadline) * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          </span>
+          <span className="text-xs text-muted">0G can now route measured spare to this order. Any shortfall returns to the buyer automatically.</span>
+        </section>
+      ))}
     </div>
   );
 }

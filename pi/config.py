@@ -70,6 +70,7 @@ ARKIV_ENABLED = os.getenv("ARKIV_ENABLED", "true").lower() == "true"
 
 # Price for spare solar sold to nearby shops (USDC per kWh); the admin can change it in the app
 SHOP_PRICE_USDC = float(os.getenv("SHOP_PRICE_USDC", "0.08") or 0.08)
+MARKET_OFFER_TTL_MIN = int(os.getenv("MARKET_OFFER_TTL_MIN", "10") or 10)
 
 # Arc testnet (contracts deployed from Arc Studio, see contracts/README.md)
 ARC_RPC_URL = os.getenv("ARC_RPC_URL", "https://rpc.testnet.arc.io").strip()

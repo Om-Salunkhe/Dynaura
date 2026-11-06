@@ -293,9 +293,11 @@ class TradeLoop:
     snapshot() -> credits.py's window() (or {spare_wh, needs, shop_order_wh, window}) | None,
     and trades when there is spare. On the Pi: TradeLoop(lambda: App.credits.window(TRADE_EVERY_MIN), ...)."""
 
-    def __init__(self, snapshot, *, store=None, uploader=None, notify=None, speed: float | None = None):
+    def __init__(self, snapshot, *, store=None, uploader=None, notify=None, on_trade=None,
+                 speed: float | None = None):
         self.snapshot = snapshot
         self.store, self.uploader, self.notify = store, uploader, notify
+        self.on_trade = on_trade
         speed = speed if speed is not None else (config.SIM_SPEED if config.HW == "sim" else 1.0)
         self.interval_s = max(TRADE_MIN_GAP_S, config.TRADE_EVERY_MIN * 60 / max(speed, 0.001))
         self.last: dict | None = None
@@ -319,6 +321,11 @@ class TradeLoop:
                                       store=self.store, uploader=self.uploader, notify=self.notify,
                                       window=snap["window"])
             self.last["at"] = time.time()
+            if self.on_trade:
+                try:
+                    self.on_trade(self.last, snap)
+                except Exception:
+                    log.exception("marketplace callback failed")
             self.error = None
             return self.last
 

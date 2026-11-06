@@ -76,7 +76,6 @@ async def lifespan(_: FastAPI):
         # or straight away when 0G Storage is not set up.
         App.brain.on_decision = lambda did: None if App.uploader.ready() else App.arkiv.decision(did)
         App.uploader.on_root = lambda did, root: App.arkiv.decision(did)
-        App.brain.on_offer = lambda offer: App.arkiv.post("/offer", offer)
         App.brain.arkiv = App.arkiv
         App.arkiv.start()
     App.arc = Arc()
@@ -87,12 +86,16 @@ async def lifespan(_: FastAPI):
     App.cleaning.start()
     App.sales = ShopSettler(App.arc, App.brain, App.cleaning)
     if App.arkiv:
+        App.sales.on_offer = lambda offer: App.arkiv.post("/offer", offer)
         App.sales.on_sale = lambda sale: App.arkiv.post("/sale", sale)
+    App.brain.on_offer = App.sales.publish_plan_offer
     App.sales.start()
     App.scheduler = PlanScheduler(App.brain)
     App.scheduler.start()
     if credits.ENABLED:  # fair share + solar credits (dy-arkiv); off = no change
         App.credits = credits.Ledger(App.store, App.hw, App.arkiv, sales=App.sales, arc=App.arc)
+        App.sales.routed = lambda order: App.credits.routed_shop_wh(
+            order["day"], since=order.get("detected_at"), until=order.get("deadline"))
         App.credits.start()
         try:  # the 0G trader (dy-0g) routes each window's spare; without trader.py, no trades
             import trader
@@ -262,6 +265,10 @@ def set_price(body: dict, x_admin_key: str | None = Header(default=None)):
     """Admin sets the shop price: {"price_usdc": 0.08}"""
     require_admin(x_admin_key)
     App.brain.price = max(0.0, float(body.get("price_usdc", config.SHOP_PRICE_USDC)))
+    # All live pricing reads this value.  Retire any already-advertised offer so the next
+    # measured-spare trade is published at the same price the Arc contract will charge.
+    config.SHOP_PRICE_USDC = App.brain.price
+    App.sales.offer = None
     out = {"price_usdc": App.brain.price}
     if App.arc.enabled and App.arc.shop:  # the on-chain price is what shops actually pay
         try:
@@ -344,7 +351,7 @@ def sales():
 
 @app.post("/api/admin/settle/{order_id}")
 def settle_now(order_id: int, x_admin_key: str | None = Header(default=None)):
-    """Settle a shop order now instead of waiting for the end of the solar window (demo)."""
+    """Settle a shop order now instead of waiting for its delivery deadline."""
     require_admin(x_admin_key)
     try:
         return App.sales.settle(order_id)
@@ -414,6 +421,7 @@ def _trade_loop(trader, minutes: float | None = None):
     loop = trader.TradeLoop(None, store=App.store, uploader=App.uploader, notify=App.brain.notify)
     win = minutes or max(1, round(loop.interval_s / 60))
     loop.snapshot = lambda: App.credits.window(int(win))
+    loop.on_trade = lambda trade, snap: App.sales.offer_from_trade(trade, snap)
     return loop
 
 
@@ -426,6 +434,12 @@ def get_credits(period: str = "today"):
         return App.credits.period(period)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/marketplace")
+def marketplace():
+    """The real market: current metered/0G offer, prepaid Arc orders and settled sales."""
+    return {**App.sales.status, "trader": App.trader.status() if App.trader else None}
 
 
 @app.post("/api/admin/credits/trade")
