@@ -210,6 +210,7 @@ class Ledger:
         self._status: dict[str, tuple[float, dict]] = {}  # key -> (fetched at, credits_status)
         self._claims: dict[str, tuple[float, dict]] = {}  # key -> (fetched at, {flat: claim tx})
         self.sales = sales  # ShopSettler: today's open shop orders are the shop's demand
+        self.live_minute = None  # meter.MeterLoop.partial: the minute in progress, for "sell now"
         self.weights = parse_shares(shares if shares is not None else os.getenv("FLAT_SHARES", ""))
         self._db = sqlite3.connect(path or CREDITS_DB, check_same_thread=False, isolation_level=None)
         self._db.execute("PRAGMA journal_mode=WAL")
@@ -285,9 +286,26 @@ class Ledger:
             for m, wh in self._acc.items():
                 if start <= m < end:
                     avail[m] = wh
+        reads_avail = bool(getattr(self.hw, "panel_meter_reads_available", False))
         for m, r in rows.items():
             r["available_wh"] = avail.get(m, r["panel_wh"])
+            if reads_avail:  # the real panel meter shows the sun it could give, not what was drawn:
+                r["available_wh"] = max(r["available_wh"], r["panel_wh"])
+                r["panel_wh"] = round(sum(r["used"].values()), 6)  # drawn = the flats' solar use
         return [rows[m] for m in sorted(rows)]
+
+    def current_minute(self) -> dict | None:
+        """The minute in progress as a row (unsigned), from the meter loop's running sums."""
+        part = self.live_minute() if self.live_minute else None
+        if not part:
+            return None
+        row = {**part, "used": dict(part.get("used") or {})}
+        with self._lock:
+            row["available_wh"] = self._acc.get(row["minute"], row.get("panel_wh", 0.0))
+        if getattr(self.hw, "panel_meter_reads_available", False):
+            row["available_wh"] = max(row["available_wh"], row.get("panel_wh", 0.0))
+            row["panel_wh"] = round(sum(row["used"].values()), 6)
+        return row
 
     def trades(self, start: int, end: int) -> list[dict]:
         out = []
@@ -360,14 +378,24 @@ class Ledger:
         out["claims"] = claims
         return out
 
-    def window(self, minutes: int = 15, now: float | None = None) -> dict:
+    def window(self, minutes: int = 15, now: float | None = None, include_now: bool = False) -> dict:
         """The last few minutes, for the 0G trader (pi/trader.py TradeLoop calls this as its
-        snapshot, with minutes = its own interval): how much is spare and who needs more."""
-        end = int((now or time.time()) // 60 * 60)
+        snapshot, with minutes = its own interval): how much is spare and who needs more.
+        include_now (the demo's "sell now") also counts the minute in progress, so half a minute of
+        lamp is already spare."""
+        now = now or time.time()
+        end = int(now // 60 * 60)
         start = end - minutes * 60
-        out = settle_period(self.minutes(start, end), self.weights, prices())
+        rows = self.minutes(start, end)
+        until = end
+        if include_now:
+            cur = self.current_minute()
+            if cur and cur["minute"] >= end:
+                rows.append(cur)
+                until = int(now)
+        out = settle_period(rows, self.weights, prices())
         p = prices()
-        return {"since": start, "until": end, "window": [start, end], "spare_wh": out["spare_wh"],
+        return {"since": start, "until": until, "window": [start, until], "spare_wh": out["spare_wh"],
                 "needs": {f: x["over_wh"] for f, x in out["flats"].items() if x["over_wh"] > 0},
                 "unused": {f: x["unused_wh"] for f, x in out["flats"].items()},
                 "shop_order_wh": self.shop_order_wh(now),

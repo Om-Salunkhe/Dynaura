@@ -256,12 +256,19 @@ class RealHardware(Hardware):
         with self._lock:
             return {name: self._read_one(name) for name in METERS}
 
+    @property
+    def panel_meter_reads_available(self) -> bool:
+        """True when the panel meter shows the sun the panel could give (its own load, or its voltage)
+        rather than what the flats drew from it. The credits ledger then takes what was drawn from the
+        flats' solar meters, so the panel reading isn't mistaken for a common load using up the spare."""
+        return self.panel_sense == "voltage" or _env("PANEL_READS_AVAILABLE", "true").lower() != "false"
+
     def solar_available_w(self) -> float | None:
         """What the panel could give right now. On this model the panel drives its own load and its
         INA219 reads that, so the panel meter IS the available sun (lamp brighter = more). The fair-share
         credits split this. Set PANEL_READS_AVAILABLE=false on a board where the panel feeds the flats
         (then the meter reads only what is drawn, and credits fall back to PANEL_AVAILABLE_W / PANEL_BEST_W)."""
-        if _env("PANEL_READS_AVAILABLE", "true").lower() == "false":
+        if not self.panel_meter_reads_available:
             return None
         last = self._last.get("panel")
         if last is None:
