@@ -34,7 +34,7 @@ An AI coding assistant (Claude Code) worked on the 0G part of Dynaura in this se
 | `zerog/` | Deployed and verified EpisodeRegistry on Galileo (`0xb62f4531…a984`) | Contract source readable on chainscan-galileo; `count()` / `device()` read back |
 | `pi/camera.py` | The frame Dyna looks at: uploaded photo, real camera command, fixed file, or (SIM only) the placeholder frames. On real hardware with no camera it returns nothing rather than a stock picture | `pi/tests/test_dust_check.py` |
 | `pi/assets/camera/` | Synthetic placeholder frames (clean / dusty), drawn with Python, to be replaced by real photos | Looked at both images |
-| `pi/dust.py` | `check_dust`: 0G vision model on the photo, else 0G text model on the meter readings (`input = "meter-only"`); records the `dust` decision and its episode; logs `no_check` and raises when 0G gives no verdict | Mocked 0G Router over HTTP: vision, missing vision model, no photo, no verdict, TEE failed, unreachable |
+| `pi/dust.py` | `check_dust`: 0G vision model on the photo, else 0G text model on the meter readings (`input = "meter-only"`); records the `dust` decision and its episode; raises (and records nothing) when 0G gives no verdict, so `pi/cleaning.py` logs `no_check` | Mocked 0G Router over HTTP: vision, missing vision model, no photo, no verdict, TEE failed, unreachable |
 | `pi/zg.py` | `model` parameter; a missing model is a separate error so the vision call can fall back | Same tests |
 
 Found by reading the Router's public `/models` list rather than assuming: 0G's own `0gm-1.0-35b-a3b` takes text and images and is the only TEE-attested (TDX) vision model listed, so it is the default `ZG_VISION_MODEL`.

@@ -156,17 +156,16 @@ def main():
     assert r["dirty"] is False and r["input"] == "meter-only" and r["frame_sha256"] is None, r
     assert store.decision(r["decision_id"])["summary"].startswith("0G: panel clean")
 
-    # 4. An answer without a true/false verdict: no verdict is invented
+    # 4. An answer without a true/false verdict: no verdict is invented, nothing is recorded here,
+    #    and the exception carries the 0G call for the caller's no_check record
     ROUTER["text_answer"] = "The panel might be a bit dirty, hard to say."
-    n = len(up.episodes)
+    n_dec, n_ep = len(store.decisions(limit=100)), len(up.episodes)
     try:
-        dust.check_dust(None, ctx, store=store, uploader=up)
+        zg.check_dust(None, ctx, store=store, uploader=up)  # the zg shortcut
         raise AssertionError("made up a verdict")
     except zg.ZGUnavailable as e:
-        d = store.decision(e.decision_id)
-        assert (d["kind"], d["mode"], d["output"]["state"]) == ("dust", "no-ai", "no_check"), d
-        assert d["request_id"], "the 0G call that gave no verdict is still on record"
-    assert len(up.episodes) == n + 1  # the no_check episode is uploaded too
+        assert e.request_id and e.raw_answer.startswith("The panel might"), vars(e)
+    assert len(store.decisions(limit=100)) == n_dec and len(up.episodes) == n_ep
 
     # 5. TEE signature did not verify: refused like 0G being down
     ROUTER["text_answer"], ROUTER["tee"] = '{"dirty": true, "coverage_pct": 50, "reason": "x"}', False
@@ -174,7 +173,7 @@ def main():
         dust.check_dust(None, ctx, store=store, uploader=up)
         raise AssertionError("accepted an unverified answer")
     except zg.ZGUnavailable as e:
-        assert store.decision(e.decision_id)["output"]["state"] == "no_check"
+        assert "TEE" in str(e) and e.request_id is None  # refused before any answer was used
     ROUTER["tee"] = True
 
     # 6. 0G unreachable: raises, logs no_check, nothing else
@@ -185,9 +184,8 @@ def main():
         raise AssertionError("0G was down but a verdict came back")
     except zg.ZGUnavailable as e:
         assert not isinstance(e, zg.ZGModelUnavailable)
-        d = store.decision(e.decision_id)
-        assert d["mode"] == "no-ai" and d["request_id"] is None and d["output"]["state"] == "no_check", d
-    assert not [x for x in store.decisions("dust", 20) if x["mode"] == "ai" and x["id"] > d["id"]]
+        assert e.request_id is None and e.frame_sha256, vars(e)
+    assert len(store.decisions(limit=100)) == n_dec  # nothing recorded on any failure
 
     srv.shutdown()
     print("dust check + camera: all checks passed", flush=True)

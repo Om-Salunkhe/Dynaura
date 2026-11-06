@@ -131,6 +131,12 @@ def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2,
     return reply
 
 
+def check_dust(jpeg, ctx, **kw) -> dict:
+    """The 0G dust check lives in pi/dust.py (it records decisions); this is a shortcut to it."""
+    import dust
+    return dust.check_dust(jpeg, ctx, **kw)
+
+
 def extract_json(text: str) -> dict:
     """Models with 'thinking' may wrap JSON in prose or <think> blocks: take the last JSON object."""
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.S)

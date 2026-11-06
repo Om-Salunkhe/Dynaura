@@ -7,9 +7,10 @@
   cloud forecast instead, and says so (input = "meter-only"). That is still 0G's decision.
 - Records the decision (kind "dust", mode "ai") and uploads its episode log, photo included, to
   0G Storage like every other decision.
-- 0G unreachable, the TEE check failed, or no usable answer: records a "no_check" decision
-  (kind "dust", mode "no-ai") and raises zg.ZGUnavailable (with .decision_id). Nothing is flagged.
-  It never makes up a verdict.
+- 0G unreachable, the TEE check failed, or no true/false answer: raises zg.ZGUnavailable and records
+  nothing. The caller (pi/cleaning.py) logs the no_check decision; the exception carries
+  .request_id, .model, .raw_answer (when 0G did answer) and .frame_sha256 for it. It never makes up
+  a verdict.
 
 ctx: what the meter knows, e.g. {"measured_w": 2.1, "expected_w": 4.4, "output_pct": 48,
 "cloud_cover_pct": 10, "dust_pct": 70}. Any keys are passed to 0G as they are.
@@ -72,14 +73,12 @@ def check_dust(jpeg: bytes | None, ctx: dict, *, store, uploader=None, notify=No
         reply, kind = _ask(jpeg, ctx_text)
         verdict = _verdict(zg.extract_json(reply.text))
     except zg.ZGUnavailable as e:
-        did = store.add_decision(
-            "dust", "no-ai", "0G could not check the panel: nothing flagged, no money moved",
-            {"state": "no_check", "reason": str(e)[:300], "ctx": ctx, "frame_sha256": frame_sha},
-            request_id=reply.request_id if reply else None, model=reply.model if reply else None,
-            tee=reply.tee if reply else None, input=ctx_text)
-        _publish(did, uploader, notify, {"raw_answer": reply.text} if reply else None)
-        log.warning("dust check: no verdict (decision #%s): %s", did, e)
-        e.decision_id = did
+        # No verdict. Nothing is recorded here: the caller logs the no_check decision with these.
+        e.request_id = reply.request_id if reply else None
+        e.model = reply.model if reply else None
+        e.raw_answer = reply.text if reply else None
+        e.frame_sha256 = frame_sha
+        log.warning("dust check: no verdict from 0G: %s", e)
         raise
 
     pct = verdict["coverage_pct"]
