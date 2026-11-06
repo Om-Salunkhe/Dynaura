@@ -59,6 +59,8 @@ class ShopSettler:
                 order = self.arc.order(self._next)
                 if order["status"] == "open":
                     order["detected_at"] = now
+                    # the shop's prepay on Arc, so the app can link it as the sale's proof
+                    order["tx"] = self.arc.order_tx(self._next) if hasattr(self.arc, "order_tx") else None
                     # An offer is single-use. Once Arc proves a buyer prepaid it, never let the
                     # same measured capacity reappear after the order settles.
                     self.offer = None
@@ -90,8 +92,9 @@ class ShopSettler:
             wh = delivered_wh(o, self.cleaning.status if self.cleaning else None)
         paid, back, tx = self.arc.settle_order(order_id, wh)
         o.update(status="settled", delivered_wh=wh)
+        o["settle_tx"] = tx
         sale = {"order_id": order_id, "buyer": o["shop"], "kwh": wh / 1000, "usdc": paid,
-                "delivered_wh": wh, "refunded": back, "arc_tx": tx, "day": o["day"]}
+                "delivered_wh": wh, "refunded": back, "arc_tx": tx, "prepay_tx": o.get("tx"), "day": o["day"]}
         self.sales.insert(0, sale)
         log.info("order #%s settled: %s Wh, %.4f USDC to society, %.4f back to shop", order_id, wh, paid, back)
         if self.on_sale:

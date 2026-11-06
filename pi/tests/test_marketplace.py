@@ -24,6 +24,9 @@ class Arc:
     def order(self, order_id):
         return dict(self.orders[order_id])
 
+    def order_tx(self, order_id):
+        return f"0xprepaid{order_id}"
+
     def settle_order(self, order_id, delivered_wh):
         self.settled.append((order_id, delivered_wh))
         return delivered_wh * 0.08 / 1000, (self.orders[order_id]["want_wh"] - delivered_wh) * 0.08 / 1000, "0xsettled"
@@ -56,6 +59,7 @@ def test_marketplace():
     }
     market.step(now + 1)
     assert market.orders[1]["detected_at"] == now + 1
+    assert market.orders[1]["tx"] == "0xprepaid1", "the shop's prepay tx is the sale's first proof"
     assert market.status["offer"] is None, "the purchased offer is consumed, never shown twice"
     assert arc.settled == [], "a live offer created after 15:00 must not settle against the old default window"
 
@@ -66,6 +70,7 @@ def test_marketplace():
     assert arc.settled == [(1, 40)]
     assert sales[0]["delivered_wh"] == 40 and sales[0]["refunded"] > 0
     assert market.orders[1]["status"] == "settled"
+    assert market.orders[1]["settle_tx"] == "0xsettled" and sales[0]["prepay_tx"] == "0xprepaid1"
 
 
 if __name__ == "__main__":
