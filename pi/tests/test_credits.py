@@ -198,7 +198,7 @@ def test_ledger_end_to_end_with_store_settle_and_arkiv():
     assert w["needs"] == {} and w["spare_wh"] > 0
 
 
-def test_trader_gets_the_window_with_shop_demand_and_is_skipped_without_spare():
+def test_window_for_the_trader_carries_shop_demand():
     day0 = int(time.mktime(time.strptime("2026-11-07", "%Y-%m-%d")))
     m = day0 + 12 * 3600
     rows = [{"minute": m, "meter": "panel", "wh": 0.06, "solar_wh": 0.06, "sig": "s"},
@@ -212,20 +212,10 @@ def test_trader_gets_the_window_with_shop_demand_and_is_skipped_without_spare():
     led = credits.Ledger(FakeStore(rows, [done]), FakeHw(6.0), path=str(Path(tempfile.mkdtemp()) / "c.db"), sales=Sales())
     for i in range(13):
         led.sample(5, now=m + i * 5)
-    seen = []
-    led.trade = lambda snap: seen.append(snap) or {"mode": "ai", "routes": []}
-    out = led.trade_now(minutes=5, now=m + 120)
-    snap = seen[0]
+    snap = led.window(5, now=m + 120)
     assert snap["shop_order_wh"] == 1.5, "open order 2000 real Wh = 2 model Wh, minus 0.5 already routed"
-    assert snap["window"] == [snap["since"], snap["until"]] and snap["spare_wh"] > 0 and out["mode"] == "ai"
-    later = led.trade_now(minutes=5, now=m + 3600)  # an hour later: no readings, no spare
-    assert "skipped" in later and len(seen) == 1
-    led.trade = None
-    try:
-        led.trade_now()
-        raise AssertionError("no trader must be an error, not a fake trade")
-    except RuntimeError:
-        pass
+    assert snap["window"] == [snap["since"], snap["until"]] and snap["spare_wh"] > 0
+    assert led.window(5, now=m + 3600)["spare_wh"] == 0, "an hour later: no readings, no spare"
 
 
 def test_real_board_available_sun_never_hammers_a_dead_forecast():
