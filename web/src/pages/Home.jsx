@@ -34,12 +34,6 @@ export default function Home() {
         <PageHeader
           kicker={`${flat.name} · ${flat.floor}`}
           title="Your energy"
-          right={
-            <span className="chip hidden border border-line bg-card-solid min-[400px]:inline-flex">
-              <Icon name="bolt" size={13} className="text-sun-ink" />
-              42 iAI
-            </span>
-          }
         />
         <AskBar />
       </div>

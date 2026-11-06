@@ -33,10 +33,7 @@ export default function TopNav({ items }) {
         </nav>
         <div className="flex flex-none items-center gap-3">
           {who.role === "resident" ? (
-            <span className="flex flex-col items-end leading-tight">
-              <span className="mono text-[11.5px] text-ink-2">flat-{who.flat.toLowerCase()}.dynaura.eth</span>
-              <span className="text-[11px] text-sun-ink">42 iAI credits</span>
-            </span>
+            <span className="mono text-[11.5px] text-ink-2">flat-{who.flat.toLowerCase()}.dynaura.eth</span>
           ) : (
             <span className="text-[12px] text-muted">Sunrise Apartments</span>
           )}
