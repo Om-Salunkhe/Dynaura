@@ -1,0 +1,127 @@
+/* Twin design tokens. Only loaded when the Twin design is on, and every rule is scoped to
+   html[data-design="twin"], so switching back to Current leaves nothing behind. */
+
+html:root[data-design="twin"] {
+  --t-bg: #f3f2ef;
+  --t-surface: #ffffff;
+  --t-ink: #1b1b1a;
+  --t-ink-2: #3a3936;
+  --t-muted: #6b6862;
+  --t-line: #dedbd5;
+  --t-building: #3b3b3d;
+  --t-building-2: #4a4a4d;
+  --t-solar: #f2a900;
+  --t-grid: #2f6fed;
+  --t-water: #1c9aa6;
+  --t-paid: #2e8b57;
+  --t-alert: #c2410c;
+
+  /* The shared chrome (nav, header, dialogs, banners) reads these: map them onto the twin palette */
+  --bg-1: var(--t-bg);
+  --bg-2: var(--t-bg);
+  --bg-3: var(--t-bg);
+  --card: var(--t-surface);
+  --card-solid: var(--t-surface);
+  --inner: #ecebe7;
+  --line: var(--t-line);
+  --ink: var(--t-ink);
+  --ink-2: var(--t-ink-2);
+  --muted: var(--t-muted);
+  --idle: var(--t-line);
+  --sun: var(--t-solar);
+  --sun-ink: #8a6100;
+  --sun-soft: rgba(242, 169, 0, 0.12);
+  --grid: var(--t-grid);
+  --good: var(--t-paid);
+  --bad: var(--t-alert);
+  --link: var(--t-ink);
+  --btn: var(--t-ink);
+  --btn-ink: #ffffff;
+  --nav: var(--t-surface);
+  --shadow: 0 1px 0 rgba(27, 27, 26, 0.04);
+  color-scheme: light;
+}
+
+html[data-design="twin"] body {
+  font-family: "IBM Plex Sans", "IBM Plex Sans Devanagari", system-ui, sans-serif;
+  background: var(--t-bg);
+  color: var(--t-ink);
+}
+
+/* Matte, not glass */
+html[data-design="twin"] .card {
+  border-radius: 14px;
+  background: var(--t-surface);
+  backdrop-filter: none;
+}
+html[data-design="twin"] .btn,
+html[data-design="twin"] .btn-ghost {
+  border-radius: 10px;
+}
+html[data-design="twin"] .mono,
+html[data-design="twin"] .t-mono {
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+
+/* ---- twin primitives -------------------------------------------------------- */
+.t-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.02em;
+}
+.t-caps {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t-muted);
+}
+.t-hair {
+  border-color: var(--t-line);
+}
+.t-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.t-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--t-line);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  color: var(--t-ink-2);
+  background: var(--t-surface);
+  white-space: nowrap;
+}
+a.t-chip:hover {
+  border-color: var(--t-ink);
+  color: var(--t-ink);
+}
+
+/* Energy flowing along a conduit: dashes move, speed set per path */
+@keyframes t-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+.t-flow {
+  stroke-dasharray: 10 18;
+  animation: t-flow linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-flow {
+    animation: none;
+  }
+}

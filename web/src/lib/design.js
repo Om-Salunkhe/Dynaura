@@ -22,7 +22,15 @@ function initial() {
   return "current";
 }
 
+// The Twin's tokens and fonts load only when it's on; the attribute scopes them
+function apply(d) {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.design = d;
+  if (d === "twin") import("../twin/theme.js");
+}
+
 let design = typeof window === "undefined" ? "current" : initial();
+apply(design);
 const subs = new Set();
 
 export function setDesign(d) {
@@ -31,6 +39,7 @@ export function setDesign(d) {
   try {
     localStorage.setItem(KEY, d);
   } catch {}
+  apply(d);
   subs.forEach((f) => f());
 }
 

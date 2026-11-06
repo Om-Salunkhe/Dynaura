@@ -119,7 +119,7 @@ export default function PanelHealth() {
 }
 
 /** The fallback: the committee posts a job by hand (the Pi normally does it). */
-function ManualPost({ hero }) {
+export function ManualPost({ hero }) {
   const [fee, setFee] = useState(panel.fee.toFixed(2));
   const [deadline, setDeadline] = useState(60);
   const [posted, setPosted] = useState(null);
