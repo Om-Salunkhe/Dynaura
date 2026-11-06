@@ -153,6 +153,13 @@ class FakeArc:
     def __init__(self):
         self.calls = []
 
+    def credits_status(self, period_id):
+        return {"posted": True, "total_in_usdc": 1.0, "period_id": None}
+
+    def credit_claims(self, period_id):
+        self.calls.append(("claims", period_id))
+        return {"A": "0xclaimA", "B": None}
+
     def post_credits(self, *a):
         self.calls.append(("post", a))
         return "0xpost"
@@ -198,8 +205,12 @@ def test_ledger_end_to_end_with_store_settle_and_arkiv():
     assert post[4] == 13000, "USDC base units per real kWh"
     fund = arc.calls[1][1]
     assert fund[1] == int(round((0.03 * 0.08 + 0.01 * 0.006) * 1e6)), fund
-    assert chain["post_tx"] == "0xpost" and led.period("2026-11-07", now=m)["chain"]["fund_tx"] == "0xfund"
-    assert led.settle(arc, "2026-11-07")["post_tx"] == "0xpost" and len(arc.calls) == 2, "settled once"
+    assert chain["post_tx"] == "0xpost"
+    led.arc = arc  # chain{} refreshes from the contract: claims appear, the posted period id stays
+    c = led.period("2026-11-07", now=m)["chain"]
+    assert c["fund_tx"] == "0xfund" and c["claims"]["A"] == "0xclaimA" and c["posted"] is True
+    assert c["period_id"] == "0x" + __import__("hashlib").sha256(b"dynaura-credits:2026-11-07").hexdigest()
+    assert led.settle(arc, "2026-11-07")["post_tx"] == "0xpost" and [x[0] for x in arc.calls].count("post") == 1, "settled once"
 
     class NotSetUp(FakeArc):  # arc.py without a key or ARC_CREDITS: a clear error, not a crash
         enabled, credits = False, None

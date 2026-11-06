@@ -303,20 +303,31 @@ class Ledger:
 
     def chain(self, key: str, saved: dict | None) -> dict | None:
         """chain{} for a period: what SolarCredits says now (claims change after settling), read at
-        most every 20 s, else what settle saved. Only for periods this Pi settled."""
+        most every 20 s, else what settle saved. Only for periods this Pi settled. Works with both
+        arc.py shapes: credits_status(key) next to credits_settle, or credits_status(period_id) +
+        credit_claims(period_id)."""
         arc = self.arc
         if not saved or not (arc and getattr(arc, "enabled", False) and getattr(arc, "credits", None) is not None
-                             and hasattr(arc, "credits_settle") and hasattr(arc, "credits_status")):
+                             and hasattr(arc, "credits_status")):
             return saved
         hit = self._status.get(key)
         if not hit or time.time() - hit[0] > 20:
             try:
-                hit = (time.time(), arc.credits_status(key))
+                if hasattr(arc, "credits_settle"):
+                    status = arc.credits_status(key)
+                else:
+                    pid = saved.get("period_id")
+                    status = dict(arc.credits_status(pid))
+                    if hasattr(arc, "credit_claims"):
+                        status["claims"] = arc.credit_claims(pid)
+                hit = (time.time(), status)
                 self._status[key] = hit
             except Exception as e:
                 log.info("SolarCredits status for %s failed: %s", key, str(e)[:120])
                 return saved
-        return {**saved, **{k: v for k, v in hit[1].items() if v is not None}}
+        out = {**saved, **{k: v for k, v in hit[1].items() if v is not None}}
+        out["period_id"] = saved.get("period_id") or out.get("period_id")  # the id claim() takes, as posted
+        return out
 
     def window(self, minutes: int = 15, now: float | None = None) -> dict:
         """The last few minutes, for the 0G trader (pi/trader.py TradeLoop calls this as its
