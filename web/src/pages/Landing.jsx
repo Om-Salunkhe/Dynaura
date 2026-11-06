@@ -80,10 +80,6 @@ function Hero() {
         <span className="g3" />
       </div>
       <div className="relative z-10 mx-auto flex max-w-[860px] flex-col items-center px-6 text-center">
-        <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[12px] text-white/70 backdrop-blur-md">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#f5a53c] shadow-[0_0_8px_#f5a53c]" />
-          Shared rooftop solar for apartment buildings
-        </span>
         <h1 className="m-0 text-[46px] font-light leading-[1.02] tracking-[-0.045em] sm:text-[80px]">
           One roof. Every flat.
           <br />
