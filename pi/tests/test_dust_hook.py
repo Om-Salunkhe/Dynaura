@@ -32,13 +32,20 @@ class FakeArc:
 
     def __init__(self):
         self.opened = []
+        self.request_ids = []
+        self.linked = []
 
-    def open_cleaning(self, fee, deadline, lvl):
+    def open_cleaning(self, fee, deadline, lvl, og_request_id=""):
         self.opened.append(lvl)
+        self.request_ids.append(og_request_id)
         return len(self.opened), "0xopen"
 
     def job(self, job_id):
-        return {"status": "open", "cleaner": None}
+        return {"status": "open", "cleaner": None, "output_after": 0}
+
+    def link_episode(self, job_id, root):
+        self.linked.append((job_id, root))
+        return "0xlink"
 
 
 def watch(confirm=None):
@@ -83,7 +90,15 @@ def main():
     w, arc = watch(confirmed)
     assert arc.opened and w.job["og_decision_id"], w.job
     assert w.job["og_request_id"] == "chat-dust-1", w.job
+    assert arc.request_ids[-1] == "chat-dust-1", arc.request_ids  # the 0G request ID goes on chain
     assert w.job["og_storage_root"] is None  # filled in after the 0G Storage upload
+
+    # The episode reaches 0G Storage later: its root is linked into the escrow once
+    w.store.set_decision(w.job["og_decision_id"], storage_root="0x" + "ab" * 32)
+    w.step()
+    w.step()
+    assert arc.linked == [(w.job["job_id"], "0x" + "ab" * 32)], arc.linked
+    assert w.job["og_storage_root"] == "0x" + "ab" * 32 and w.job["link_tx"] == "0xlink", w.job
 
     print("dust hook: all checks passed")
 

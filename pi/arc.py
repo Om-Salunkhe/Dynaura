@@ -24,7 +24,7 @@ ERC20_ABI = [
      "inputs": [{"name": "s", "type": "address"}, {"name": "v", "type": "uint256"}],
      "outputs": [{"name": "", "type": "bool"}]},
 ]
-JOB_STATUS = ["none", "open", "accepted", "paid", "refunded"]
+JOB_STATUS = ["none", "open", "accepted", "paid", "refunded", "cancelled", "disputed"]
 ORDER_STATUS = ["none", "open", "settled", "refunded"]
 
 
@@ -104,22 +104,33 @@ class Arc:
             self.send(self.usdc.functions.approve(spender, 2**256 - 1))
 
     # ---- cleaning escrow -------------------------------------------------
-    def open_cleaning(self, fee_usdc: float, deadline: int, output_pct: float) -> tuple[int, str]:
+    def open_cleaning(self, fee_usdc: float, deadline: int, output_pct: float, og_request_id: str = "") -> tuple[int, str]:
+        """og_request_id: the 0G request ID of the AI decision that flagged the panel (stored on chain)."""
         esc = self.need(self.escrow)
         units = to_units(fee_usdc)
         self.ensure_allowance(esc.address, units)
-        rcpt = self.send(esc.functions.openJob(units, int(deadline), int(round(output_pct))))
+        pct = max(0, min(100, int(round(output_pct))))
+        rcpt = self.send(esc.functions.openJob(units, int(deadline), pct, (og_request_id or "")[:128]))
         ev = esc.events.JobOpened().process_receipt(rcpt)[0]
         return ev["args"]["jobId"], self.tx_hash(rcpt)
 
     def job(self, job_id: int) -> dict:
         j = self.need(self.escrow).functions.jobs(job_id).call()
         return {"job_id": job_id, "payer": j[0], "cleaner": j[1], "fee_usdc": from_units(j[2]), "deadline": j[3],
-                "output_before": j[4], "output_after": j[5], "status": JOB_STATUS[j[6]]}
+                "output_before": j[4], "output_after": j[5], "status": JOB_STATUS[j[6]],
+                "proof": "0x" + j[7].hex() if any(j[7]) else None,
+                "og_storage_root": "0x" + j[8].hex() if any(j[8]) else None, "og_request_id": j[9] or None}
 
     def release_cleaning(self, job_id: int, output_pct: float, proof: bytes) -> str:
-        rcpt = self.send(self.need(self.escrow).functions.release(job_id, int(output_pct), proof))
+        rcpt = self.send(self.need(self.escrow).functions.release(job_id, min(100, int(output_pct)), proof))
         return self.tx_hash(rcpt)
+
+    def link_episode(self, job_id: int, root: str) -> str:
+        """Attach the 0G Storage root of the episode behind the job (once per job)."""
+        return self.tx_hash(self.send(self.need(self.escrow).functions.linkEpisode(job_id, bytes.fromhex(root.removeprefix("0x")))))
+
+    def cancel_cleaning(self, job_id: int) -> str:
+        return self.tx_hash(self.send(self.need(self.escrow).functions.cancel(job_id)))
 
     def refund_cleaning(self, job_id: int) -> str:
         return self.tx_hash(self.send(self.need(self.escrow).functions.refund(job_id)))
@@ -151,11 +162,14 @@ class Arc:
     def bill(self, bill_id: int) -> dict:
         x = self.need(self.billing).functions.bills(bill_id).call()
         return {"bill_id": bill_id, "flat": x[0], "month": x[1], "resident": x[2], "usdc": from_units(x[3]),
-                "solar_wh": x[4], "grid_wh": x[5], "readings_hash": "0x" + x[6].hex(), "paid": x[7], "paid_by": x[8]}
+                "solar_wh": x[4], "grid_wh": x[5], "readings_hash": "0x" + x[6].hex(), "paid": x[7], "paid_by": x[8],
+                "solar_usdc": from_units(x[9]), "grid_usdc": from_units(x[10])}
 
-    def post_bill(self, flat: str, month: str, resident: str | None, usdc: float, solar_wh: int, grid_wh: int,
-                  readings_hash: bytes) -> tuple[int, str]:
+    def post_bill(self, flat: str, month: str, resident: str | None, solar_usdc: float, grid_usdc: float,
+                  solar_wh: int, grid_wh: int, readings_hash: bytes) -> tuple[int, str]:
+        """On payment the solar part goes to the society treasury, the grid part to the grid payee."""
         b = self.need(self.billing)
         resident = Web3.to_checksum_address(resident) if resident else "0x" + "00" * 20
-        rcpt = self.send(b.functions.postBill(flat, month, resident, to_units(usdc), int(solar_wh), int(grid_wh), readings_hash))
+        rcpt = self.send(b.functions.postBill(flat, month, resident, to_units(solar_usdc), to_units(grid_usdc),
+                                              int(solar_wh), int(grid_wh), readings_hash))
         return b.events.BillPosted().process_receipt(rcpt)[0]["args"]["billId"], self.tx_hash(rcpt)

@@ -26,13 +26,15 @@ def compute(store, flat: str, month: str | None = None) -> dict:
     wh = sum(r["wh"] for r in rows) * config.BILL_SCALE
     solar = sum(r["solar_wh"] for r in rows) * config.BILL_SCALE
     grid = max(0.0, wh - solar)
-    usdc = round(solar / 1000 * config.SOLAR_RATE_USDC + grid / 1000 * config.GRID_RATE_USDC, 2)
+    solar_usdc = round(solar / 1000 * config.SOLAR_RATE_USDC, 2)  # paid to the society treasury
+    grid_usdc = round(grid / 1000 * config.GRID_RATE_USDC, 2)     # paid to the grid payee
+    usdc = round(solar_usdc + grid_usdc, 2)
     blob = json.dumps(sorted((r["minute"], r.get("sig")) for r in rows))
     return {
         "flat": flat, "month": month, "minutes": len(rows),
         "solar_kwh": round(solar / 1000, 2), "grid_kwh": round(grid / 1000, 2),
         "solar_pct": round(100 * solar / wh) if wh else 0,
-        "usdc": usdc, "solar_rate": config.SOLAR_RATE_USDC, "grid_rate": config.GRID_RATE_USDC,
+        "usdc": usdc, "solar_usdc": solar_usdc, "grid_usdc": grid_usdc, "solar_rate": config.SOLAR_RATE_USDC, "grid_rate": config.GRID_RATE_USDC,
         "saved_usdc": round(solar / 1000 * (config.GRID_RATE_USDC - config.SOLAR_RATE_USDC), 2),
         "readings_hash": hashlib.sha256(blob.encode()).digest(),
     }
@@ -63,7 +65,7 @@ def post_all(store, arc, month: str | None = None, on_bill=None) -> list[dict]:
         if arc.bill_id(f, month):
             out.append({**with_chain(arc, b), "skipped": "already posted"})
             continue
-        bid, tx = arc.post_bill(f, month, config.FLAT_WALLETS.get(f), b["usdc"],
+        bid, tx = arc.post_bill(f, month, config.FLAT_WALLETS.get(f), b["solar_usdc"], b["grid_usdc"],
                                 int(b["solar_kwh"] * 1000), int(b["grid_kwh"] * 1000), b["readings_hash"])
         row = {**with_chain(arc, b), "arc_tx": tx, "posted_at": int(time.time())}
         out.append(row)
