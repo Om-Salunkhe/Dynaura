@@ -58,6 +58,7 @@ class ArkivQueue:
         self._stop = threading.Event()
         self._heartbeat: dict | None = None
         self._db = sqlite3.connect(outbox_path or OUTBOX_PATH, check_same_thread=False, isolation_level=None)
+        self._replies = {}  # outbox row id -> callback for the bridge's reply (functions can't go in the outbox)
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("""CREATE TABLE IF NOT EXISTS outbox (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,11 +77,15 @@ class ArkivQueue:
             self._wake.set()
             return
         key = f"daily:{body.get('day')}" if path == "/daily" else None
+        body = dict(body)
+        on_reply = body.pop("_on_reply", None)  # kept in memory: only the record itself is stored
         with self._lock:
             if key:
                 self._db.execute("DELETE FROM outbox WHERE coalesce_key = ?", (key,))
-            self._db.execute("INSERT INTO outbox (path, body, coalesce_key, created) VALUES (?, ?, ?, ?)",
-                             (path, json.dumps(body), key, time.time()))
+            rid = self._db.execute("INSERT INTO outbox (path, body, coalesce_key, created) VALUES (?, ?, ?, ?)",
+                                   (path, json.dumps(body), key, time.time())).lastrowid
+            if on_reply is not None:
+                self._replies[rid] = on_reply
             over = self._db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0] - self._max_rows
             if over > 0:
                 shed = self._db.execute("DELETE FROM outbox WHERE id IN (SELECT id FROM outbox WHERE path = '/readings' "
@@ -179,8 +184,11 @@ class ArkivQueue:
         if row is None or row[4] > now:
             return did  # empty, or the oldest record is backing off: keep the order, wait
         rid, path, body, tries, _ = row
+        record = json.loads(body)
+        if rid in self._replies:
+            record["_on_reply"] = self._replies[rid]  # _send pops it and calls it with the bridge's reply
         try:
-            self._send(path, json.loads(body))
+            self._send(path, record)
         except Exception as e:
             err = str(e)[:200]
             self.ok, self.last_error = False, err
@@ -193,11 +201,13 @@ class ArkivQueue:
             else:
                 with self._lock:
                     self._db.execute("DELETE FROM outbox WHERE id = ?", (rid,))
+                self._replies.pop(rid, None)
                 self.dropped += 1
                 log.error("Arkiv %s dropped, won't succeed or must not be resent: %s", path, err)
             return did
         with self._lock:
             self._db.execute("DELETE FROM outbox WHERE id = ?", (rid,))
+        self._replies.pop(rid, None)
         self.ok, self.last_error = True, None
         return True
 

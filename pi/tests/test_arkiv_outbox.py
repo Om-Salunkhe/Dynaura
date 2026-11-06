@@ -147,6 +147,19 @@ def test_bounded_sheds_oldest_readings_never_decisions():
     assert [b["summaries"][0]["minute"] for p, b in bridge.got if p == "/readings"] == [3, 4], "newest readings kept"
 
 
+def test_reply_callback_is_kept_in_memory_not_in_the_outbox():
+    # The cleaning flow attaches _on_reply (a function) to keep the Arkiv key; json can't store it.
+    bridge = FakeBridge()
+    q = queue("reply_cb", bridge)
+    got = []
+    q.post("/cleaning_job", {"id": 3, "state": "flagged", "_on_reply": lambda out: got.append(out.get("key"))})
+    assert q.backlog()["waiting"] == 1, "stored without the callback"
+    bridge.up = True
+    drain(q)
+    assert got == ["0xkey1"], got
+    assert "_on_reply" not in bridge.got[0][1], "the callback never goes to the bridge"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
