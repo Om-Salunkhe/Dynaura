@@ -35,7 +35,7 @@ export function TradeRow({ t }) {
   return (
     <div className="flex flex-col gap-1 border-t border-line py-2.5 first-of-type:border-0">
       <span className="text-[11px] text-muted">
-        {windowText(t.window) || (t.at ? time(t.at) : "")} · {t.mode === "ai" ? "decided on 0G" : "no-ai: 0G unreachable, spare to the grid"}
+        {windowText(t.window) || (t.at ? time(t.at) : "")} · {t.mode === "ai" ? "decided on 0G" : "Fixed rule, 0G offline"}
       </span>
       <span className="text-[13px]">
         {t.routes
@@ -44,9 +44,14 @@ export function TradeRow({ t }) {
           .join(" · ")}
       </span>
       {t.reason && <span className="text-[12px] text-ink-2">“{t.reason}”</span>}
-      {t.mode === "ai" && t.request_id && (
-        <span className="mono text-[11px] text-muted" title={t.request_id}>
-          0G · req {isFakeId(t.request_id) ? "demo" : shortId(t.request_id)}
+      {((t.mode === "ai" && t.request_id) || t.key) && (
+        <span className="flex flex-wrap items-center gap-2">
+          {t.mode === "ai" && t.request_id && (
+            <span className="mono text-[11px] text-muted" title={t.request_id}>
+              0G · req {isFakeId(t.request_id) ? "demo" : shortId(t.request_id)}
+            </span>
+          )}
+          {t.key && <Proof kind="arkiv" id={t.key} label="Read from Arkiv" className="text-[11px]" />}
         </span>
       )}
     </div>
@@ -154,7 +159,25 @@ export default function FairShare({ flat }) {
 
 /** The period on Arc (SolarCredits): claim what's owed, or pay in for sun bought from neighbours. */
 function OnChain({ flat, chain, claimTxFromPi }) {
-  const on = useCreditsChain(chain.period_id, flat);
+  const read = useCreditsChain(chain.period_id, flat);
+  // The browser reads SolarCredits itself; if Arc's RPC can't be reached from here, use what the
+  // Pi read from the contract (chain.flats[f], refreshed every ~20 s)
+  const pi = chain.flats?.[flat];
+  const on =
+    read?.error && pi
+      ? {
+          posted: true,
+          inPeriod: true,
+          claimable: Number(pi.claimable_usdc) || 0,
+          claimed: pi.claimed ? Number(pi.claimed_usdc) || 0 : 0,
+          paidIn: !!pi.paid_in,
+          owesUnits: BigInt(Math.round((Number(pi.owes_usdc) || 0) * 1e6)),
+          wallet: pi.wallet,
+          noWallet: !pi.wallet || /^0x0{40}$/i.test(pi.wallet),
+          viaPi: true,
+          reload: read.reload,
+        }
+      : read;
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
   const [tx, setTx] = useState(null);
@@ -220,6 +243,7 @@ function OnChain({ flat, chain, claimTxFromPi }) {
           </>
         ))}
       {doneTx && <Proof kind="arc" id={doneTx} label="Arc tx" className="self-start text-xs" />}
+      {on.viaPi && <span className="text-[11px] text-muted">Arc isn't reachable from this browser: showing the Pi's read of SolarCredits.</span>}
       {err && <span className="text-[12px] text-bad">{err}</span>}
     </>,
   );

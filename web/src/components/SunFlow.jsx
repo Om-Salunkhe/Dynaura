@@ -1,5 +1,6 @@
 // Building page: where today's sun went. Panel -> Flats A, B, C, the pump, the shop, the grid as
 // thin horizontal bars, and the latest 0G trade decision with its reason.
+import { fetchTrades, useArkiv } from "../lib/arkiv.js";
 import { periodFlats, units, useCredits } from "../lib/credits.js";
 import { TradeRow, soldTrades } from "./FairShare.jsx";
 
@@ -7,6 +8,8 @@ const TONE = { flat: "bg-sun", pump: "bg-[#2F9E6A]", shop: "bg-ink-2", grid: "bg
 
 export default function SunFlow() {
   const c = useCredits("today");
+  // The latest trade straight from Arkiv (dynaura.trade) when the Pi is live; never in demo mode
+  const ark = useArkiv(() => (c.status === "live" ? fetchTrades({ limit: 1 }) : Promise.resolve([])), null, [c.status]);
   if (c.status === "off" || c.status === "loading" || !c.data) return null;
   const d = c.data;
   const total = Math.max(d.available_wh || 0, 1);
@@ -20,7 +23,15 @@ export default function SunFlow() {
     { key: "shop", label: "Shop", wh: d.pool?.shop_wh || 0, tone: TONE.shop, note: d.pool?.prices?.shop != null ? `at ${d.pool.prices.shop} a unit` : "" },
     { key: "grid", label: "Grid", wh: d.pool?.grid_wh || 0, tone: TONE.grid, note: d.pool?.prices?.export != null ? `feed-in at ${d.pool.prices.export}` : "" },
   ];
-  const last = soldTrades(d.trades).slice(-1)[0];
+  const piLast = soldTrades(d.trades).slice(-1)[0];
+  const k = Number(d.scale?.real_kwh_per_wh) || 1;
+  const a = c.status === "live" && Array.isArray(ark.data) ? ark.data[0] : null;
+  const arkLast =
+    a && soldTrades([a]).length
+      ? { at: a.at, routes: (a.routes || []).map((r) => ({ ...r, wh: r.wh * k })), request_id: a.requestId, mode: a.mode, reason: a.reason, key: a.key }
+      : null;
+  // Arkiv can lag the Pi by a write or two: use its record unless the Pi has a newer trade
+  const last = arkLast && (!piLast || arkLast.at >= (piLast.at || 0) - 60) ? arkLast : piLast;
 
   return (
     <section className="card flex flex-col gap-3 rounded-[14px]">
