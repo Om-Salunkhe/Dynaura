@@ -1,5 +1,7 @@
+import { lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
+import Variant from "./components/Variant.jsx";
 import { RoleProvider, useRole } from "./lib/role.jsx";
 import { useTheme } from "./lib/theme.js";
 import AdminOverview from "./pages/AdminOverview.jsx";
@@ -35,22 +37,31 @@ const NAV = {
 
 const HOME = { resident: "/", admin: "/admin", cleaner: "/jobs", shop: "/shop" };
 
+// The Twin design (an option under review): loaded only when it's switched on
+const Twin = {
+  Home: lazy(() => import("./twin/Home.jsx")),
+  Building: lazy(() => import("./twin/Building.jsx")),
+  PanelHealth: lazy(() => import("./twin/PanelHealth.jsx")),
+  CleanerJobs: lazy(() => import("./twin/CleanerJobs.jsx")),
+  Demo: lazy(() => import("./twin/Demo.jsx")),
+};
+
 function Routed() {
   const [who] = useRole();
   return (
     <Routes>
       <Route path="/ask" element={<AskDyna />} />
-      <Route path="/demo" element={<Demo />} />
+      <Route path="/demo" element={<Variant current={Demo} twin={Twin.Demo} />} />
       <Route element={<Layout nav={NAV[who.role]} />}>
-        <Route path="/" element={who.role === "resident" ? <Home /> : <Navigate to={HOME[who.role]} replace />} />
+        <Route path="/" element={who.role === "resident" ? <Variant current={Home} twin={Twin.Home} /> : <Navigate to={HOME[who.role]} replace />} />
         <Route path="/society" element={<Society />} />
-        <Route path="/building" element={<Building />} />
+        <Route path="/building" element={<Variant current={Building} twin={Twin.Building} />} />
         <Route path="/bill" element={<Bill />} />
         <Route path="/history" element={<History />} />
         <Route path="/admin" element={<AdminOverview />} />
         <Route path="/admin/trading" element={<AdminTrading />} />
-        <Route path="/admin/panel" element={<PanelHealth />} />
-        <Route path="/jobs" element={<CleanerJobs />} />
+        <Route path="/admin/panel" element={<Variant current={PanelHealth} twin={Twin.PanelHealth} />} />
+        <Route path="/jobs" element={<Variant current={CleanerJobs} twin={Twin.CleanerJobs} />} />
         <Route path="/shop" element={<ShopOffers />} />
         <Route path="*" element={<Navigate to={HOME[who.role]} replace />} />
       </Route>

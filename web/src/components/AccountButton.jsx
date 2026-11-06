@@ -67,7 +67,7 @@ export default function AccountButton() {
             className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 text-sm font-semibold hover:bg-inner"
           >
             <Icon name="lock" size={16} />
-            Connection & admin key
+            Connection & settings
           </button>
           <button
             type="button"

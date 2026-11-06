@@ -13,6 +13,7 @@ import {
   setPiUrl,
   useConnection,
 } from "../lib/connection.js";
+import { DESIGNS, setDesign, useDesign } from "../lib/design.js";
 import Icon from "./Icon.jsx";
 
 /** "Live · Pi dynaura.local:8000" or "Demo data · Pi not reachable (no answer)" */
@@ -86,6 +87,7 @@ export function MixedContentBanner() {
 /** The Connection dialog: Pi address (change, test, reset) and the admin key (unlock, lock). */
 export function ConnectionDialog() {
   const conn = useConnection();
+  const design = useDesign();
   const [url, setUrl] = useState(conn.piUrl);
   const [key, setKey] = useState("");
   const [check, setCheck] = useState(null);
@@ -137,12 +139,12 @@ export function ConnectionDialog() {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Connection"
+        aria-label="Connection and settings"
         className="flex w-full max-w-md flex-col gap-3 rounded-[26px] border border-line bg-card-solid p-5 shadow-nav"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <span className="text-lg font-extrabold">Connection</span>
+          <span className="text-lg font-extrabold">Connection &amp; settings</span>
           <button type="button" aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full bg-inner" onClick={closeConnection}>
             <Icon name="close" size={16} />
           </button>
@@ -194,6 +196,28 @@ export function ConnectionDialog() {
             />
           </label>
         )}
+
+        <div className="my-1 h-px bg-line" />
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex flex-col">
+            <span className="text-sm font-bold">Design</span>
+            <span className="text-[11px] text-muted">Twin is a new design under review. Also: ?design=twin</span>
+          </span>
+          <span role="radiogroup" aria-label="Design" className="flex rounded-xl bg-inner p-1">
+            {DESIGNS.map((d) => (
+              <button
+                key={d.key}
+                type="button"
+                role="radio"
+                aria-checked={design === d.key}
+                onClick={() => setDesign(d.key)}
+                className={`min-h-[36px] rounded-lg px-3 text-xs font-bold ${design === d.key ? "bg-btn text-btn-ink" : "text-muted"}`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </span>
+        </div>
 
         <button type="button" className="btn" onClick={save}>
           {key.trim() ? "Save and unlock admin" : "Save"}
