@@ -6,6 +6,7 @@ Dynaura's USDC contracts on Arc. They are **generated, tested and deployed in Ar
 |---|---|
 | `CleaningEscrow` | The panel is dusty, so its cleaning fee is locked in USDC. A cleaner accepts the job, and **the meter releases the fee once output is back to at least 90%**. If nobody cleans it by the deadline, the society is refunded. The cleaner can dispute (on a cloudy day, for example), and the committee then decides. Each job carries the **0G request ID** of the AI decision that opened it and the **0G Storage root** of that decision's episode log, and each payout carries the hash of the meter readings that proved the clean. |
 | `ShopTrade` | A nearby shop prepays for spare noon solar. After the window, the meter settles **in one transaction**: the society is paid per Wh delivered (rounded down) and the shop gets the rest back. If the meter never settles, the shop takes its deposit back after the deadline. |
+| `SolarCredits` | **Fair share of the spare sun.** Each period the Pi posts, per flat, how much of its fair share it left **unused** and how much it used **over** its share. Flats that used more pay their neighbours (`payIn`: over × the neighbour rate), and shop and grid revenue is added (`fund`). Each flat then claims **pool × its unused / everyone's unused**, computed on chain, to its registered wallet. With Pawan's numbers, A left 30 kWh and B left 10 kWh, so A is paid 3× B, where an equal split pays them the same. Reusable for any "pay contributors by measured contribution". |
 | `SolarBilling` | Each month the meter posts each flat's bill, computed from that flat's own meter, along with the hash of the signed readings behind it. **One payment is split by where the power came from:** the solar part goes to the society treasury and the grid part to the electricity board. |
 
 ## Shared rules
@@ -29,17 +30,31 @@ resolve(jobId, payCleaner)                            committee                 
 refund(jobId)                                         anyone, after the deadline (disputed: +3 days) -> Refunded
 ```
 
+## Fair share, step by step (SolarCredits)
+
+```
+register(flat, wallet)                         committee: the flat's wallet (once, or to replace it)
+postPeriod(periodId, flats, unusedWh, overWh,  the Pi, once per period: energy in Wh of the real building,
+           neighborRate, readingsHash)            rate in micro-USDC per Wh, hash of the signed readings
+payIn(periodId, flat)                           a flat that used over its share pays over x rate (once)
+fund(periodId, amount)                          shop + grid revenue into the pool
+claim(periodId, flat)                           anyone; pays pool x unused / sum(unused) - already claimed
+                                                to the flat's registered wallet
+```
+
+Claims are cumulative, so money that arrives later is shared out the same way, and nothing is paid twice. Rounding is down: under 1 micro-USDC per flat per period stays in the contract. The period id is `sha256("dynaura-credits:<day>")`.
+
 ## Tests
 
-**211 Foundry tests:**
-- `test/*.t.sol`: 161 tests written by Arc Studio, including fuzz and invariant tests.
-- `test/acceptance/`: our 50 tests, written independently from the same spec. They ran inside Studio too, and Studio didn't change them.
+**318 Foundry tests:**
+- `test/*.t.sol`: 253 tests written by Arc Studio, including fuzz, invariant and reentrancy tests.
+- `test/acceptance/`: our 65 tests, written independently from the same spec before the code existed (15 of them for SolarCredits). They ran inside Studio too, and Studio didn't change them.
 
 ```bash
 cd contracts
 npm install                                   # OpenZeppelin + solc for the ABIs
 forge install foundry-rs/forge-std --no-git   # once
-forge test                                    # 211 tests
+forge test                                    # 318 tests
 npm run build                                 # writes abi/*.json (read by pi/ and web/)
 ```
 
