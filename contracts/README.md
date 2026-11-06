@@ -6,6 +6,7 @@ Dynaura's USDC contracts on Arc. They are **generated, tested and deployed in Ar
 |---|---|
 | `CleaningEscrow` | The panel is dusty, so its cleaning fee is locked in USDC. A cleaner accepts the job, and **the meter releases the fee once output is back to at least 90%**. If nobody cleans it by the deadline, the society is refunded. The cleaner can dispute (on a cloudy day, for example), and the committee then decides. Each job carries the **0G request ID** of the AI decision that opened it and the **0G Storage root** of that decision's episode log, and each payout carries the hash of the meter readings that proved the clean. |
 | `ShopTrade` | A nearby shop prepays for spare noon solar. After the window, the meter settles **in one transaction**: the society is paid per Wh delivered (rounded down) and the shop gets the rest back. If the meter never settles, the shop takes its deposit back after the deadline. |
+| `SolarCredits` | **Fair share of the spare sun.** Each period the Pi posts, per flat, how much of its fair share it left **unused** and how much it used **over** its share. Flats that used more pay their neighbours (`payIn`: over × the neighbour rate), and shop and grid revenue is added (`fund`). Each flat then claims **pool × its unused / everyone's unused**, computed on chain, to its registered wallet. With Pawan's numbers, A left 30 kWh and B left 10 kWh, so A is paid 3× B, where an equal split pays them the same. Reusable for any "pay contributors by measured contribution". |
 | `SolarBilling` | Each month the meter posts each flat's bill, computed from that flat's own meter, along with the hash of the signed readings behind it. **One payment is split by where the power came from:** the solar part goes to the society treasury and the grid part to the electricity board. |
 
 ## Shared rules
@@ -29,25 +30,39 @@ resolve(jobId, payCleaner)                            committee                 
 refund(jobId)                                         anyone, after the deadline (disputed: +3 days) -> Refunded
 ```
 
+## Fair share, step by step (SolarCredits)
+
+```
+register(flat, wallet)                         committee: the flat's wallet (once, or to replace it)
+postPeriod(periodId, flats, unusedWh, overWh,  the Pi, once per period: energy in Wh of the real building,
+           neighborRate, readingsHash)            rate in micro-USDC per Wh, hash of the signed readings
+payIn(periodId, flat)                           a flat that used over its share pays over x rate (once)
+fund(periodId, amount)                          shop + grid revenue into the pool
+claim(periodId, flat)                           anyone; pays pool x unused / sum(unused) - already claimed
+                                                to the flat's registered wallet
+```
+
+Claims are cumulative, so money that arrives later is shared out the same way, and nothing is paid twice. Rounding is down: under 1 micro-USDC per flat per period stays in the contract. The period id is `sha256("dynaura-credits:<day>")`.
+
 ## Tests
 
-**211 Foundry tests:**
-- `test/*.t.sol`: 161 tests written by Arc Studio, including fuzz and invariant tests.
-- `test/acceptance/`: our 50 tests, written independently from the same spec. They ran inside Studio too, and Studio didn't change them.
+**318 Foundry tests:**
+- `test/*.t.sol`: 253 tests written by Arc Studio, including fuzz, invariant and reentrancy tests.
+- `test/acceptance/`: our 65 tests, written independently from the same spec before the code existed (15 of them for SolarCredits). They ran inside Studio too, and Studio didn't change them.
 
 ```bash
 cd contracts
 npm install                                   # OpenZeppelin + solc for the ABIs
 forge install foundry-rs/forge-std --no-git   # once
-forge test                                    # 211 tests
+forge test                                    # 318 tests
 npm run build                                 # writes abi/*.json (read by pi/ and web/)
 ```
 
 Mock tokens (`test/MockUSDC.sol`, `test/acceptance/AcceptanceUSDC.sol`) exist only for these tests. Never deploy them.
 
-## On-chain proof (Arc testnet, Fri 6 Nov)
+## On-chain proof (Arc testnet, Fri 6 and Sat 7 Nov)
 
-The whole flow, run for real with `scripts/committee.mjs` and `scripts/e2e.mjs`. Every hash is in `deployments.json` under `demoTxs`.
+The whole flow, run for real with `scripts/committee.mjs`, `scripts/e2e.mjs` and `scripts/credits.mjs`. Every hash is in `deployments.json` under `demoTxs`.
 
 | Step | What happened | Transaction |
 |---|---|---|
@@ -63,6 +78,13 @@ The whole flow, run for real with `scripts/committee.mjs` and `scripts/e2e.mjs`.
 | Ownership | The Pi hands CleaningEscrow to the committee (`transferOwnership`, then `acceptOwnership`) | [`0x0e14b7c0…`](https://explorer.testnet.arc.io/tx/0x0e14b7c01fe353818179ad5767555fe06ce95f053efc9249c580807d439d5229) |
 | Ownership | The same for ShopTrade | [`0x765ae598…`](https://explorer.testnet.arc.io/tx/0x765ae598786d70075dc0dd3aa317085aca5959ee819ddf8f8d9d05576b7ec67f) |
 | Ownership | The same for SolarBilling | [`0xcbb5c44e…`](https://explorer.testnet.arc.io/tx/0xcbb5c44ede94b5bedbdd33e0231a8d3d82ee773033ea17106a07e350be7e0c10) |
+| Fair share | Arc Studio deploys SolarCredits (owner = committee, oracle = Pi) | [`0x4f546ec8…`](https://explorer.testnet.arc.io/tx/0x4f546ec80336d1e7fb52bd73ec35b615fb56ffc0d49f8dc0554fecec974dff41) |
+| Fair share | The committee registers each flat's wallet (`register`, shown for A) | [`0x20c96997…`](https://explorer.testnet.arc.io/tx/0x20c96997fe4bdedf2eca3d1a0af02e44cd66e1d1a14c396cbc95e9faf2d61485) |
+| Fair share | The Pi posts Pawan's day: A left 30 kWh unused, B 10 kWh, C used 20 kWh over its share (`postPeriod`) | [`0x1e4bf2ca…`](https://explorer.testnet.arc.io/tx/0x1e4bf2cac3395c5dcf02af6715886af4ac7681a2e6018fb08e91ccd06dea6cea) |
+| Fair share | C pays its neighbours for the 20 kWh: 0.26 USDC (`payIn`) | [`0x039349e2…`](https://explorer.testnet.arc.io/tx/0x039349e236a5f9fca86337da44268d0032140d264024ddf137c9c59a781b45a0) |
+| Fair share | Shop and grid revenue goes into the pool: 0.14 USDC (`fund`) | [`0x59fb00a5…`](https://explorer.testnet.arc.io/tx/0x59fb00a5149233c3e787712564b77861cf4fb236a8e32cb37d42fe7def501f7f) |
+| Fair share | **A claims 0.30 USDC**: pool × 30 / 40, computed on chain (`claim`) | [`0xe26af95a…`](https://explorer.testnet.arc.io/tx/0xe26af95abbb552d6a1a1915ae68318afef9c465c4999d2faf9197afbd4c65339) |
+| Fair share | **B claims 0.10 USDC**: pool × 10 / 40. An equal split would have paid each 0.20 (`claim`) | [`0x3611a780…`](https://explorer.testnet.arc.io/tx/0x3611a7805a4be62f073dfd899f42f36414e521cef70f3d118f4e3e37fb498283) |
 
 | Role | Wallet |
 |---|---|

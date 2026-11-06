@@ -79,6 +79,9 @@ ARC_USDC = os.getenv("ARC_USDC", "0x3600000000000000000000000000000000000000").s
 ARC_ESCROW = os.getenv("ARC_ESCROW", "").strip()
 ARC_SHOP = os.getenv("ARC_SHOP", "").strip()
 ARC_BILLING = os.getenv("ARC_BILLING", "").strip()
+ARC_CREDITS = os.getenv("ARC_CREDITS", "").strip()   # SolarCredits: fair-share payouts (contracts/README.md)
+ARC_CREDITS_FROM_BLOCK = int(os.getenv("ARC_CREDITS_FROM_BLOCK", "0") or 0)  # its deploy block (for event lookups)
+BUILDING_ID = os.getenv("BUILDING_ID", "sunrise-apartments").strip()  # same id as the Arkiv bridge
 ARC_MIN_FEE_GWEI = float(os.getenv("ARC_MIN_FEE_GWEI", "20") or 20)
 
 # Panel cleaning: alert under DUST_PCT of the clean level, pay the cleaner at CLEAN_PCT or more

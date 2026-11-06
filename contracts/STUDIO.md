@@ -89,3 +89,16 @@ Project: https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852 (you nee
    - Studio built the app's frontend: a one-page escrow console with the jobs list, the actions each wallet is allowed (accept, dispute, cancel, refund) and a live event feed. The code is pulled into `studio/console/`.
    - Studio found that Arc's RPC rejects `eth_getLogs` filtered by several event topics, so the console fetches raw logs and decodes them in the browser.
    - **Public link:** the Studio project itself needs a Circle login. The Studio-built app can be published for free: in the workspace, open **Integrations** in the workbench header (or the **+** menu in the chat toolbar), connect Vercel, Netlify or Hugging Face, then ask Studio to "deploy this".
+
+## SolarCredits (Sat 7 Nov, fair share)
+
+1. **Tests before code:**
+   - We wrote `test/acceptance/SolarCredits.t.sol` (15 tests) from the spec before any contract existed, including Pawan's numbers: A saved 30 kWh, B saved 10 kWh, so A gets 3× B.
+   - We checked the tests against a throwaway reference implementation, so Studio wasn't handed a wrong test.
+2. **`credits`** (`studio/04-solar-credits.md`):
+   - Studio wrote `contracts/SolarCredits.sol` in the same project and left the three live contracts untouched.
+   - It ran its security and functional review plus static analysis: one low note (errors without context values, the same as the others).
+   - It added 91 tests: every revert and event, fuzz tests of the split, a balance invariant, and hostile-token reentrancy.
+   - Our 15 tests passed unchanged. Result: **318/318 green**, re-checked locally. `src/SolarCredits.sol` is byte-identical to Studio's.
+3. **`deploy-credits`** (`studio/05-deploy-credits.md`): Studio deployed it from its own wallet. The owner is the committee and the oracle the Pi, the same roles as the other three contracts.
+4. **`scripts/credits.mjs`** ran Pawan's day on Arc testnet. The transactions are in the README's "On-chain proof" table.

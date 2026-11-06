@@ -7,6 +7,8 @@
 #   contracts/studio/run.sh pull      pull Studio's contracts + tests into studio/out/pulled and diff against src/
 #   contracts/studio/run.sh deploy    02: Studio deploys the 3 contracts to Arc testnet
 #   contracts/studio/run.sh console   03: Studio builds the escrow console frontend in the same app
+#   contracts/studio/run.sh credits   04: Studio writes + tests SolarCredits against our acceptance tests
+#   contracts/studio/run.sh deploy-credits  05: Studio deploys SolarCredits to Arc testnet
 #   contracts/studio/run.sh status    deployments + workspace URL
 #
 # Each turn's result document is saved to studio/out/<step>.json (stderr progress in <step>.log).
@@ -76,7 +78,7 @@ case "${1:-}" in
   pull)
     rm -rf "$OUT/pulled"
     "$AS" pull --session "$SESSION" --out "$OUT/pulled" --paths "contracts/*.sol" "contracts/test/**" "foundry.toml" "remappings.txt" "README.md"
-    for c in CleaningEscrow ShopTrade SolarBilling; do
+    for c in CleaningEscrow ShopTrade SolarBilling SolarCredits; do
       f="$OUT/pulled/contracts/$c.sol"; [ -f "$f" ] || f=""
       if [ -z "$f" ]; then echo "missing $c.sol in Studio's workspace"; continue; fi
       echo "=== $c: Studio vs src/ ==="
@@ -84,11 +86,17 @@ case "${1:-}" in
     done ;;
   deploy)
     turn deploy "$HERE/02-deploy.md" ;;
+  credits)
+    rm -rf "$OUT/stage" && mkdir -p "$OUT/stage"
+    sed -e 's|"\.\./\.\./src/|"../../|' "$HERE/../test/acceptance/SolarCredits.t.sol" >"$OUT/stage/SolarCredits.t.sol"
+    (cd "$OUT/stage" && turn credits "$HERE/04-solar-credits.md" --file SolarCredits.t.sol:contracts/test/acceptance/) ;;
+  deploy-credits)
+    turn deploy-credits "$HERE/05-deploy-credits.md" ;;
   console)
     turn console "$HERE/03-console.md" ;;
   status)
     "$AS" deployments --session "$SESSION" --json || true
     "$AS" apps --json | python3 -I -c "import json,sys; [print(a.get('id'), a.get('name'), a.get('updatedAt','')) for a in json.load(sys.stdin)]" || true ;;
   *)
-    sed -n '2,13p' "$0"; exit 1 ;;
+    sed -n '2,15p' "$0"; exit 1 ;;
 esac

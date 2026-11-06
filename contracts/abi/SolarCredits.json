@@ -1,0 +1,751 @@
+[
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "usdc_",
+    "type": "address"
+   },
+   {
+    "internalType": "address",
+    "name": "oracle_",
+    "type": "address"
+   },
+   {
+    "internalType": "address",
+    "name": "owner_",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "nonpayable",
+  "type": "constructor"
+ },
+ {
+  "inputs": [],
+  "name": "AlreadyPaid",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "AlreadyPosted",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "BadAmount",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "BadFlatCount",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "BadLabel",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "BadPeriodId",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "BadRate",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "BadWh",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "DuplicateFlat",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "LengthMismatch",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NoPeriod",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NoUnusedWh",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NotBuyer",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NotOracle",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NothingToClaim",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "owner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnableInvalidOwner",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "account",
+    "type": "address"
+   }
+  ],
+  "name": "OwnableUnauthorizedAccount",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "ReentrancyGuardReentrantCall",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "token",
+    "type": "address"
+   }
+  ],
+  "name": "SafeERC20FailedOperation",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "ZeroAddress",
+  "type": "error"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "string",
+    "name": "flat",
+    "type": "string"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "wallet",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "amount",
+    "type": "uint256"
+   }
+  ],
+  "name": "CreditClaimed",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": false,
+    "internalType": "string",
+    "name": "flat",
+    "type": "string"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "wallet",
+    "type": "address"
+   }
+  ],
+  "name": "FlatRegistered",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "string",
+    "name": "flat",
+    "type": "string"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "payer",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "overWh",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "amount",
+    "type": "uint256"
+   }
+  ],
+  "name": "NeighborPaid",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": false,
+    "internalType": "address",
+    "name": "oracle",
+    "type": "address"
+   }
+  ],
+  "name": "OracleChanged",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferStarted",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferred",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "from",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "amount",
+    "type": "uint256"
+   }
+  ],
+  "name": "PeriodFunded",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "string[]",
+    "name": "flats",
+    "type": "string[]"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256[]",
+    "name": "unusedWh",
+    "type": "uint256[]"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256[]",
+    "name": "overWh",
+    "type": "uint256[]"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "neighborRate",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "bytes32",
+    "name": "readingsHash",
+    "type": "bytes32"
+   }
+  ],
+  "name": "PeriodPosted",
+  "type": "event"
+ },
+ {
+  "inputs": [],
+  "name": "MAX_FLATS",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "MAX_LABEL_BYTES",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "MAX_RATE",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "MAX_WH",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "acceptOwnership",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   },
+   {
+    "internalType": "string",
+    "name": "flat",
+    "type": "string"
+   }
+  ],
+  "name": "claim",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   },
+   {
+    "internalType": "string",
+    "name": "flat",
+    "type": "string"
+   }
+  ],
+  "name": "claimable",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   },
+   {
+    "internalType": "string",
+    "name": "flat",
+    "type": "string"
+   }
+  ],
+  "name": "flatInfo",
+  "outputs": [
+   {
+    "internalType": "bool",
+    "name": "inPeriod",
+    "type": "bool"
+   },
+   {
+    "internalType": "uint256",
+    "name": "unusedWh",
+    "type": "uint256"
+   },
+   {
+    "internalType": "uint256",
+    "name": "overWh",
+    "type": "uint256"
+   },
+   {
+    "internalType": "bool",
+    "name": "paidIn",
+    "type": "bool"
+   },
+   {
+    "internalType": "uint256",
+    "name": "claimed",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   }
+  ],
+  "name": "flatsOf",
+  "outputs": [
+   {
+    "internalType": "string[]",
+    "name": "",
+    "type": "string[]"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   },
+   {
+    "internalType": "uint256",
+    "name": "amount",
+    "type": "uint256"
+   }
+  ],
+  "name": "fund",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "oracle",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "owner",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   },
+   {
+    "internalType": "string",
+    "name": "flat",
+    "type": "string"
+   }
+  ],
+  "name": "payIn",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "pendingOwner",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   }
+  ],
+  "name": "periodInfo",
+  "outputs": [
+   {
+    "internalType": "bool",
+    "name": "posted",
+    "type": "bool"
+   },
+   {
+    "internalType": "uint256",
+    "name": "neighborRate",
+    "type": "uint256"
+   },
+   {
+    "internalType": "bytes32",
+    "name": "readingsHash",
+    "type": "bytes32"
+   },
+   {
+    "internalType": "uint256",
+    "name": "totalUnusedWh",
+    "type": "uint256"
+   },
+   {
+    "internalType": "uint256",
+    "name": "totalIn",
+    "type": "uint256"
+   },
+   {
+    "internalType": "uint256",
+    "name": "totalClaimed",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "periodId",
+    "type": "bytes32"
+   },
+   {
+    "internalType": "string[]",
+    "name": "flats",
+    "type": "string[]"
+   },
+   {
+    "internalType": "uint256[]",
+    "name": "unusedWh",
+    "type": "uint256[]"
+   },
+   {
+    "internalType": "uint256[]",
+    "name": "overWh",
+    "type": "uint256[]"
+   },
+   {
+    "internalType": "uint256",
+    "name": "neighborRate",
+    "type": "uint256"
+   },
+   {
+    "internalType": "bytes32",
+    "name": "readingsHash",
+    "type": "bytes32"
+   }
+  ],
+  "name": "postPeriod",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "string",
+    "name": "flat",
+    "type": "string"
+   },
+   {
+    "internalType": "address",
+    "name": "wallet",
+    "type": "address"
+   }
+  ],
+  "name": "register",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "renounceOwnership",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "oracle_",
+    "type": "address"
+   }
+  ],
+  "name": "setOracle",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "transferOwnership",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "usdc",
+  "outputs": [
+   {
+    "internalType": "contract IERC20",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "string",
+    "name": "flat",
+    "type": "string"
+   }
+  ],
+  "name": "walletOf",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ }
+]

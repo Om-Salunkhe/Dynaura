@@ -10,7 +10,7 @@
   "entryPoint": "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789",
   "compiler": "solc 0.8.28, optimizer 200 runs, evm cancun",
   "sourceVerified": true,
-  "bytecodeCheck": "runtime bytecode of all three equals a local build of src/ (only the metadata hash differs)",
+  "bytecodeCheck": "runtime bytecode of all four equals a local build of src/ (only the metadata hash differs)",
   "usdc": "0x3600000000000000000000000000000000000000",
   "oracle": "0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf",
   "owner": "0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6",
@@ -28,6 +28,18 @@
   "SolarBilling": {
     "address": "0x5bd5aecc43968994e90f33df7177fb384401902b",
     "deployTx": "0x7588f283b6e87e6c74b8d1b990b890f71b5156bf5bfd4b5fc3edf6aae29101bb"
+  },
+  "SolarCredits": {
+    "address": "0x12b06e364ecc08aead9ce2142382682b9d46859c",
+    "deployTx": "0x4f546ec80336d1e7fb52bd73ec35b615fb56ffc0d49f8dc0554fecec974dff41",
+    "block": 71074539
+  },
+  "committee": "0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6",
+  "roles": {
+    "oracle": "the Pi (releases, settles, bills, links 0G roots)",
+    "owner": "the committee (resolves disputes, can rotate the oracle)",
+    "treasury": "the society (the Pi wallet in the demo)",
+    "gridPayee": "stand-in for the electricity board"
   },
   "demoTxs": {
     "committee": {
@@ -55,13 +67,21 @@
       "postBill": "0x86132eba80d909c0416f530d35f89603bd38fa88f5659fba743a615cf09a3b24",
       "approve bill": "0x1a560eb43c627b0cb786364b0ffe825a9ef3a0725e26991e579b9d53dee13e7d",
       "pay (split)": "0x21e8b1741c1550a00324935587b16028da566f1dd87a73e426c17faf5c0cfd87"
+    },
+    "credits 20261106T190600": {
+      "fund flat A": "0xe08b9a6608ac213c70a8b50ae7aaec8907960bfa3e0fa6a0fe386198818addb5",
+      "fund flat B": "0x5643a8a7caf42b632dc28a3f382d403e7317ac407fc8275a3966e9fe851ee441",
+      "fund flat C": "0x77b06a1ad8edb2f7d64b36ebae11b48a3aa1458df2ea6744b0d804db784ba7ec",
+      "register A": "0x20c96997fe4bdedf2eca3d1a0af02e44cd66e1d1a14c396cbc95e9faf2d61485",
+      "register B": "0x3e9ed74b25278cb083f83579ed6b811bdc1df3eb41ddc512b9fe0d09f266f0f5",
+      "register C": "0xfa373b4f605cda0d13bd52c8938f297cdf0b1b8cef0e4dae5a4e5083231f2730",
+      "postPeriod": "0x1e4bf2cac3395c5dcf02af6715886af4ac7681a2e6018fb08e91ccd06dea6cea",
+      "approve C": "0xe6c82756c6847f36354ec3cb0fc898d1c0e8d46b83a829baca3626b6f631e8b1",
+      "payIn C (neighbour)": "0x039349e236a5f9fca86337da44268d0032140d264024ddf137c9c59a781b45a0",
+      "approve fund": "0xb5adee7070bb1ace79c627c2a20d0ea0806f7da932f496ef775dbd00313f7c2d",
+      "fund (shop + grid)": "0x59fb00a5149233c3e787712564b77861cf4fb236a8e32cb37d42fe7def501f7f",
+      "claim A": "0xe26af95abbb552d6a1a1915ae68318afef9c465c4999d2faf9197afbd4c65339",
+      "claim B": "0x3611a7805a4be62f073dfd899f42f36414e521cef70f3d118f4e3e37fb498283"
     }
-  },
-  "committee": "0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6",
-  "roles": {
-    "oracle": "the Pi (releases, settles, bills, links 0G roots)",
-    "owner": "the committee (resolves disputes, can rotate the oracle)",
-    "treasury": "the society (the Pi wallet in the demo)",
-    "gridPayee": "stand-in for the electricity board"
   }
 }
