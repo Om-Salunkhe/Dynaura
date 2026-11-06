@@ -23,7 +23,6 @@ real kWh.
 """
 import json
 import logging
-import os
 import threading
 import time
 from datetime import datetime
@@ -36,20 +35,14 @@ log = logging.getLogger("dynaura.trader")
 FLATS = ("A", "B", "C")
 
 
-def _rate(name: str, default: str) -> float | None:
-    raw = os.getenv(name, default).strip()
-    return float(raw) if raw else None
-
-
-# Prices, USDC per real kWh. Import = GRID_RATE_USDC; shop = SHOP_PRICE_USDC (both in config.py).
-EXPORT_RATE_USDC = _rate("EXPORT_RATE_USDC", "0.006")      # feed-in: what the grid pays for spare sun
-NEIGHBOR_RATE_USDC = _rate("NEIGHBOR_RATE_USDC", "")       # empty = midpoint of export and import
-TRADE_EVERY_MIN = float(os.getenv("TRADE_EVERY_MIN", "15") or 15)
-TRADE_MIN_WH = float(os.getenv("TRADE_MIN_WH", "0.5") or 0.5)  # less spare than this: no trade
+# Settings live in config.py (read when used, so tests and the API can change them). Aliases for callers:
+EXPORT_RATE_USDC = config.EXPORT_RATE_USDC
+NEIGHBOR_RATE_USDC = config.NEIGHBOR_RATE_USDC
+TRADE_EVERY_MIN = config.TRADE_EVERY_MIN
+TRADE_MIN_WH = config.TRADE_MIN_WH
 TRADE_MIN_GAP_S = 60.0  # never more than one 0G trade call a minute (SIM_SPEED makes windows short)
 # 0gm-1.0 is Qwen3-based and "thinks" first: ~80 s per trade with thinking, ~6 s without (measured
 # Sat 01:00 on router-api.0g.ai). A trade is a short, rule-bound choice, so thinking is off by default.
-TRADE_THINKING = os.getenv("TRADE_THINKING", "false").lower() == "true"
 NO_THINKING = {"chat_template_kwargs": {"enable_thinking": False}}
 
 SYSTEM = """You are Dyna, the market maker for the shared rooftop solar panel of a small apartment building with flats A, B and C.
@@ -68,10 +61,10 @@ Answer with ONE JSON object only, no other text:
 
 def current_prices() -> dict:
     """{export, import, shop, neighbor}: USDC per real kWh. neighbor = midpoint unless set."""
-    exp, imp = EXPORT_RATE_USDC, config.GRID_RATE_USDC
+    exp, imp, set_rate = config.EXPORT_RATE_USDC, config.GRID_RATE_USDC, config.NEIGHBOR_RATE_USDC
     lo, hi = min(exp, imp), max(exp, imp)
     mid = round((lo + hi) / 2, 6)
-    neighbor = NEIGHBOR_RATE_USDC if NEIGHBOR_RATE_USDC is not None and lo <= NEIGHBOR_RATE_USDC <= hi else mid
+    neighbor = set_rate if set_rate is not None and lo <= set_rate <= hi else mid
     return {"export": exp, "import": imp, "shop": config.SHOP_PRICE_USDC, "neighbor": neighbor}
 
 
@@ -265,7 +258,7 @@ def decide_routes(spare_wh: float, needs: dict, shop_order_wh: float = 0.0, pric
 
 def _ask(prompt: str) -> zg.ZGReply:
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]
-    if not TRADE_THINKING:
+    if not config.TRADE_THINKING:
         try:
             return zg.chat(messages, max_tokens=4000, temperature=0.2, extra_body=NO_THINKING)
         except zg.ZGModelUnavailable as e:  # the Router answered but refused the option: ask with thinking
@@ -307,7 +300,7 @@ class TradeLoop:
         self.snapshot = snapshot
         self.store, self.uploader, self.notify = store, uploader, notify
         speed = speed if speed is not None else (config.SIM_SPEED if config.HW == "sim" else 1.0)
-        self.interval_s = max(TRADE_MIN_GAP_S, TRADE_EVERY_MIN * 60 / max(speed, 0.001))
+        self.interval_s = max(TRADE_MIN_GAP_S, config.TRADE_EVERY_MIN * 60 / max(speed, 0.001))
         self.last: dict | None = None
         self.error: str | None = None
         self._lock = threading.Lock()
@@ -323,7 +316,7 @@ class TradeLoop:
                 log.exception("credits snapshot failed")
                 return {"skipped": self.error}
             spare = _num(snap["spare_wh"]) or 0.0
-            if spare <= TRADE_MIN_WH:
+            if spare < config.TRADE_MIN_WH:
                 return {"skipped": "no spare sun to sell", "spare_wh": round(spare, 3)}
             self.last = decide_routes(spare, snap["needs"], snap["shop_order_wh"], snap["prices"],
                                       store=self.store, uploader=self.uploader, notify=self.notify,
@@ -350,7 +343,7 @@ class TradeLoop:
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, name="0g-trader", daemon=True)
         self._thread.start()
-        log.info("0G trader on: every %ds while spare > %g Wh", self.interval_s, TRADE_MIN_WH)
+        log.info("0G trader on: every %ds while spare >= %g Wh", self.interval_s, config.TRADE_MIN_WH)
 
     def stop(self) -> None:
         self._stop.set()
