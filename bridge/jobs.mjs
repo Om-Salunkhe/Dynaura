@@ -20,6 +20,9 @@ const txt = (v, n = 120) => (v === undefined || v === null || v === "" ? undefin
 const unix = (v) => (isNum(v) ? u64(BigInt(Math.floor(Number(v)))) : undefined)
 const teeOf = (t) => (typeof t === "boolean" ? t : t && typeof t === "object" ? Boolean(t.verified ?? t.ok ?? t.valid) : undefined)
 
+// States v2 never had (it only knew open, accepted, paid, refunded).
+const V3_ONLY = new Set(["flagged", "approved", "cleaned", "rejected", "disputed", "resolved", "no_check"])
+
 // States in which a job has no real escrow deadline yet: a deadline sent with them is ignored.
 const NO_DEADLINE_YET = new Set(["flagged", "no_check", "rejected"])
 
@@ -36,9 +39,11 @@ const NO_DEADLINE_YET = new Set(["flagged", "no_check", "rejected"])
 export function jobColumns(b) {
   const og = b.og || {}
   const arc = b.arc || {}
-  const flatV3 = Object.hasOwn(b, "arc_job_id")
-  const win = arc.proof_window || b.proof_window || []
   const status = String(b.state ?? b.status ?? "")
+  // v3 if it says arc_job_id (even null), or if its state only exists in v3: v2 never sent those,
+  // so a bare job_id with one of them is the Pi's id, not an Arc escrow id.
+  const flatV3 = Object.hasOwn(b, "arc_job_id") || V3_ONLY.has(status)
+  const win = arc.proof_window || b.proof_window || []
   const cols = {
     status,
     case_id: txt(b.id ?? (flatV3 ? b.job_id : undefined), 64),
