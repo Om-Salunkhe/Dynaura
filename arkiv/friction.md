@@ -169,15 +169,38 @@ it's a lot to absorb in a hackathon.
 **Suggestion.** A small `safeWrite()` helper in the SDK that does this, or that at least returns
 `{ txHash, nonce }` before waiting for the receipt, would save every team from building it.
 
-## 9. The public endpoint returns 429s under modest load; even with a key, latency is about 0.5 s per call from Mumbai (Low)
+## 9. The public endpoint goes from fine to unusable when the venue is busy (Medium)
 
-Without a key, our earlier app got 429s under load. With a key we saw no 429s tonight, but 10 sequential `eth_blockNumber` calls took 5.5 s from the venue. A write needs about 5
-round trips: nonce, block number, send, receipt polls. So it takes 3–5 s even though blocks are 2 s,
-and slow periods pushed single writes to 10–15 s. We cache `eth_gasPrice`, skip viem's fee lookups
-by passing `gasPrice`, and add jittered backoff on reads.
+The same five web-app queries against the keyless endpoint:
+- At 09:00: **750/750** succeeded, up to ~40 queries/s.
+- At 22:30: **4/60** succeeded. 223 of 228 requests were 429s, and a page load took 6 s at the
+  median.
+- With an access key at the same moment: 60/60, 0.7 s.
 
-**Suggestion.** An Asia-region RPC, or support for JSON-RPC batch requests through the SDK's write
-path.
+The 429 body explains it: `{"error":"ANON_COST_LIMITED","message":"unauthenticated query budget
+exhausted; get an API key at https://hub.arkiv.network for a monthly quota"}`. So it's a **cost
+budget** for anonymous callers, not a per-second rate, and our own morning tests from the same
+machine probably used part of it. A judge opening our app on the venue Wi-Fi would have seen
+"Arkiv not reachable". With a key,
+latency is about 0.5 s per call from Mumbai. A write needs about 5 round trips (nonce, block
+number, send, receipt polls), so it takes 3–5 s even though blocks are 2 s. We cache
+`eth_gasPrice`, skip viem's fee lookups by passing `gasPrice`, and back off with jitter on reads.
+
+**It also hit the judging rule.** Arkiv asks for "one query a judge can run" in the README. Our
+keyless README query, the obvious way to make it runnable by anyone, returned `ANON_COST_LIMITED`
+to our own docs teammate on 6 Nov evening. The README now shows the key as an optional last part
+of the URL (`…arkiv.network/${ARKIV_KEY}`), which works with or without one.
+
+**What the app does now.** The web app treats `ANON_COST_LIMITED` as "budget spent", not as a
+network blip:
+- it stops retrying, which used to take about 6 s per page;
+- every read fails at once for 60 s, so it stops spending a budget that's gone;
+- it shows its labelled demo data, with a "busy" flag the screens can use
+  ([`arkivReads.js`](../web/src/lib/arkivReads.js), with an offline test).
+
+**Suggestion.** Document the anonymous budget: its size, what it's counted per (IP?), and when
+it resets. Send a `Retry-After` header with the 429. Also a read-only browser key type, and an
+Asia-region RPC.
 
 ## 10. Every viem error prints the access key (High)
 
@@ -204,10 +227,10 @@ chain, but restrict it to your origins or IPs". Arkiv's `arkiv-security-trust` s
 "operator RPC keys stay server-side… a browser-wallet user configures their own RPC key", and the
 browser guide says "never give a browser the operator's server key".
 
-**What we did.** No key of ours ships. The app reads keyless from the public endpoint with
-jittered backoff, which we measured to be enough for our read volume
+**What we did.** The bridge's key never ships. At first the app read keyless, which measured fine
+in the morning. In the evening the keyless endpoint was rate limited (item 9), so the app now uses
+a **separate public read key made only for it**, documented as public and revocable
 ([how-you-use-arkiv.md](how-you-use-arkiv.md#reads-from-the-browser-and-the-access-key)).
-The bridge (server side) keeps the key.
 
 **Suggestion.** One documented answer, ideally a read-only browser key type with origin
 restriction and its own quota.

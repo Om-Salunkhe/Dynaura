@@ -21,8 +21,25 @@ the scope; humans decided what to build and reviewed the output.
 - **Wrote the hardened write path** (`bridge/writer.mjs`): a single queue, explicit
   nonce/gas/gasPrice, reconciliation by hash or nonce instead of resending. It also wrote the
   offline tests, the keeper, the readonly ("sealed") fact records, and the trust check.
-- **Drafted the judging files** in `arkiv/` from what was measured and observed. `reach.md` and
-  the demo-wallet fields are left as TODOs for the humans; no numbers were invented.
+- **Drafted the judging files** in `arkiv/` from what was measured and observed, and later
+  rewrote them against the live building. No numbers were invented. What only the team can say
+  (the video and live-app links, whether they'll keep building) is left marked for them.
+- **Cleaning flow v3** (spec: the team's DECISIONS row, Fri 22:12):
+  - It extended `dynaura.cleaning_job` to one entity per request, from 0G's flag to payout,
+    patched on every transition, with a lifetime that follows the job.
+  - It added `bridge/jobs.mjs` with offline tests.
+- **Payout verification** (`web/src/lib/arkivProof.js`): it rebuilt the Pi's Python strings
+  (signed reading messages, the escrow's proof hash) in JavaScript, checked them against Python's
+  own output, and verified all 76 live readings' signatures from Arkiv.
+- **A cleaner-owned work receipt:** created by the building and transferred to the cleaner's
+  wallet in one atomic batch.
+- **Measured the public endpoint** under load. When the evening numbers contradicted the morning
+  ones, it changed its recommendation: the web app now uses a separate public read key.
+- **Mistakes it made and fixed:**
+  - It once printed the shared access key into a local log through a viem error. The log was
+    deleted, and every printed error is now redacted.
+  - It stated timestamps it hadn't checked (corrected).
+  - It recommended keyless reads from a single morning measurement.
 
 ## What humans did
 

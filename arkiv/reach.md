@@ -1,47 +1,79 @@
 # Reach
 
-> **Draft.** Items marked **TODO** need Pawan or Om to fill them in with real links and numbers.
-> Nothing here is an estimate dressed up as a fact.
+## Who it's for
 
-## Who Dynaura is for
+**Apartment buildings that share one rooftop solar system, starting in Maharashtra.** In 2024 the
+state regulator (MERC) added *virtual net metering* to its rooftop rules, so residents of
+multi-storied buildings can set up one system and share its output
+([Mercom, Sept 2024](https://mercomindia.com/merc-proposes-virtual-net-metering-in-rooftop-renewable-energy-system-rules)).
+In October 2025 MERC fined the state utility for not implementing it, after three housing
+societies complained
+([Saur Energy, Oct 2025](https://www.saurenergy.com/solar-energy-news/merc-imposes-penalty-on-msedcl-not-implementing-virtual-net-metering-10588428)).
+So the buildings exist, the rule exists, and societies are already pushing for it.
 
-**Apartment buildings that share a rooftop.** In Indian cities most families live in housing
-societies, where the committee runs shared assets and keeps the books: the water pump, the lift,
-common-area power, and now rooftop solar. Rooftop solar on a shared roof raises three questions
-residents argue about: who gets the power, who pays for what, and was the panel really cleaned.
-Dynaura answers them with an AI that plans the sharing (0G), money that moves only on proof (Arc),
-and **a record book on Arkiv that every resident can read without trusting the committee**.
+Once a building shares a roof, three groups need the same facts and don't fully trust each other:
 
-The same pattern fits any shared physical asset with a small group of owners and a trust problem:
-a borewell, a society EV charger, a co-op's cold storage. In each case expiring records do real
-work: offers that close, alarms that fire when a device goes quiet, jobs that clear themselves.
-
-**TODO (Pawan/Om):** one sourced number on housing societies or rooftop solar in Mumbai/India, with
-the link.
-
-## How people can see it
-
-| Channel | What | Status |
+| Who | What they need from the record | What Arkiv gives them |
 |---|---|---|
-| Live demo at ETHGlobal Mumbai | Cardboard 3-flat building with a real panel, meters and relays. Cover the panel and watch Dyna flag it, the Arc escrow open, the cleaner get paid, and every step land on Arkiv | **TODO:** number of people who saw it at the booth or judging |
-| The app | Web app reading Arkiv straight from the browser | **TODO:** deployed URL |
-| Demo video | Under 3 minutes, the hero moment end to end | **TODO:** link |
-| Open source | MIT-licensed repo, including the bridge, schemas, trust check and smoke test, reusable by any Arkiv project that writes from a device | **TODO:** repo link once public |
-| Social | Thread on X tagging Arkiv, 0G and Arc | **TODO:** links, impressions, the right handles |
-| Arkiv community | Our [friction log](friction.md), with nine issues ready to file upstream (among them: the gas estimate for back-to-back extensions, the access key leaking through error messages, `.ownedBy()` spoofing in the README example, and a receipt wait that can hang for minutes) | **TODO:** issue links once Pawan approves filing |
+| **Residents** (flats A, B, C) | "Was my bill fair? Did the committee spend our money on a real cleaning?" | Their bills and the society's maintenance and cleaning records, readable without asking anyone |
+| **The housing committee** | A record that ends arguments, and no server or spreadsheet to keep alive | One wallet writes; anyone can check; expiry clears offers and stale flags by itself |
+| **The cleaner** | Proof the job was paid fairly, or grounds to dispute it | The cleaning request on Arkiv, with 0G's verdict, the meter readings it was paid on, and the Arc transactions |
+| **Nearby shops** buying spare solar | Live offers they can trust, and receipts | Offers that disappear when the sun window closes; sales they can look up by their wallet |
 
-## What others can reuse
+The same pattern fits any small group sharing a physical asset with a trust problem: a society's
+borewell or EV charger, a co-op's cold storage. In each case, expiring records do real work.
 
-- **[`bridge/writer.mjs`](../bridge/writer.mjs):** a single-writer queue for Arkiv that reconciles
-  failed writes by hash or nonce instead of resending. It's independent of Dynaura and has 11
-  offline tests. Any device writing to Arkiv (sensors, kiosks, Pis) needs exactly this.
-- **[`bridge/trust-check.mjs`](../bridge/trust-check.mjs):** a one-command live demonstration of
-  why readers must scope by creator as well as owner.
-- **The heartbeat pattern:** one entity, patch + extend every 30 s, and a 2-minute expiry as the
-  offline alarm. It's the smallest useful example of expiry as product logic.
+## Would they use it?
 
-## After the hackathon
+What we can say honestly, two days in:
+- **The pain is documented, not assumed.** Societies took the utility to the regulator over shared
+  solar (link above). Today a building's committee runs this with a spreadsheet and a WhatsApp
+  group.
+- **The cost is small.** One write costs 0.00004–0.0006 tGLM on testnet; a full day of 1-minute
+  readings and 30-second heartbeats is about 1 tGLM
+  ([measured](how-you-use-arkiv.md#measured)). The committee pays one cleaner fee and a few cents of
+  transaction fees a month.
+- **Nobody has to learn crypto to read it.** Residents see a normal app. The record behind it is
+  public for whoever wants to check.
+- **What we haven't done yet:** put it in a real building, or interview a committee. That's the
+  first next step below.
 
-**TODO (Pawan/Om):** next steps, if any. For example: a pilot in one real building, a printed QR
-code in the lobby that opens the building's Arkiv record, or extending the record book to the
-society's other shared assets.
+## Can they try it today?
+
+Yes. Everything here works without our help:
+
+| Try | How | Needs |
+|---|---|---|
+| **Read the live building's record** | The curl queries in [`arkiv/README.md`](README.md): the building's AI decisions, the panel's signed readings, and "is it online?" | Nothing (or a free Arkiv key if the public endpoint is busy) |
+| **Run the whole building in simulation** | The README's SIM quick start: the Pi API, the bridge and the web app on a laptop, no hardware | Python 3.11, Node 22 |
+| **Prove the reads can't be spoofed** | [`bridge/trust-check.mjs`](../bridge/trust-check.mjs): a stranger's fake decision, handed to the building wallet, is ignored by our queries | A funded Rabdi test key |
+| **Check our Arkiv write path** | `npm test` in `bridge/` (15 offline tests) and `npm run smoke` (every schema, live) | Node 22 |
+| **See it run on hardware** | The cardboard 3-flat building with a real panel, meters and relays, at ETHGlobal Mumbai | Being there, or the demo video |
+
+Live app: **TODO (Pawan)** the Vercel link once it's deployed with the public read key. Demo video:
+**TODO (Pawan)** the link.
+
+## What other builders can reuse
+
+- **[`bridge/writer.mjs`](../bridge/writer.mjs):** a single-writer queue for Arkiv. It reconciles a
+  failed write by hash or nonce instead of resending it, and puts a deadline on the SDK's receipt
+  wait. It's independent of Dynaura, has offline tests, and fits any device that writes to Arkiv
+  (sensors, kiosks, Pis).
+- **The heartbeat pattern:** one entity, patched and extended every 30 s, whose 2-minute expiry is
+  the offline alarm. It's the smallest useful example of expiry as product logic.
+- **[`bridge/trust-check.mjs`](../bridge/trust-check.mjs):** a one-command demonstration of why
+  readers must scope by creator as well as owner.
+- **Our [friction log](friction.md):** 13 items with reproductions and on-chain evidence. Nine are
+  drafted as issues for Arkiv-Network/reported-issues and waiting for our OK to file. Among them: an
+  SDK gas estimate that fails every other back-to-back renewal, and access keys leaking through error
+  messages.
+
+## Will we keep building?
+
+**TODO (Pawan/Om), your call, in your words.** What we'd do first, if you go on:
+1. Put the Pi in one real building's meter room for a month, with its committee using the app.
+2. Move from the Rabdi testnet to a production Arkiv network, and have the society own the building
+   wallet.
+3. Fix the one privacy gap we know about: the plan summary can name an away flat
+   ([why-arkiv.md](why-arkiv.md#what-we-kept-off-arkiv-and-why)).
+4. Add a QR code in the lobby that opens the building's record.

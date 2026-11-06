@@ -6,10 +6,10 @@
 // and still OWNS. Nothing else counts, whatever its tags say.
 import { createPublicClient } from "@arkiv-network/sdk";
 import { rabdi } from "@arkiv-network/sdk/chains";
-import { and, asc, desc, eq, gte } from "@arkiv-network/sdk/query";
+import { and, asc, desc, eq, gte, lte, or } from "@arkiv-network/sdk/query";
 import { addr, u64 } from "@arkiv-network/sdk/schema";
 import { hexToString, http } from "viem";
-import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale } from "./arkivSchemas.js";
+import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale, WorkReceipt } from "./arkivSchemas.js";
 
 /** A read-only Rabdi client. Rabdi makes a block every 2 s; viem assumes 12 s unless told. */
 export function arkivClient(accessKey = "") {
@@ -33,12 +33,45 @@ export function isRetryable(e) {
   return false;
 }
 
-/** Reads are safe to repeat: back off exponentially, with jitter so retries don't line up. */
+/** The keyless endpoint's answer when its free query budget is spent: 429 ANON_COST_LIMITED.
+ *  Retrying can't help until the budget refills, so reads fail fast instead (friction #9). */
+export class ArkivBudgetError extends Error {
+  limited = true;
+}
+export function isBudgetExhausted(e) {
+  for (let x = e; x; x = x.cause) if (/ANON_COST_LIMITED/.test(`${x.details ?? ""} ${x.message ?? ""}`)) return true;
+  return false;
+}
+const BUDGET_PAUSE_MS = 60_000;
+let budgetOutUntil = 0;
+const budgetListeners = new Set();
+/** Hear when Arkiv's free budget runs out (pausedUntil = ms timestamp) or comes back (0). */
+export function onBudget(fn) {
+  budgetListeners.add(fn);
+  fn(Date.now() < budgetOutUntil ? budgetOutUntil : 0);
+  return () => budgetListeners.delete(fn);
+}
+const setBudgetOut = (until) => {
+  if (until === budgetOutUntil) return;
+  budgetOutUntil = until;
+  for (const fn of budgetListeners) fn(until);
+};
+
+/** Reads are safe to repeat: back off exponentially, with jitter so retries don't line up.
+ *  Once the free budget is spent, every read fails at once for a minute (the app shows its demo
+ *  data) instead of each one waiting through retries that can't succeed. */
 export async function withBackoff(fn, { tries = 4, base = 400 } = {}) {
+  if (Date.now() < budgetOutUntil) throw new ArkivBudgetError("Arkiv's public endpoint is out of free queries (ANON_COST_LIMITED); retrying in a minute");
   for (let i = 0; ; i++) {
     try {
-      return await fn();
+      const out = await fn();
+      if (budgetOutUntil) setBudgetOut(0); // the budget is back
+      return out;
     } catch (e) {
+      if (isBudgetExhausted(e)) {
+        setBudgetOut(Date.now() + BUDGET_PAUSE_MS);
+        throw new ArkivBudgetError("Arkiv's public endpoint is out of free queries (ANON_COST_LIMITED); retrying in a minute", { cause: e });
+      }
       if (i + 1 >= tries || !isRetryable(e)) throw e;
       await sleep(base * 2 ** i * (0.5 + Math.random()));
     }
@@ -184,31 +217,89 @@ export function offers(ctx, limit = 20) {
   });
 }
 
-/** Cleaner job board. Pass a status ("open", "accepted", "paid", "refunded") to filter on it. */
-export function cleaningJobs(ctx, { status, limit = 20 } = {}) {
+/** Cleaning requests (flow v3), newest first. Filter with `status: "flagged"` or
+ *  `statuses: ["open", "accepted", "cleaned"]`. v2 jobs come back too, with their old fields mapped. */
+export function cleaningJobs(ctx, { status, statuses, limit = 20 } = {}) {
   return withBackoff(async () => {
-    const where = status ? and(eq("building", ctx.building), eq("status", status)) : eq("building", ctx.building);
+    const list = statuses?.length ? statuses : status ? [status] : [];
+    const byStatus = list.length === 1 ? eq("status", list[0]) : list.length > 1 ? or(list.map((x) => eq("status", x))) : null;
     const page = await scoped(
       ctx,
       ctx.client
-        .select({ $key: true, job_id: true, status: true, fee_usdc: true, deadline: true, output_before: true, output_after: true, arc_tx: true, og_request_id: true, og_storage_root: true, $expiresAt: true })
+        .select({
+          $key: true, case_id: true, status: true, job_id: true, created_at: true, fee_usdc: true, deadline: true,
+          dusty_pct: true, after_pct: true, output_before: true, output_after: true, coverage_pct: true, og_input: true, og_tee: true,
+          og_request_id: true, og_storage_root: true, proof_hash: true, proof_from: true, proof_to: true,
+          open_tx: true, release_tx: true, refund_tx: true, arc_tx: true, $expiresAt: true,
+        })
         .from(CleaningJob)
-        .where(where),
+        .where(byStatus ? and(eq("building", ctx.building), byStatus) : eq("building", ctx.building)),
     )
-      .orderBy(desc("job_id"))
+      .orderBy(desc("created_at"))
       .limit(limit)
       .fetch();
+    const n = (v) => (v ? Number(v.value) : null);
+    return page.entities.map((e) => {
+      const dusty = n(e.dusty_pct) ?? n(e.output_before);
+      const after = n(e.after_pct) ?? n(e.output_after);
+      return {
+        key: e.$key,
+        caseId: e.case_id?.value ?? null,
+        status: e.status.value,
+        jobId: n(e.job_id), // Arc escrow id: null until approved
+        createdAt: n(e.created_at),
+        feeUsdc: n(e.fee_usdc) ?? 0, // 0 until the admin approves a fee (the board calls toFixed on it)
+        deadline: n(e.deadline),
+        dustyPct: dusty,
+        afterPct: after,
+        outputBefore: dusty, // v2 names, still used by the job board
+        outputAfter: after,
+        coveragePct: n(e.coverage_pct),
+        ogInput: e.og_input?.value ?? null,
+        ogTee: e.og_tee ? Boolean(e.og_tee.value) : null,
+        ogRequestId: e.og_request_id?.value,
+        ogStorageRoot: e.og_storage_root?.value,
+        proofHash: e.proof_hash?.value ?? null,
+        proofWindow: e.proof_from && e.proof_to ? [n(e.proof_from), n(e.proof_to)] : null,
+        openTx: e.open_tx?.value ?? null,
+        releaseTx: e.release_tx?.value ?? null,
+        refundTx: e.refund_tx?.value ?? null,
+        arcTx: e.arc_tx?.value ?? e.release_tx?.value ?? e.refund_tx?.value ?? e.open_tx?.value,
+      };
+    });
+  });
+}
+
+/** A cleaner's work history: receipts this building CREATED and the cleaner now OWNS (the building
+ *  hands each one over when the escrow pays). Newest first. */
+export function workReceipts(ctx, { cleaner, limit = 20 } = {}) {
+  return withBackoff(async () => {
+    const page = await ctx.client
+      .select({
+        $key: true, $owner: true, cleaner: true, case_id: true, job_id: true, fee_usdc: true, paid_at: true,
+        dusty_pct: true, after_pct: true, release_tx: true, og_request_id: true, proof_hash: true, $expiresAt: true,
+      })
+      .from(WorkReceipt)
+      .where(and(eq("building", ctx.building), eq("cleaner", addr(cleaner))))
+      .createdBy(ctx.owner)
+      .ownedBy(cleaner)
+      .orderBy(desc("paid_at"))
+      .limit(limit)
+      .fetch();
+    const n = (v) => (v ? Number(v.value) : null);
     return page.entities.map((e) => ({
       key: e.$key,
-      jobId: Number(e.job_id.value),
-      status: e.status.value,
+      owner: e.$owner,
+      cleaner: e.cleaner.value,
+      caseId: e.case_id?.value ?? null,
+      jobId: n(e.job_id),
       feeUsdc: Number(e.fee_usdc.value),
-      deadline: Number(e.deadline.value),
-      outputBefore: Number(e.output_before.value),
-      outputAfter: e.output_after ? Number(e.output_after.value) : null,
-      arcTx: e.arc_tx?.value,
-      ogRequestId: e.og_request_id?.value,
-      ogStorageRoot: e.og_storage_root?.value,
+      paidAt: Number(e.paid_at.value),
+      dustyPct: n(e.dusty_pct),
+      afterPct: n(e.after_pct),
+      releaseTx: e.release_tx?.value ?? null,
+      ogRequestId: e.og_request_id?.value ?? null,
+      proofHash: e.proof_hash?.value ?? null,
     }));
   });
 }
@@ -286,15 +377,23 @@ export function dailyOutput(ctx, days = 7) {
   });
 }
 
-/** Signed 1-minute readings of one meter ("panel", "A", "B", "C") since a unix time. */
-export function readings(ctx, { meter, since = 0, limit = 60 } = {}) {
+/** Signed 1-minute readings of one meter ("panel", "A", "B", "C"), newest first, with minute in
+ *  [since, until]. A paid job's proof window is exactly that range. */
+export function readings(ctx, { meter, since = 0, until, limit = 60 } = {}) {
   return withBackoff(async () => {
     const page = await scoped(
       ctx,
       ctx.client
         .select({ $key: true, meter: true, minute: true, avg_w: true, wh: true, solar_wh: true, samples: true, signer: true, sig: true })
         .from(Reading)
-        .where(and(eq("building", ctx.building), eq("meter", meter), gte("minute", u64(BigInt(since))))),
+        .where(
+          and(
+            eq("building", ctx.building),
+            eq("meter", meter),
+            gte("minute", u64(BigInt(since))),
+            ...(until != null ? [lte("minute", u64(BigInt(until)))] : []),
+          ),
+        ),
     )
       .orderBy(desc("minute"))
       .limit(limit)

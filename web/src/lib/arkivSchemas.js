@@ -2,7 +2,7 @@
 // indexed `arkiv.schema` tag ("dynaura.reading", ...) and queries only match our own kind.
 // Readers must also filter .ownedBy(<building wallet>): anyone can write any tag.
 // Copy of bridge/schemas.mjs (keep the two in sync).
-import { addr, bytes, dec, defineSchema, str, u64 } from "@arkiv-network/sdk/schema"
+import { addr, bool, bytes, dec, defineSchema, str, u64 } from "@arkiv-network/sdk/schema"
 
 // 1-minute summary per meter, signed by the Pi's device key. Lives 7 days.
 export const Reading = defineSchema("dynaura.reading", {
@@ -72,18 +72,55 @@ export const Sale = defineSchema("dynaura.sale", {
   arc_tx: str(),
 })
 
-// Panel cleaning job backed by an Arc escrow. Expires at the deadline (refund time).
+// A panel cleaning request, cleaning flow v3 (DECISIONS Fri 22:12). One entity per request, patched
+// on every transition: flagged (0G saw dust) -> approved -> open (Arc escrow) -> accepted -> cleaned
+// -> paid, or rejected / refunded / disputed -> resolved. no_check = 0G was unreachable, nothing
+// flagged. Its life follows the job: an unapproved flag lapses after 48 h, an approved job lives
+// until a week after the escrow deadline (time to dispute), a dispute adds 7 days from then.
+// The lasting record is Maintenance.
+// Every v3 column is optional so v2 jobs (Arc job_id + output_before/after) still read.
 export const CleaningJob = defineSchema("dynaura.cleaning_job", {
   building: str().indexed(),
-  job_id: u64().indexed(), // id in the CleaningEscrow contract
-  status: str().indexed(), // open | accepted | paid | refunded
+  case_id: str().indexed().optional(), // the Pi's job id: the request's identity from flag to payout
+  status: str().indexed(), // flagged | approved | open | accepted | cleaned | paid | rejected | refunded | disputed | resolved | no_check
+  job_id: u64().indexed().optional(), // CleaningEscrow job id on Arc, once approved
+  created_at: u64().optional(), // unix s (sort key)
+  fee_usdc: dec().optional(),
+  deadline: u64().optional(), // unix s, escrow refund time
+  dusty_pct: dec().optional(), // panel output vs expected when flagged
+  after_pct: dec().optional(), // the same after cleaning, over the confirm window
+  output_before: dec().optional(), // v2 name of dusty_pct
+  output_after: dec().optional(), // v2 name of after_pct
+  coverage_pct: dec().optional(), // 0G's dust coverage estimate
+  og_input: str().optional(), // vision | meter-only
+  og_tee: bool().optional(), // the 0G answer passed TEE verification
+  og_request_id: str().indexed().optional(), // the 0G dust check (joins to dynaura.decision)
+  og_storage_root: str().optional(), // its episode log on 0G Storage
+  proof_hash: str().optional(), // sha256 of the signed readings window the release was paid on
+  proof_from: u64().optional(), // that window: first and last minute (unix s) of the panel readings
+  proof_to: u64().optional(),
+  open_tx: str().optional(), // Arc: openJob
+  release_tx: str().optional(), // Arc: release to the cleaner
+  refund_tx: str().optional(), // Arc: refund to the society
+  arc_tx: str().optional(), // the latest Arc tx (v2)
+})
+
+// A receipt for a paid cleaning, made by the building and handed to the cleaner's wallet in the same
+// transaction. Two parties: the building CREATED it (provenance, fixed forever), the cleaner OWNS it
+// (custody: the committee can't delete their work history). Sealed, so neither side can rewrite it;
+// anyone may extend it, so it outlives the job board. Read with createdBy(building) + cleaner.
+export const WorkReceipt = defineSchema("dynaura.work_receipt", {
+  building: str().indexed(),
+  cleaner: addr().indexed(),
+  case_id: str().indexed().optional(), // the cleaning request (dynaura.cleaning_job case_id)
+  job_id: u64().indexed().optional(), // CleaningEscrow job on Arc
   fee_usdc: dec(),
-  deadline: u64(),
-  output_before: dec(), // % of expected output when posted
-  output_after: dec().optional(),
-  arc_tx: str().optional(),
-  og_request_id: str().indexed().optional(), // the 0G dust check behind the job (DECISIONS 01:30)
-  og_storage_root: str().optional(), // its episode log on 0G Storage, patched in when the upload lands
+  paid_at: u64(), // unix s
+  dusty_pct: dec().optional(),
+  after_pct: dec().optional(),
+  release_tx: str().optional(), // Arc: the payout
+  og_request_id: str().optional(), // the 0G dust check
+  proof_hash: str().optional(), // what the escrow released on
 })
 
 // Maintenance history of the solar asset. Lives ~6 months (extend).
@@ -107,4 +144,4 @@ export const Bill = defineSchema("dynaura.bill", {
   arc_tx: str().optional(),
 })
 
-export const ALL = { Reading, Heartbeat, DailyOutput, Decision, Offer, Sale, CleaningJob, Maintenance, Bill }
+export const ALL = { Reading, Heartbeat, DailyOutput, Decision, Offer, Sale, CleaningJob, WorkReceipt, Maintenance, Bill }

@@ -2,14 +2,13 @@
 // Every write goes through write() (one queue, explicit nonce, reconcile, never resend blindly).
 import { ExpirationTime } from "@arkiv-network/sdk"
 import { and, desc, eq, lte } from "@arkiv-network/sdk/query"
-import { addr, dec, u64 } from "@arkiv-network/sdk/schema"
-import { hexToBytes, stringToBytes } from "viem"
+import { addr, u64 } from "@arkiv-network/sdk/schema"
+import { hexToBytes, isAddress, stringToBytes } from "viem"
 import { account, addHealth, BUILDING, publicClient, read, route, walletClient, write } from "./bridge.mjs"
+import { d, jobColumns, JOB_STATES, ogRequestId, ogStorageRoot, wantedEnd } from "./jobs.mjs"
 import { redact } from "./retry.mjs"
-import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale } from "./schemas.mjs"
+import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale, WorkReceipt } from "./schemas.mjs"
 
-// Decimals as plain strings ("0.004167"), never scientific notation
-export const d = (n, places = 6) => dec(Number(n || 0).toFixed(places).replace(/\.?0+$/, "") || "0")
 export const days = (n) => ExpirationTime.fromDays(n)
 const nowS = () => Math.floor(Date.now() / 1000)
 /** Expire at a wall-clock time (unix seconds), but never sooner than `min` from now. */
@@ -124,10 +123,6 @@ addHealth(async (block) => {
   return { heartbeat: { key: heartbeatKey, alive: Boolean(e), expires_in_s: e ? Number(e.$expiresAt - block) * 2 : 0 } }
 })
 
-// 0G proof fields: final names og_request_id / og_storage_root (DECISIONS 01:30). The old
-// request_id / storage_root are still accepted from older Pi code.
-const ogRequestId = (b) => b.og_request_id ?? b.request_id
-const ogStorageRoot = (b) => b.og_storage_root ?? b.storage_root
 
 // POST /decision  {decision_id, kind, mode, og_request_id, model, og_storage_root, summary, day, arkiv_key?}
 // A decision written with its 0G Storage root is sealed. One written without it (0G Storage was
@@ -237,52 +232,129 @@ route("POST", "/offer", async (b) => {
   return { key: r.entityKey, txHash: r.txHash, expiresAt: r.expiresAt }
 })
 
-// POST /cleaning_job  {job_id, status, fee_usdc, deadline, output_before, output_after?, arc_tx?, og_request_id?, og_storage_root?}
-// Created when the escrow opens, patched as it is accepted / paid / refunded. It lives until a
-// day after the deadline (the escrow refunds at the deadline); the lasting record is Maintenance.
-const jobKeys = new Map()
+// POST /cleaning_job  the Pi's cleaning Job, as is (cleaning flow v3, DECISIONS Fri 22:12):
+//   { id, state, fee_usdc?, deadline?, created_at?, dusty_pct?, after_pct?,
+//     og:  { request_id, tee, coverage_pct, input, storage_root },
+//     arc: { job_id, open_tx, release_tx, refund_tx, proof_hash, proof_window: [from, to] },
+//     arkiv_key? }                       -> { key, txHash, patched, extended }
+// The first post creates the entity; the Pi keeps the returned key as job.arkiv_key and every later
+// transition patches it (only the fields it sends). v2's flat {job_id, status, output_before, ...}
+// still works. Lifetime follows the job: a flag nobody approves lapses after 48 h, an approved job
+// lives until a week after its escrow deadline (time to dispute), a dispute keeps it 7 more days
+// from then. Nothing ever shortens it.
+const jobKeys = new Map() // case id (or "arc:<job_id>") -> entity key
+
+async function findJob(cols) {
+  const by = cols.case_id ? eq("case_id", cols.case_id) : cols.job_id ? eq("job_id", cols.job_id) : null
+  if (!by) return null
+  const page = await read(() => ours(publicClient.select({ $key: true }).from(CleaningJob).where(and(eq("building", BUILDING), by))).limit(1).fetch())
+  return page.entities[0]?.$key ?? null
+}
 
 route("POST", "/cleaning_job", async (b) => {
-  const id = String(b.job_id)
-  const set = {
-    status: String(b.status),
-    ...(b.output_after != null ? { output_after: d(b.output_after, 1) } : {}),
-    ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
-    ...(ogRequestId(b) ? { og_request_id: String(ogRequestId(b)).slice(0, 120) } : {}),
-    ...(ogStorageRoot(b) ? { og_storage_root: String(ogStorageRoot(b)) } : {}),
-  }
-  return write(`cleaning_job ${id} ${set.status}`, async (tx) => {
-    let k = jobKeys.get(id)
-    if (!k) {
-      const found = await read(() =>
-        ours(publicClient.select({ $key: true }).from(CleaningJob).where(and(eq("building", BUILDING), eq("job_id", u64(BigInt(b.job_id))))))
-          .limit(1)
-          .fetch(),
-      )
-      k = found.entities[0]?.$key
-    }
+  const cols = jobColumns(b)
+  if (!cols.status) throw Object.assign(new Error("state (or status) is required"), { status: 400 })
+  if (!cols.case_id && !cols.job_id && !b.arkiv_key) throw Object.assign(new Error("id, arc.job_id or arkiv_key is required"), { status: 400 })
+  if (!JOB_STATES.includes(cols.status)) console.warn(`cleaning_job: unknown state "${cols.status}" written as is`)
+  const cacheId = cols.case_id ?? `arc:${cols.job_id?.value}`
+  const end = wantedEnd(cols.status, b.deadline)
+
+  return write(`cleaning_job ${cacheId} ${cols.status}`, async (tx) => {
+    let k = b.arkiv_key || jobKeys.get(cacheId) || (await findJob(cols))
+    let current = null
     if (k) {
-      const r = await walletClient.patchEntity(CleaningJob, k, { set }, tx)
-      jobKeys.set(id, k)
-      return { key: k, txHash: r.txHash, patched: true }
+      current = await read(() => publicClient.getEntity(k)).catch((e) => (e?.name === "NoEntityFoundError" ? null : Promise.reject(e)))
+      if (current && current.$creator?.toLowerCase() !== account.address.toLowerCase()) throw Object.assign(new Error("arkiv_key is not one of our jobs"), { status: 409 })
+      if (!current) k = null // it lapsed (e.g. a flag left for 48 h): start a new record
     }
-    const deadline = Math.floor(Number(b.deadline))
-    const r = await walletClient.createEntity(
-      CleaningJob,
+
+    if (k) {
+      const { building, ...set } = cols // building never changes
+      const head = await read(() => publicClient.getBlockNumber())
+      const endBlock = end ? head + BigInt(Math.ceil((end - nowS()) / 2)) : 0n
+      const extend = end && endBlock > current.$expiresAt + 30n // only ever lengthen, by more than a minute
+      const r = await walletClient.executeBatch(
+        {
+          patches: [{ schema: CleaningJob, entityKey: k, set }],
+          ...(extend ? { extensions: [{ entityKey: k, expiration: until(end) }] } : {}),
+        },
+        tx,
+      )
+      jobKeys.set(cacheId, k)
+      return { key: k, txHash: r.txHash, patched: true, extended: Boolean(extend) }
+    }
+
+    const expiration = end ? until(end, ExpirationTime.fromHours(1)) : ExpirationTime.fromHours(48)
+    const r = await walletClient.createEntity(CleaningJob, { building: BUILDING, created_at: u64(BigInt(nowS())), ...cols }, { expiration }, tx)
+    jobKeys.set(cacheId, r.entityKey)
+    return { key: r.entityKey, txHash: r.txHash, patched: false, extended: false }
+  }, { ops: 2 }).then(async (out) => {
+    // A paid job also gets the cleaner's work receipt (needs arc.cleaner). Its failure never fails the job.
+    if (cols.status !== "paid") return out
+    const receipt = await issueReceipt(b, cols).catch((e) => ({ error: redact(e?.shortMessage || e?.message || e) }))
+    return receipt ? { ...out, receipt } : out
+  })
+})
+
+// ---- work receipt: made by the building, owned by the cleaner -------------------------------
+// One batch creates the sealed receipt and hands it to the cleaner's wallet. The key is predicted
+// first, so the transfer can name it; if anything doesn't match, the whole batch reverts. After
+// that only the cleaner can delete it, nobody can change it, and anyone may keep it alive.
+const receipts = new Map() // case id (or "arc:<job_id>") -> receipt key
+
+export async function issueReceipt(b, cols = jobColumns(b)) {
+  const cleaner = b.arc?.cleaner ?? b.cleaner
+  if (!cleaner || !isAddress(cleaner)) return null
+  const id = cols.case_id ?? (cols.job_id ? `arc:${cols.job_id.value}` : null)
+  if (!id) return null
+  if (receipts.has(id)) return { key: receipts.get(id), owner: cleaner, issued: false }
+  return write(`work_receipt ${id}`, async (tx) => {
+    const by = cols.case_id ? eq("case_id", cols.case_id) : eq("job_id", cols.job_id)
+    const found = await read(() =>
+      publicClient
+        .select({ $key: true })
+        .from(WorkReceipt)
+        .where(and(eq("building", BUILDING), eq("cleaner", addr(cleaner)), by))
+        .createdBy(account.address)
+        .ownedBy(cleaner)
+        .limit(1)
+        .fetch(),
+    )
+    if (found.entities[0]) {
+      receipts.set(id, found.entities[0].$key)
+      return { key: found.entities[0].$key, owner: cleaner, issued: false }
+    }
+    const [{ key, salt }] = await read(() => publicClient.predictEntityKeys({ owner: account.address, count: 1 }))
+    const values = {
+      building: BUILDING,
+      cleaner: addr(cleaner),
+      ...(cols.case_id ? { case_id: cols.case_id } : {}),
+      ...(cols.job_id ? { job_id: cols.job_id } : {}),
+      fee_usdc: cols.fee_usdc ?? d(0),
+      paid_at: u64(BigInt(nowS())),
+      ...(cols.dusty_pct ? { dusty_pct: cols.dusty_pct } : {}),
+      ...(cols.after_pct ? { after_pct: cols.after_pct } : {}),
+      ...(cols.release_tx ? { release_tx: cols.release_tx } : {}),
+      ...(cols.og_request_id ? { og_request_id: cols.og_request_id } : {}),
+      ...(cols.proof_hash ? { proof_hash: cols.proof_hash } : {}),
+    }
+    const r = await walletClient.executeBatch(
       {
-        building: BUILDING,
-        job_id: u64(BigInt(b.job_id)),
-        fee_usdc: d(b.fee_usdc),
-        deadline: u64(BigInt(deadline)),
-        output_before: d(b.output_before, 1),
-        ...set,
+        creates: [{ schema: WorkReceipt, values, expiration: ExpirationTime.max(), flags: { readonly: true, permissionlessExtension: true }, salt }],
+        ownershipChanges: [{ entityKey: key, newOwner: cleaner }],
       },
-      { expiration: until(deadline + 24 * 3600, ExpirationTime.fromHours(1)) },
       tx,
     )
-    jobKeys.set(id, r.entityKey)
-    return { key: r.entityKey, txHash: r.txHash, patched: false }
-  })
+    const made = r.createdEntities?.[0] ?? key
+    receipts.set(id, made)
+    return { key: made, txHash: r.txHash, owner: cleaner, issued: true }
+  }, { ops: 2 })
+}
+
+route("POST", "/work_receipt", async (b) => {
+  const out = await issueReceipt(b)
+  if (!out) throw Object.assign(new Error("needs arc.cleaner (an address) and an id or arc.job_id"), { status: 400 })
+  return out
 })
 
 // POST /sale  {order_id, buyer, buyer_name?, kwh, usdc, arc_tx}: one settled ShopTrade order

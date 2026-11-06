@@ -160,20 +160,66 @@ const off = await step("write shop offer (expires when the window closes)", () =
   post("/offer", { day: today, kwh: 0.42, price_usdc: 0.08, window_end: now + 10 * 60, og_request_id: `smoke-${run}` }),
 )
 
-const jobId = 800_000 + (run % 99_999)
+// Cleaning flow v3, in dy-arc's flat payload (pi/cleaning.py): job_id is the PI's job id and
+// arc_job_id the escrow id once approved. The bridge maps them to case_id / job_id on Arkiv.
+const jobId = 800_000 + (run % 99_999) // Arc escrow id, known from approval on
+const piJobId = 700_000 + (run % 99_999)
+const caseId = String(piJobId)
 const deadline = now + 60 * 60
-const j1 = await step("write cleaning job (escrow open)", () =>
-  post("/cleaning_job", { job_id: jobId, status: "open", fee_usdc: 2, deadline, output_before: 52.3, arc_tx: "0x" + "11".repeat(32), og_request_id: `smoke-dust-${run}` }),
-)
+const cleaner = privateKeyToAccount(generatePrivateKey()).address // the cleaner's wallet
+const job = (status, extra = {}) => ({
+  job_id: piJobId, arc_job_id: null, status, fee_usdc: 2, created_at: now, deadline: now + 86_400,
+  output_before: 52.3, dusty_pct: 52.3, after_pct: null, output_after: null,
+  og_request_id: `smoke-dust-${run}`, og_storage_root: null, og_tee: true, coverage_pct: 38.5, og_input: "vision",
+  proof_hash: null, open_tx: null, release_tx: null, refund_tx: null, arc_tx: null, ...extra,
+})
+const j1 = await step("cleaning job flagged by 0G (create, no escrow yet)", () => post("/cleaning_job", job("flagged")))
 const j1Entity = j1 && (await entity(j1.key))
-await step("cleaning job -> accepted (patch)", () => post("/cleaning_job", { job_id: jobId, status: "accepted" }))
-const j3 = await step("cleaning job -> paid at 94% (patch)", () =>
-  post("/cleaning_job", { job_id: jobId, status: "paid", output_after: 94.1, arc_tx: "0x" + "22".repeat(32), og_storage_root: "0x" + "cd".repeat(32) }),
+await step("a flag nobody approves lapses in 48 h", async () => {
+  const head = await ctx.client.getBlockNumber()
+  const hours = (Number(j1Entity.$expiresAt - head) * 2) / 3600
+  expect(hours > 47 && hours <= 48, `${hours.toFixed(2)} h`)
+  return { note: `${hours.toFixed(1)} h left` }
+})
+const j2 = await step("admin approves (patch + extend to deadline + 7 days)", async () => {
+  const r = await post("/cleaning_job", job("approved", { deadline }))
+  expect(r.key === j1.key && r.patched && r.extended, JSON.stringify(r))
+  return r
+})
+const j2Entity = j2 && (await entity(j2.key))
+await step("escrow open on Arc -> open (patch)", () => post("/cleaning_job", job("open", { deadline, arc_job_id: jobId, open_tx: "0x" + "11".repeat(32), arc_tx: "0x" + "11".repeat(32) })))
+await step("cleaner accepts -> accepted (patch)", () => post("/cleaning_job", job("accepted", { deadline, arc_job_id: jobId, open_tx: "0x" + "11".repeat(32) })))
+await step("cleaner marks done -> cleaned (patch)", () => post("/cleaning_job", job("cleaned", { deadline, arc_job_id: jobId, open_tx: "0x" + "11".repeat(32) })))
+const j3 = await step("meter proves it: paid at 94% (patch)", () =>
+  post("/cleaning_job", job("paid", {
+    deadline, arc_job_id: jobId, after_pct: 94.1, output_after: 94.1, og_storage_root: "0x" + "cd".repeat(32),
+    open_tx: "0x" + "11".repeat(32), release_tx: "0x" + "22".repeat(32), arc_tx: "0x" + "22".repeat(32),
+    proof_hash: "0x" + "ee".repeat(32), proof_window: [minute - 120, minute], cleaner,
+  })),
 )
-await step("patch kept the expiry (cleaning_job)", async () => {
+await step("paid job: a work receipt made by the building, owned by the cleaner", async () => {
+  const rc = j3?.receipt
+  expect(rc && rc.issued && rc.owner === cleaner && rc.key, `receipt ${JSON.stringify(rc)}`)
+  const e = await entity(rc.key)
+  expect(e.$creator.toLowerCase() === health.wallet.toLowerCase(), "created by the building")
+  expect(e.$owner.toLowerCase() === cleaner.toLowerCase(), "owned by the cleaner")
+  expect(e.$creationFlags?.readonly === true && e.$creationFlags?.permissionlessExtension === true, "sealed, anyone may extend")
+  const again = await post("/work_receipt", { job_id: piJobId, arc_job_id: jobId, cleaner, status: "paid", fee_usdc: 2 })
+  expect(again.key === rc.key && again.issued === false, "issued once")
+  const mine = await reads.workReceipts(ctx, { cleaner })
+  expect(mine.length === 1 && mine[0].key === rc.key && mine[0].afterPct === 94.1, `cleaner's history ${JSON.stringify(mine)}`)
+  return { note: `${rc.key.slice(0, 10)}… owner ${cleaner.slice(0, 8)}…` }
+})
+await step("later patches kept the expiry (cleaning_job)", async () => {
   const after = await entity(j3.key)
-  expect(after.$expiresAt === j1Entity.$expiresAt, `expiresAt ${j1Entity.$expiresAt} -> ${after.$expiresAt}`)
-  return { note: `still block ${after.$expiresAt}` }
+  expect(after.$expiresAt === j2Entity.$expiresAt, `expiresAt ${j2Entity.$expiresAt} -> ${after.$expiresAt}`)
+  expect(j2Entity.$expiresAt > j1Entity.$expiresAt, "approval extended it")
+  return { note: `block ${j1Entity.$expiresAt} -> ${j2Entity.$expiresAt}, then unchanged` }
+})
+await step("v2 flat job still accepted", async () => {
+  const r = await post("/cleaning_job", { job_id: jobId + 1, status: "open", fee_usdc: 2, deadline, output_before: 61 })
+  expect(r.key && !r.patched, JSON.stringify(r))
+  return r
 })
 
 const mnt = await step("write maintenance record", () =>
@@ -236,11 +282,14 @@ await step("read offers (web: Shop offers)", async () => {
 })
 await step("read cleaning jobs with status=paid (web: Cleaner jobs)", async () => {
   const rows = await reads.cleaningJobs(ctx, { status: "paid" })
-  const j = rows.find((x) => x.jobId === jobId)
-  expect(j && j.outputAfter === 94.1 && j.outputBefore === 52.3, "paid job row")
-  expect(j.ogRequestId === `smoke-dust-${run}` && j.ogStorageRoot === "0x" + "cd".repeat(32), "0G proof on the job")
-  const open = await reads.cleaningJobs(ctx, { status: "open" })
-  expect(!open.some((x) => x.jobId === jobId), "paid job must not show as open")
+  const j = rows.find((x) => x.caseId === caseId)
+  expect(j && j.jobId === jobId && j.afterPct === 94.1 && j.dustyPct === 52.3 && j.outputBefore === 52.3, `paid job row ${JSON.stringify(j)}`)
+  expect(j.ogRequestId === `smoke-dust-${run}` && j.ogStorageRoot === "0x" + "cd".repeat(32) && j.ogTee === true && j.ogInput === "vision" && j.coveragePct === 38.5, "0G verdict on the job")
+  expect(j.proofHash === "0x" + "ee".repeat(32) && j.proofWindow?.[1] === minute && j.releaseTx === "0x" + "22".repeat(32) && j.openTx === "0x" + "11".repeat(32), "Arc proof on the job")
+  const live = await reads.cleaningJobs(ctx, { statuses: ["flagged", "open", "accepted", "cleaned"] })
+  expect(!live.some((x) => x.caseId === caseId), "a paid job must not show as live")
+  const v2 = (await reads.cleaningJobs(ctx, { status: "open" })).find((x) => x.jobId === jobId + 1)
+  expect(v2 && v2.outputBefore === 61 && v2.feeUsdc === 2, "v2 job reads with its old fields")
   return { note: `${rows.length} paid` }
 })
 await step("read bills for flat A (web: Bill)", async () => {
