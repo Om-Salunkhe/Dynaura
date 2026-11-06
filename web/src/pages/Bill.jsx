@@ -2,9 +2,12 @@ import { useState } from "react";
 import DemoBadge from "../components/DemoBadge.jsx";
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import Proof from "../components/Proof.jsx";
 import WalletButton from "../components/WalletButton.jsx";
 import { bill as demoBill } from "../data/demo.js";
-import { ADMIN_KEY, postJSON, usePi } from "../lib/api.js";
+import { postJSON, usePi } from "../lib/api.js";
+import { fetchBills, useArkiv } from "../lib/arkiv.js";
+import { useConnection } from "../lib/connection.js";
 import { ARC_READY, ensureAllowance, errText, txUrl, write } from "../lib/arc.js";
 import { FLATS, useRole } from "../lib/role.jsx";
 
@@ -14,6 +17,10 @@ export default function Bill() {
   const [who] = useRole();
   const flat = FLATS[who.flat];
   const pi = usePi(`/api/bill?flat=${who.flat}`, null);
+  const { adminKey } = useConnection();
+  const ark = useArkiv(() => fetchBills({ flat: who.flat }), null, [who.flat]);
+  // newest first from Arkiv; a re-posted month keeps only its newest bill
+  const arkBills = ark.live ? ark.data.filter((p, i, all) => all.findIndex((q) => q.month === p.month) === i) : null;
   const live = !pi.demo && pi.data;
   const [demoPaid, setDemoPaid] = useState(false);
   const [busy, setBusy] = useState(null);
@@ -99,7 +106,7 @@ export default function Bill() {
         {live && !pi.data.bill_id ? (
           <>
             <span className="text-center text-sm text-muted">This bill is not on Arc yet. The committee posts all three flats' bills together.</span>
-            {ADMIN_KEY && pi.data.arc && (
+            {adminKey && pi.data.arc && (
               <button type="button" className="btn min-h-[52px] text-[15px]" onClick={postBills} disabled={busy === "post"}>
                 {busy === "post" ? "Posting on Arc…" : `Post ${b.month} bills on Arc (admin)`}
               </button>
@@ -136,14 +143,36 @@ export default function Bill() {
         {live && <Line k="Proof" v={<span className="mono text-xs">{pi.data.readings_hash.slice(0, 10)}… of {pi.data.minutes} signed minutes</span>} />}
       </section>
 
-      {!live && (
+      {arkBills?.length > 0 && (
+        <section className="card flex flex-col gap-1 rounded-[26px]">
+          <span className="text-base font-bold">Bills on Arkiv</span>
+          <span className="pb-1 text-xs text-muted">Read straight from Arkiv: anyone can check them</span>
+          {arkBills.map((p) => (
+            <div key={p.key} className="flex flex-col gap-1.5 border-t border-line py-2.5 text-sm first-of-type:border-0">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">{monthName(p.month)}</span>
+                <span className="font-bold">{p.usdc.toFixed(2)} USDC</span>
+              </div>
+              <span className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="text-muted">
+                  {p.kwh.toFixed(2)} kWh · {p.solarPct}% solar
+                </span>
+                <Proof kind="arc" id={p.arcTx} />
+                <Proof kind="arkiv" id={p.key} />
+              </span>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {!live && !arkBills?.length && (
         <section className="card flex flex-col gap-1 rounded-[26px]">
           <span className="pb-1 text-base font-bold">Past bills</span>
           {demoBill.past.map((p) => (
             <div key={p.month} className="flex items-center justify-between py-2 text-sm">
               <span className="font-semibold">{p.month}</span>
               <span className="font-bold">{p.amount.toFixed(2)} USDC</span>
-              <span className="text-xs font-bold text-link">{p.status} · Arc tx</span>
+              <span className="text-xs font-bold text-muted">{p.status}</span>
             </div>
           ))}
         </section>

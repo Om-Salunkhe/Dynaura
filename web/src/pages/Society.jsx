@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import DemoBadge from "../components/DemoBadge.jsx";
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { plan as demoPlan } from "../data/demo.js";
@@ -70,7 +69,6 @@ export default function Society() {
       <PageHeader
         kicker={`Sunrise Apartments · ${plan.date}`}
         title="Spare sun runs the building."
-        right={<DemoBadge demo={api.demo} />}
       />
 
       {noAi && (
