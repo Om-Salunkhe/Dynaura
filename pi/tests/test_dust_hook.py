@@ -45,7 +45,7 @@ def watch(confirm=None):
     store = Store(str(Path(tempfile.mkdtemp()) / "t.db"))
     arc = FakeArc()
     w = cleaning.CleaningWatch(FakeHw(), FakeLoop(), store, arc)
-    w.confirm_dirty = confirm
+    w.confirm_dirty = confirm(store) if confirm else None
     for _ in range(cleaning.WINDOW):  # fill the 1-minute window under the dust line
         w.step()
     return w, arc
@@ -64,7 +64,7 @@ def main():
     def not_dirty(lvl):
         calls.append(lvl)
         return False, 11
-    w, arc = watch(not_dirty)
+    w, arc = watch(lambda store: not_dirty)
     w.step()
     assert not arc.opened and w.job is None, w.status
     assert len(calls) == 1, calls
@@ -72,13 +72,18 @@ def main():
     # 0G down: no escrow, and the status says why
     def down(lvl):
         raise zg.ZGUnavailable("0G call failed: no route to host")
-    w, arc = watch(down)
+    w, arc = watch(lambda store: down)
     assert not arc.opened and w.job is None
     assert "no money moved" in (w.status["error"] or ""), w.status
 
     # 0G confirms: the escrow opens and carries the 0G decision that allowed it
-    w, arc = watch(lambda lvl: (True, 42))
-    assert arc.opened and w.job["og_decision_id"] == 42, w.job
+    def confirmed(store):
+        return lambda lvl: (True, store.add_decision("dust", "ai", "dirty", {"panel_dirty": True},
+                                                     request_id="chat-dust-1"))
+    w, arc = watch(confirmed)
+    assert arc.opened and w.job["og_decision_id"], w.job
+    assert w.job["og_request_id"] == "chat-dust-1", w.job
+    assert w.job["og_storage_root"] is None  # filled in after the 0G Storage upload
 
     print("dust hook: all checks passed")
 

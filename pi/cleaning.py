@@ -129,9 +129,11 @@ class CleaningWatch:
         lvl = lvl if lvl is not None else (self.level() or self.health_pct() or 0)
         deadline = int(time.time() + deadline_min * 60)
         job_id, tx = self.arc.open_cleaning(fee_usdc, deadline, lvl)
+        og = self.store.decision(og_decision) if og_decision else None  # the 0G dust check behind it
         self.job = {"job_id": job_id, "status": "open", "fee_usdc": float(fee_usdc), "deadline": deadline,
                     "output_before": lvl, "output_after": None, "open_tx": tx, "cleaner": None,
-                    "og_decision_id": og_decision}  # the 0G dust check that let the money move
+                    "og_decision_id": og_decision, "og_request_id": (og or {}).get("request_id"),
+                    "og_storage_root": (og or {}).get("storage_root")}
         self._save(f"Panel at {lvl:.0f}% of clean: {fee_usdc:.2f} USDC locked on Arc for a cleaner")
         return self.job
 
