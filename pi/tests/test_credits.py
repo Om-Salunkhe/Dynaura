@@ -37,6 +37,22 @@ def test_pawans_numbers_75_25_not_50_50():
     assert out["flats"]["C"]["equal_split_usdc"] == 0, "a flat with no share isn't in the equal split"
 
 
+def test_demo_story_three_flats_75_25_0():
+    """DECISIONS: 150 available -> shares 50 each. A uses 20, B 40, C 50 -> unused 30 / 10 / 0,
+    earned 75% / 25% / 0, while an equal split pays R/3 each."""
+    row = {"available_wh": 150, "panel_wh": 110, "used": {"A": 20, "B": 40, "C": 50}}
+    out = credits.settle_period([row], THREE, P, scale=1.0)
+    a, b, c = (out["flats"][f] for f in "ABC")
+    assert [x["share_wh"] for x in (a, b, c)] == [50, 50, 50]
+    assert [x["unused_wh"] for x in (a, b, c)] == [30, 10, 0] and c["over_wh"] == 0
+    r = out["pool"]["revenue_usdc"]
+    close(a["earned_usdc"], 0.75 * r)
+    close(b["earned_usdc"], 0.25 * r)
+    assert c["earned_usdc"] == 0
+    for x in (a, b, c):
+        close(x["equal_split_usdc"], r / 3)
+
+
 def test_neighbour_pays_for_sun_beyond_its_share():
     """Shares 30 each. A uses 10 (leaves 20), B uses 50 (takes 20 from A's spare), C uses 30."""
     row = {"available_wh": 90, "panel_wh": 90, "used": {"A": 10, "B": 50, "C": 30}}
