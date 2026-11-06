@@ -70,17 +70,8 @@ route("POST", "/heartbeat", async (b) => {
   return { key: entityKey, txHash, renewed: false }
 })
 
-// POST /decision  {decision_id, kind, mode, request_id, model, storage_root, summary, day, arkiv_key?}
-// With arkiv_key the decision is already on Arkiv (written before its 0G Storage upload worked,
-// e.g. while 0G was offline): only the root that came later is patched in.
+// POST /decision  {decision_id, kind, mode, request_id, model, storage_root, summary, day}
 route("POST", "/decision", async (b) => {
-  if (b.arkiv_key) {
-    if (!b.storage_root) return { key: b.arkiv_key, patched: false }
-    const { txHash } = await walletClient.patchEntity(Decision, b.arkiv_key, {
-      set: { storage_root: String(b.storage_root) },
-    })
-    return { key: b.arkiv_key, txHash, patched: true }
-  }
   const { entityKey, txHash } = await walletClient.createEntity(
     Decision,
     {
