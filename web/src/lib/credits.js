@@ -142,6 +142,7 @@ export const settleCredits = (period = "today") => postJSON(`/api/admin/credits/
 
 export const units = (wh) => {
   const n = Number(wh) || 0;
+  if (n > 0 && n < 1) return `${n.toFixed(2)} units`; // small live periods: 0.02, not "0"
   const r = Math.round(n * 10) / 10;
   return `${Number.isInteger(r) || r >= 10 ? Math.round(r) : r.toFixed(1)} units`;
 };

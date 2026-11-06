@@ -35,7 +35,7 @@ export function TradeRow({ t }) {
   return (
     <div className="flex flex-col gap-1 border-t border-line py-2.5 first-of-type:border-0">
       <span className="text-[11px] text-muted">
-        {windowText(t.window) || (t.at ? time(t.at) : "")} · {t.mode === "ai" ? "decided on 0G" : "no-ai: 0G unreachable, spare to the grid"}
+        {windowText(t.window) || (t.at ? time(t.at) : "")} · {t.mode === "ai" ? "decided on 0G" : "Fixed rule, 0G offline"}
       </span>
       <span className="text-[13px]">
         {t.routes
