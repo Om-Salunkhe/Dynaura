@@ -4,6 +4,7 @@ import DemoBadge from "../components/DemoBadge.jsx";
 import Legend from "../components/Legend.jsx";
 import CleaningAlert from "../components/CleaningAlert.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import SettleCredits from "../components/SettleCredits.jsx";
 import { admin } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
 import { ARKIV_BUSY_TEXT, ARKIV_READY, fetchHeartbeat, useArkiv } from "../lib/arkiv.js";
@@ -54,6 +55,8 @@ export default function AdminOverview() {
       </div>
 
       <Heartbeat />
+
+      <SettleCredits />
 
       <section className="card flex items-center justify-between rounded-[14px] py-3">
         <span className="flex items-center gap-2 text-sm font-medium">
