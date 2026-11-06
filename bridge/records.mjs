@@ -3,11 +3,11 @@
 import { ExpirationTime } from "@arkiv-network/sdk"
 import { and, desc, eq, lte } from "@arkiv-network/sdk/query"
 import { addr, u64 } from "@arkiv-network/sdk/schema"
-import { hexToBytes, stringToBytes } from "viem"
+import { hexToBytes, isAddress, stringToBytes } from "viem"
 import { account, addHealth, BUILDING, publicClient, read, route, walletClient, write } from "./bridge.mjs"
 import { d, jobColumns, JOB_STATES, ogRequestId, ogStorageRoot, wantedEnd } from "./jobs.mjs"
 import { redact } from "./retry.mjs"
-import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale } from "./schemas.mjs"
+import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale, WorkReceipt } from "./schemas.mjs"
 
 export const days = (n) => ExpirationTime.fromDays(n)
 const nowS = () => Math.floor(Date.now() / 1000)
@@ -288,7 +288,73 @@ route("POST", "/cleaning_job", async (b) => {
     const r = await walletClient.createEntity(CleaningJob, { building: BUILDING, ...cols }, { expiration }, tx)
     jobKeys.set(cacheId, r.entityKey)
     return { key: r.entityKey, txHash: r.txHash, patched: false, extended: false }
+  }, { ops: 2 }).then(async (out) => {
+    // A paid job also gets the cleaner's work receipt (needs arc.cleaner). Its failure never fails the job.
+    if (cols.status !== "paid") return out
+    const receipt = await issueReceipt(b, cols).catch((e) => ({ error: redact(e?.shortMessage || e?.message || e) }))
+    return receipt ? { ...out, receipt } : out
+  })
+})
+
+// ---- work receipt: made by the building, owned by the cleaner -------------------------------
+// One batch creates the sealed receipt and hands it to the cleaner's wallet. The key is predicted
+// first, so the transfer can name it; if anything doesn't match, the whole batch reverts. After
+// that only the cleaner can delete it, nobody can change it, and anyone may keep it alive.
+const receipts = new Map() // case id (or "arc:<job_id>") -> receipt key
+
+export async function issueReceipt(b, cols = jobColumns(b)) {
+  const cleaner = b.arc?.cleaner ?? b.cleaner
+  if (!cleaner || !isAddress(cleaner)) return null
+  const id = cols.case_id ?? (cols.job_id ? `arc:${cols.job_id.value}` : null)
+  if (!id) return null
+  if (receipts.has(id)) return { key: receipts.get(id), owner: cleaner, issued: false }
+  return write(`work_receipt ${id}`, async (tx) => {
+    const by = cols.case_id ? eq("case_id", cols.case_id) : eq("job_id", cols.job_id)
+    const found = await read(() =>
+      publicClient
+        .select({ $key: true })
+        .from(WorkReceipt)
+        .where(and(eq("building", BUILDING), eq("cleaner", addr(cleaner)), by))
+        .createdBy(account.address)
+        .ownedBy(cleaner)
+        .limit(1)
+        .fetch(),
+    )
+    if (found.entities[0]) {
+      receipts.set(id, found.entities[0].$key)
+      return { key: found.entities[0].$key, owner: cleaner, issued: false }
+    }
+    const [{ key, salt }] = await read(() => publicClient.predictEntityKeys({ owner: account.address, count: 1 }))
+    const values = {
+      building: BUILDING,
+      cleaner: addr(cleaner),
+      ...(cols.case_id ? { case_id: cols.case_id } : {}),
+      ...(cols.job_id ? { job_id: cols.job_id } : {}),
+      fee_usdc: cols.fee_usdc ?? d(0),
+      paid_at: u64(BigInt(nowS())),
+      ...(cols.dusty_pct ? { dusty_pct: cols.dusty_pct } : {}),
+      ...(cols.after_pct ? { after_pct: cols.after_pct } : {}),
+      ...(cols.release_tx ? { release_tx: cols.release_tx } : {}),
+      ...(cols.og_request_id ? { og_request_id: cols.og_request_id } : {}),
+      ...(cols.proof_hash ? { proof_hash: cols.proof_hash } : {}),
+    }
+    const r = await walletClient.executeBatch(
+      {
+        creates: [{ schema: WorkReceipt, values, expiration: ExpirationTime.max(), flags: { readonly: true, permissionlessExtension: true }, salt }],
+        ownershipChanges: [{ entityKey: key, newOwner: cleaner }],
+      },
+      tx,
+    )
+    const made = r.createdEntities?.[0] ?? key
+    receipts.set(id, made)
+    return { key: made, txHash: r.txHash, owner: cleaner, issued: true }
   }, { ops: 2 })
+}
+
+route("POST", "/work_receipt", async (b) => {
+  const out = await issueReceipt(b)
+  if (!out) throw Object.assign(new Error("needs arc.cleaner (an address) and an id or arc.job_id"), { status: 400 })
+  return out
 })
 
 // POST /sale  {order_id, buyer, buyer_name?, kwh, usdc, arc_tx}: one settled ShopTrade order

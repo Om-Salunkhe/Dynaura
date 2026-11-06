@@ -9,7 +9,7 @@ import { rabdi } from "@arkiv-network/sdk/chains";
 import { and, asc, desc, eq, gte, lte, or } from "@arkiv-network/sdk/query";
 import { addr, u64 } from "@arkiv-network/sdk/schema";
 import { hexToString, http } from "viem";
-import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale } from "./arkivSchemas.js";
+import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale, WorkReceipt } from "./arkivSchemas.js";
 
 /** A read-only Rabdi client. Rabdi makes a block every 2 s; viem assumes 12 s unless told. */
 export function arkivClient(accessKey = "") {
@@ -234,6 +234,40 @@ export function cleaningJobs(ctx, { status, statuses, limit = 20 } = {}) {
         arcTx: e.arc_tx?.value ?? e.release_tx?.value ?? e.refund_tx?.value ?? e.open_tx?.value,
       };
     });
+  });
+}
+
+/** A cleaner's work history: receipts this building CREATED and the cleaner now OWNS (the building
+ *  hands each one over when the escrow pays). Newest first. */
+export function workReceipts(ctx, { cleaner, limit = 20 } = {}) {
+  return withBackoff(async () => {
+    const page = await ctx.client
+      .select({
+        $key: true, $owner: true, cleaner: true, case_id: true, job_id: true, fee_usdc: true, paid_at: true,
+        dusty_pct: true, after_pct: true, release_tx: true, og_request_id: true, proof_hash: true, $expiresAt: true,
+      })
+      .from(WorkReceipt)
+      .where(and(eq("building", ctx.building), eq("cleaner", addr(cleaner))))
+      .createdBy(ctx.owner)
+      .ownedBy(cleaner)
+      .orderBy(desc("paid_at"))
+      .limit(limit)
+      .fetch();
+    const n = (v) => (v ? Number(v.value) : null);
+    return page.entities.map((e) => ({
+      key: e.$key,
+      owner: e.$owner,
+      cleaner: e.cleaner.value,
+      caseId: e.case_id?.value ?? null,
+      jobId: n(e.job_id),
+      feeUsdc: Number(e.fee_usdc.value),
+      paidAt: Number(e.paid_at.value),
+      dustyPct: n(e.dusty_pct),
+      afterPct: n(e.after_pct),
+      releaseTx: e.release_tx?.value ?? null,
+      ogRequestId: e.og_request_id?.value ?? null,
+      proofHash: e.proof_hash?.value ?? null,
+    }));
   });
 }
 

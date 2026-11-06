@@ -33,6 +33,8 @@ export const fetchDecisionByOgRequest = (ogRequestId) => reads.decisionByOgReque
 export const fetchOffers = (limit = 20) => reads.offers(arkiv(), limit);
 /** Cleaning requests (v3): fetchCleaningJobs({ status: "flagged" }) or ({ statuses: ["open", "accepted", "cleaned"] }) */
 export const fetchCleaningJobs = (opts) => reads.cleaningJobs(arkiv(), opts);
+/** A cleaner's work history, owned by the cleaner's wallet: fetchWorkReceipts({ cleaner: "0x..." }) */
+export const fetchWorkReceipts = (opts) => reads.workReceipts(arkiv(), opts);
 /** Resident bills: fetchBills({ flat: "A" }) or fetchBills({ month: "2026-11" }) */
 export const fetchBills = (opts) => reads.bills(arkiv(), opts);
 /** Shop sales settled on Arc: fetchSales({ buyer: "0x..." }) */

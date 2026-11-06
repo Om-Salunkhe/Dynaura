@@ -105,6 +105,24 @@ export const CleaningJob = defineSchema("dynaura.cleaning_job", {
   arc_tx: str().optional(), // the latest Arc tx (v2)
 })
 
+// A receipt for a paid cleaning, made by the building and handed to the cleaner's wallet in the same
+// transaction. Two parties: the building CREATED it (provenance, fixed forever), the cleaner OWNS it
+// (custody: the committee can't delete their work history). Sealed, so neither side can rewrite it;
+// anyone may extend it, so it outlives the job board. Read with createdBy(building) + cleaner.
+export const WorkReceipt = defineSchema("dynaura.work_receipt", {
+  building: str().indexed(),
+  cleaner: addr().indexed(),
+  case_id: str().indexed().optional(), // the cleaning request (dynaura.cleaning_job case_id)
+  job_id: u64().indexed().optional(), // CleaningEscrow job on Arc
+  fee_usdc: dec(),
+  paid_at: u64(), // unix s
+  dusty_pct: dec().optional(),
+  after_pct: dec().optional(),
+  release_tx: str().optional(), // Arc: the payout
+  og_request_id: str().optional(), // the 0G dust check
+  proof_hash: str().optional(), // what the escrow released on
+})
+
 // Maintenance history of the solar asset. Lives ~6 months (extend).
 export const Maintenance = defineSchema("dynaura.maintenance", {
   building: str().indexed(),
@@ -126,4 +144,4 @@ export const Bill = defineSchema("dynaura.bill", {
   arc_tx: str().optional(),
 })
 
-export const ALL = { Reading, Heartbeat, DailyOutput, Decision, Offer, Sale, CleaningJob, Maintenance, Bill }
+export const ALL = { Reading, Heartbeat, DailyOutput, Decision, Offer, Sale, CleaningJob, WorkReceipt, Maintenance, Bill }

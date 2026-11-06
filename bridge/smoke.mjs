@@ -165,6 +165,7 @@ const jobId = 800_000 + (run % 99_999) // Arc escrow id, known from approval on
 const caseId = `smoke-${run}`
 const deadline = now + 60 * 60
 const og = { request_id: `smoke-dust-${run}`, tee: true, decision_id: decisionId + 2, dirty: true, coverage_pct: 38.5, input: "vision", reason: "dust film" }
+const cleaner = privateKeyToAccount(generatePrivateKey()).address // the cleaner's wallet
 const job = (state, extra = {}) => ({ id: caseId, state, fee_usdc: 2, deadline, created_at: now, dusty_pct: 52.3, og, arc: {}, ...extra })
 const j1 = await step("cleaning job flagged by 0G (create, no escrow yet)", () => post("/cleaning_job", job("flagged", { fee_usdc: undefined, deadline: undefined })))
 const j1Entity = j1 && (await entity(j1.key))
@@ -190,11 +191,24 @@ const j3 = await step("meter proves it: paid at 94% (patch)", () =>
     ...job("paid", {
       after_pct: 94.1,
       og: { ...og, storage_root: "0x" + "cd".repeat(32) },
-      arc: { job_id: jobId, release_tx: "0x" + "22".repeat(32), proof_hash: "0x" + "ee".repeat(32), proof_window: [minute - 120, minute] },
+      arc: { job_id: jobId, cleaner, release_tx: "0x" + "22".repeat(32), proof_hash: "0x" + "ee".repeat(32), proof_window: [minute - 120, minute] },
     }),
     arkiv_key: j1.key,
   }),
 )
+await step("paid job: a work receipt made by the building, owned by the cleaner", async () => {
+  const rc = j3?.receipt
+  expect(rc && rc.issued && rc.owner === cleaner && rc.key, `receipt ${JSON.stringify(rc)}`)
+  const e = await entity(rc.key)
+  expect(e.$creator.toLowerCase() === health.wallet.toLowerCase(), "created by the building")
+  expect(e.$owner.toLowerCase() === cleaner.toLowerCase(), "owned by the cleaner")
+  expect(e.$creationFlags?.readonly === true && e.$creationFlags?.permissionlessExtension === true, "sealed, anyone may extend")
+  const again = await post("/work_receipt", { id: caseId, arc: { job_id: jobId, cleaner }, fee_usdc: 2 })
+  expect(again.key === rc.key && again.issued === false, "issued once")
+  const mine = await reads.workReceipts(ctx, { cleaner })
+  expect(mine.length === 1 && mine[0].key === rc.key && mine[0].afterPct === 94.1, `cleaner's history ${JSON.stringify(mine)}`)
+  return { note: `${rc.key.slice(0, 10)}… owner ${cleaner.slice(0, 8)}…` }
+})
 await step("later patches kept the expiry (cleaning_job)", async () => {
   const after = await entity(j3.key)
   expect(after.$expiresAt === j2Entity.$expiresAt, `expiresAt ${j2Entity.$expiresAt} -> ${after.$expiresAt}`)
