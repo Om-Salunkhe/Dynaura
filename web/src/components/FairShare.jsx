@@ -8,6 +8,10 @@ import Proof from "./Proof.jsx";
 
 const shortId = (id) => (id && id.length > 14 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id || "");
 const time = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+// trader.py sends window as ["12:00", "12:15"]; the demo as one string
+const windowText = (w) => (Array.isArray(w) ? w.join("–") : w);
+/** Trades that actually sold something (trader.py logs "none" when there's no spare). */
+export const soldTrades = (trades) => (trades || []).filter((t) => t.mode !== "none" && (t.routes || []).some((r) => r.wh > 0));
 
 function Bar({ label, wh, max, tone, note }) {
   return (
@@ -31,7 +35,7 @@ export function TradeRow({ t }) {
   return (
     <div className="flex flex-col gap-1 border-t border-line py-2.5 first-of-type:border-0">
       <span className="text-[11px] text-muted">
-        {t.window || (t.at ? time(t.at) : "")} · {t.mode === "ai" ? "decided on 0G" : "no-ai: 0G unreachable, spare to the grid"}
+        {windowText(t.window) || (t.at ? time(t.at) : "")} · {t.mode === "ai" ? "decided on 0G" : "no-ai: 0G unreachable, spare to the grid"}
       </span>
       <span className="text-[13px]">
         {t.routes
@@ -64,7 +68,7 @@ export default function FairShare({ flat }) {
   const me = d.flats?.[flat];
   if (!me) return null;
   const max = Math.max(me.share_wh, me.used_wh, 1);
-  const trades = (d.trades || []).slice(-3).reverse();
+  const trades = soldTrades(d.trades).slice(-3).reverse();
   const chain = d.chain || {};
   const claimTx = claimed || chain.claims?.[flat] || null;
   const canClaim = me.earned_usdc > 0 && !claimTx && (c.demo || (chain.period_id && ARC_READY.credits));

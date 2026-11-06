@@ -1,7 +1,7 @@
 // Building page: where today's sun went. Panel -> Flats A, B, C, the pump, the shop, the grid as
 // thin horizontal bars, and the latest 0G trade decision with its reason.
 import { FLAT_IDS, units, useCredits } from "../lib/credits.js";
-import { TradeRow } from "./FairShare.jsx";
+import { TradeRow, soldTrades } from "./FairShare.jsx";
 
 const TONE = { flat: "bg-sun", pump: "bg-[#2F9E6A]", shop: "bg-ink-2", grid: "bg-grid" };
 
@@ -20,7 +20,7 @@ export default function SunFlow() {
     { key: "shop", label: "Shop", wh: d.pool?.shop_wh || 0, tone: TONE.shop, note: d.pool?.prices?.shop != null ? `at ${d.pool.prices.shop} a unit` : "" },
     { key: "grid", label: "Grid", wh: d.pool?.grid_wh || 0, tone: TONE.grid, note: d.pool?.prices?.export != null ? `feed-in at ${d.pool.prices.export}` : "" },
   ];
-  const last = (d.trades || [])[d.trades.length - 1];
+  const last = soldTrades(d.trades).slice(-1)[0];
 
   return (
     <section className="card flex flex-col gap-3 rounded-[14px]">
