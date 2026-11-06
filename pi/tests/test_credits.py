@@ -37,6 +37,22 @@ def test_pawans_numbers_75_25_not_50_50():
     assert out["flats"]["C"]["equal_split_usdc"] == 0, "a flat with no share isn't in the equal split"
 
 
+def test_demo_story_three_flats_75_25_0():
+    """DECISIONS: 150 available -> shares 50 each. A uses 20, B 40, C 50 -> unused 30 / 10 / 0,
+    earned 75% / 25% / 0, while an equal split pays R/3 each."""
+    row = {"available_wh": 150, "panel_wh": 110, "used": {"A": 20, "B": 40, "C": 50}}
+    out = credits.settle_period([row], THREE, P, scale=1.0)
+    a, b, c = (out["flats"][f] for f in "ABC")
+    assert [x["share_wh"] for x in (a, b, c)] == [50, 50, 50]
+    assert [x["unused_wh"] for x in (a, b, c)] == [30, 10, 0] and c["over_wh"] == 0
+    r = out["pool"]["revenue_usdc"]
+    close(a["earned_usdc"], 0.75 * r)
+    close(b["earned_usdc"], 0.25 * r)
+    assert c["earned_usdc"] == 0
+    for x in (a, b, c):
+        close(x["equal_split_usdc"], r / 3)
+
+
 def test_neighbour_pays_for_sun_beyond_its_share():
     """Shares 30 each. A uses 10 (leaves 20), B uses 50 (takes 20 from A's spare), C uses 30."""
     row = {"available_wh": 90, "panel_wh": 90, "used": {"A": 10, "B": 50, "C": 30}}
@@ -69,6 +85,21 @@ def test_ai_trade_sells_to_the_shop_no_ai_does_not():
     no_ai = {"mode": "no-ai", "routes": [{"to": "shop", "wh": 25, "price": 0.08}]}
     out = credits.settle_period([row], TWO, P, [no_ai], scale=1.0)
     assert out["pool"]["shop_wh"] == 0 and out["pool"]["grid_wh"] == 40, "no 0G: nothing is routed to the shop"
+
+
+def test_no_ai_rule_neighbours_first_at_midpoint_no_shop_rest_to_grid():
+    """0G down (approved rule): neighbours' over-use is still settled first at the midpoint, a fixed
+    rule; nothing goes to the shop; the rest goes to the grid. The trade is dy-0g's no-ai output."""
+    row = {"available_wh": 90, "panel_wh": 75, "used": {"A": 5, "B": 45, "C": 25}}  # shares 30: B over 15
+    no_ai = {"mode": "no-ai", "request_id": None, "reason": "fixed rule: drawn energy settled at the midpoint; no AI pricing",
+             "routes": [{"to": "B", "wh": 15, "price": 0.013}, {"to": "shop", "wh": 5, "price": 0.08}, {"to": "grid", "wh": 15, "price": 0.006}]}
+    out = credits.settle_period([row], THREE, P, [no_ai], scale=1.0)
+    pool = out["pool"]
+    assert pool["neighbor_wh"] == 15 and pool["prices"]["neighbor"] == 0.013, "neighbours first, at the midpoint"
+    assert pool["shop_wh"] == 0, "no shop sale without 0G, whatever a route says"
+    assert pool["grid_wh"] == 15, "the rest to the grid"
+    close(pool["revenue_usdc"], 15 * 0.013 + 15 * 0.006)
+    close(out["flats"]["B"]["owes_usdc"], 15 * 0.013)
 
 
 def test_neighbour_price_from_0g_only_inside_the_band():
@@ -137,6 +168,13 @@ class FakeArc:
     def __init__(self):
         self.calls = []
 
+    def credits_status(self, period_id):
+        return {"posted": any(c[0] == "post" for c in self.calls), "total_in_usdc": 1.0, "period_id": None}
+
+    def credit_claims(self, period_id):
+        self.calls.append(("claims", period_id))
+        return {"A": "0xclaimA", "B": None}
+
     def post_credits(self, *a):
         self.calls.append(("post", a))
         return "0xpost"
@@ -182,8 +220,12 @@ def test_ledger_end_to_end_with_store_settle_and_arkiv():
     assert post[4] == 13000, "USDC base units per real kWh"
     fund = arc.calls[1][1]
     assert fund[1] == int(round((0.03 * 0.08 + 0.01 * 0.006) * 1e6)), fund
-    assert chain["post_tx"] == "0xpost" and led.period("2026-11-07", now=m)["chain"]["fund_tx"] == "0xfund"
-    assert led.settle(arc, "2026-11-07")["post_tx"] == "0xpost" and len(arc.calls) == 2, "settled once"
+    assert chain["post_tx"] == "0xpost"
+    led.arc = arc  # chain{} refreshes from the contract: claims appear, the posted period id stays
+    c = led.period("2026-11-07", now=m)["chain"]
+    assert c["fund_tx"] == "0xfund" and c["claims"]["A"] == "0xclaimA" and c["posted"] is True
+    assert c["period_id"] == "0x" + __import__("hashlib").sha256(b"dynaura-credits:2026-11-07").hexdigest()
+    assert led.settle(arc, "2026-11-07")["post_tx"] == "0xpost" and [x[0] for x in arc.calls].count("post") == 1, "settled once"
 
     class NotSetUp(FakeArc):  # arc.py without a key or ARC_CREDITS: a clear error, not a crash
         enabled, credits = False, None
@@ -198,7 +240,7 @@ def test_ledger_end_to_end_with_store_settle_and_arkiv():
     assert w["needs"] == {} and w["spare_wh"] > 0
 
 
-def test_trader_gets_the_window_with_shop_demand_and_is_skipped_without_spare():
+def test_window_for_the_trader_carries_shop_demand():
     day0 = int(time.mktime(time.strptime("2026-11-07", "%Y-%m-%d")))
     m = day0 + 12 * 3600
     rows = [{"minute": m, "meter": "panel", "wh": 0.06, "solar_wh": 0.06, "sig": "s"},
@@ -212,20 +254,130 @@ def test_trader_gets_the_window_with_shop_demand_and_is_skipped_without_spare():
     led = credits.Ledger(FakeStore(rows, [done]), FakeHw(6.0), path=str(Path(tempfile.mkdtemp()) / "c.db"), sales=Sales())
     for i in range(13):
         led.sample(5, now=m + i * 5)
-    seen = []
-    led.trade = lambda snap: seen.append(snap) or {"mode": "ai", "routes": []}
-    out = led.trade_now(minutes=5, now=m + 120)
-    snap = seen[0]
+    snap = led.window(5, now=m + 120)
     assert snap["shop_order_wh"] == 1.5, "open order 2000 real Wh = 2 model Wh, minus 0.5 already routed"
-    assert snap["window"] == [snap["since"], snap["until"]] and snap["spare_wh"] > 0 and out["mode"] == "ai"
-    later = led.trade_now(minutes=5, now=m + 3600)  # an hour later: no readings, no spare
-    assert "skipped" in later and len(seen) == 1
-    led.trade = None
+    assert snap["window"] == [snap["since"], snap["until"]] and snap["spare_wh"] > 0
+    assert led.window(5, now=m + 3600)["spare_wh"] == 0, "an hour later: no readings, no spare"
+
+
+def test_settle_through_dy_arcs_credits_settle_and_status():
+    day0 = int(time.mktime(time.strptime("2026-11-07", "%Y-%m-%d")))
+    m = day0 + 12 * 3600
+    rows = [{"minute": m, "meter": "panel", "wh": 0.09, "solar_wh": 0.09, "sig": "s"},
+            {"minute": m, "meter": "A", "wh": 0.01, "solar_wh": 0.01, "sig": "s"},
+            {"minute": m, "meter": "B", "wh": 0.05, "solar_wh": 0.05, "sig": "s"},
+            {"minute": m, "meter": "C", "wh": 0.03, "solar_wh": 0.03, "sig": "s"}]
+
+    class Arc2:
+        enabled, credits = True, object()
+
+        def __init__(self):
+            self.settles, self.status_calls = [], 0
+
+        def credits_settle(self, key, flats, rate, fund, rhash):
+            self.settles.append((key, flats, rate, fund, rhash))
+            return {"period_id": "0xpid", "key": key, "posted": True, "post_tx": "0xpost", "fund_tx": "0xfund", "claims": {"A": None}}
+
+        def credits_status(self, key):
+            self.status_calls += 1
+            return {"period_id": "0xpid", "posted": True, "post_tx": None,
+                    "flats": {"A": {"claimed_usdc": 0.4, "claimable_usdc": 0}, "C": {"claimed_usdc": 0, "claimable_usdc": 0.1}}}
+
+        def credit_claims(self, key):
+            self.claim_calls = getattr(self, "claim_calls", 0) + 1
+            return {"A": "0xclaimA"}
+
+    arc = Arc2()
+    led = credits.Ledger(FakeStore(rows), FakeHw(5.4), path=str(Path(tempfile.mkdtemp()) / "c.db"), arc=arc)
+    for i in range(13):  # 5.4 W for a minute = 0.09 Wh: shares 0.03 each
+        led.sample(5, now=m + i * 5)
+    assert led.period("2026-11-07", now=m)["chain"] is None, "not settled: no chain"
+    chain = led.settle(arc, "2026-11-07")
+    key, flats, rate, fund, rhash = arc.settles[0]
+    assert key == "2026-11-07" and set(flats) == {"A", "B", "C"} and rate == 0.013 and rhash.startswith("0x")
+    close(flats["A"]["unused_wh"], 0.02)
+    close(flats["B"]["over_wh"], 0.02)
+    p = led.period("2026-11-07", now=m)
+    close(fund, p["pool"]["revenue_usdc"] - 0.02 * 0.013)  # shop + grid only: B pays its part with payIn
+    assert chain["post_tx"] == "0xpost" and p["chain"]["claims"]["A"] == "0xclaimA", "claim tx from the logs"
+    assert p["chain"]["flats"]["A"]["claimed"] is True and p["chain"]["flats"]["C"]["claimed"] is False
+    assert p["chain"]["post_tx"] == "0xpost", "a None from status doesn't hide what settle saved"
+    led.period("2026-11-07", now=m)
+    assert arc.status_calls == 1 and arc.claim_calls == 1, "status cached 20 s, claim logs 60 s"
+    led.settle(arc, "2026-11")  # a month works too (dy-arc's keys)
+    assert arc.settles[1][0] == "2026-11"
+
+
+def test_settle_resumes_from_the_chain_never_posts_or_funds_twice():
+    day0 = int(time.mktime(time.strptime("2026-11-07", "%Y-%m-%d")))
+    m = day0 + 12 * 3600
+    rows = [{"minute": m, "meter": "panel", "wh": 0.06, "solar_wh": 0.06, "sig": "s"},
+            {"minute": m, "meter": "A", "wh": 0.02, "solar_wh": 0.02, "sig": "s"},
+            {"minute": m, "meter": "B", "wh": 0.04, "solar_wh": 0.04, "sig": "s"}]
+
+    class Chain:
+        enabled, credits = True, object()
+
+        def __init__(self, fail_fund=False):
+            self.posted, self.funded, self.calls, self.fail_fund = False, False, [], fail_fund
+
+        def credits_status(self, pid):
+            return {"posted": self.posted}
+
+        def credit_txs(self, pid):
+            return {"post_tx": "0xpost" if self.posted else None, "fund_tx": "0xfund" if self.funded else None, "claims": {}}
+
+        def post_credits(self, *a):
+            assert not self.posted, "AlreadyPosted"
+            self.posted = True
+            self.calls.append("post")
+            return "0xpost"
+
+        def fund_credits(self, *a):
+            if self.fail_fund:
+                raise OSError("rpc down")
+            self.funded = True
+            self.calls.append("fund")
+            return "0xfund"
+
+        def credit_claims(self, pid):
+            return {}
+
+    arc = Chain(fail_fund=True)
+    led = credits.Ledger(FakeStore(rows), FakeHw(6.0), path=str(Path(tempfile.mkdtemp()) / "c.db"), shares="A:1,B:1,C:0")
+    for i in range(13):
+        led.sample(5, now=m + i * 5)
     try:
-        led.trade_now()
-        raise AssertionError("no trader must be an error, not a fake trade")
-    except RuntimeError:
+        led.settle(arc, "2026-11-07")
+    except OSError:
         pass
+    assert arc.calls == ["post"], "posted, then the fund failed"
+    arc.fail_fund = False
+    chain = led.settle(arc, "2026-11-07")
+    assert arc.calls == ["post", "fund"] and chain["post_tx"] == "0xpost" and chain["fund_tx"] == "0xfund"
+    fresh = credits.Ledger(FakeStore(rows), FakeHw(6.0), path=str(Path(tempfile.mkdtemp()) / "c2.db"), shares="A:1,B:1,C:0")
+    fresh.settle(arc, "2026-11-07")  # a wiped credits.db: the chain still says posted and funded
+    assert arc.calls == ["post", "fund"], "never posted or funded twice"
+
+
+def test_a_tagged_period_is_the_same_day_but_its_own_period_on_chain():
+    label, start, end = credits._range("2026-11-07#rehearsal")
+    assert label == "2026-11-07#rehearsal" and end - start == 86400
+    assert credits._range("2026-11-07")[1:] == (start, end)
+    assert credits._range("today#a b!c", now=start + 3600)[0] == "2026-11-07#abc", "tag cleaned"
+    day0 = start
+    m = day0 + 12 * 3600
+    rows = [{"minute": m, "meter": "panel", "wh": 0.06, "solar_wh": 0.06, "sig": "s"},
+            {"minute": m, "meter": "A", "wh": 0.02, "solar_wh": 0.02, "sig": "s"}]
+    arc = FakeArc()
+    led = credits.Ledger(FakeStore(rows), FakeHw(6.0), FakeArkiv(), path=str(Path(tempfile.mkdtemp()) / "c.db"), shares="A:1,B:1,C:0")
+    for i in range(13):
+        led.sample(5, now=m + i * 5)
+    led.settle(arc, "2026-11-07#rehearsal")
+    import hashlib
+    assert arc.calls[0][1][0] == hashlib.sha256(b"dynaura-credits:2026-11-07#rehearsal").digest(), "its own period id"
+    assert led.period("2026-11-07", now=m)["chain"] is None, "the plain day is still free to settle"
+    assert not led.arkiv.posts, "a tagged rehearsal isn't written to Arkiv as the day"
 
 
 def test_real_board_available_sun_never_hammers_a_dead_forecast():

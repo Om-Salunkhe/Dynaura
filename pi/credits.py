@@ -17,9 +17,11 @@ Summed over a period (today, a day, a month), then per period, as SolarCredits t
 so a flat is either under its share or over it, never both, and sum(unused) - sum(over) is exactly
 the sun that left the building.
 
-The spare pool (sum of unused) goes to: neighbours (what the over-users took), the shop (the 0G
-trader's shop routes), and the grid at the feed-in rate (the rest). With no 0G trade, nothing goes
-to the shop: the spare goes to the grid, recorded as no-ai. A routing is never invented here.
+The spare pool (sum of unused) goes to: neighbours (what over-users drew, by the meters, at the
+neighbour price), the shop (the 0G trader's shop routes) and the grid at the feed-in rate (the
+rest). With no 0G (no-ai trades, a fixed rule): neighbours' drawn energy is still settled, at the
+default midpoint price; nothing goes to the shop; the rest goes to the grid. A routing is never
+invented here.
 
 Units: *_wh are model Wh, the meters' unit. 1 model Wh = BILL_SCALE/1000 real kWh. Prices are USDC
 per real kWh, like billing.py. Behind CREDITS_ENABLED (default true); off = nothing runs.
@@ -49,8 +51,6 @@ def _f(name: str, default: float) -> float:
 ENABLED = str(getattr(config, "CREDITS_ENABLED", os.getenv("CREDITS_ENABLED", "true"))).lower() == "true"
 CREDITS_DB = os.getenv("CREDITS_DB", "credits.db")
 SAMPLE_S = 5.0          # how often the panel's available power is sampled
-TRADE_EVERY_MIN = float(os.getenv("TRADE_EVERY_MIN", "15") or 15)  # 0G routes the spare this often
-TRADE_MIN_SPARE_WH = float(os.getenv("TRADE_MIN_SPARE_WH", "0.01") or 0.01)  # below this, no trade call
 SHOP_DEMAND_WH = float(os.getenv("SHOP_DEMAND_WH", "0") or 0)  # standing shop demand per window (model Wh), on top of Arc orders
 ARKIV_EVERY_S = 600     # today's credit period goes to Arkiv every 10 minutes
 COMMON_NOISE = 0.03     # panel minus flats below 3% of the panel is meter noise, not the pump
@@ -176,14 +176,18 @@ def settle_period(minutes: list[dict], weights: dict[str, float], p: dict | None
     }
 
 
-def period_id(day: str) -> bytes:
-    return hashlib.sha256(f"dynaura-credits:{day}".encode()).digest()
-
-
 # ---- the ledger on the Pi --------------------------------------------------------------------
 
 def _range(period: str, now: float | None = None) -> tuple[str, int, int]:
-    """'today' | 'month' | 'YYYY-MM-DD' | 'YYYY-MM' -> (label, start, end) in unix seconds."""
+    """'today' | 'month' | 'YYYY-MM-DD' | 'YYYY-MM' -> (label, start, end) in unix seconds.
+    A '#tag' (e.g. 'today#rehearsal') covers the same readings but is a separate period on chain:
+    a posted period can never change, so a rehearsal settles a tagged period and leaves the plain
+    day for the real run."""
+    period, _, tag = (period or "").partition("#")
+    tag = "".join(c for c in tag if c.isalnum() or c in "-_")[:32]
+    if tag:
+        label, start, end = _range(period, now)
+        return f"{label}#{tag}", start, end
     now_dt = datetime.fromtimestamp(now or time.time())
     if period in ("today", "", None):
         period = now_dt.strftime("%Y-%m-%d")
@@ -198,13 +202,14 @@ def _range(period: str, now: float | None = None) -> tuple[str, int, int]:
 
 
 class Ledger:
-    def __init__(self, store, hw, arkiv=None, *, path: str | None = None, shares: str | None = None, sales=None):
+    def __init__(self, store, hw, arkiv=None, *, path: str | None = None, shares: str | None = None, sales=None, arc=None):
         self.store = store
         self.hw = hw
         self.arkiv = arkiv
+        self.arc = arc  # Arc client (arc.py): SolarCredits status for chain{}
+        self._status: dict[str, tuple[float, dict]] = {}  # key -> (fetched at, credits_status)
+        self._claims: dict[str, tuple[float, dict]] = {}  # key -> (fetched at, {flat: claim tx})
         self.sales = sales  # ShopSettler: today's open shop orders are the shop's demand
-        self.trade = None  # callable(window snapshot) -> trade result; set by api.py when trader.py is there
-        self.last_trade: dict | None = None
         self.weights = parse_shares(shares if shares is not None else os.getenv("FLAT_SHARES", ""))
         self._db = sqlite3.connect(path or CREDITS_DB, check_same_thread=False, isolation_level=None)
         self._db.execute("PRAGMA journal_mode=WAL")
@@ -305,10 +310,57 @@ class Ledger:
             row = self._db.execute("SELECT chain FROM settled WHERE period = ?", (label,)).fetchone()
         return {"enabled": True, "period": label, "from": start, "to": end, "minutes": len(mins), **out,
                 "trades": trades, "readings_hash": "0x" + hashlib.sha256(blob.encode()).hexdigest(),
-                "chain": json.loads(row[0]) if row else None}
+                "chain": self.chain(label, json.loads(row[0]) if row else None)}
+
+    def chain(self, key: str, saved: dict | None) -> dict | None:
+        """chain{} for a period: what SolarCredits says now (claims change after settling), read at
+        most every 20 s, else what settle saved. Only for periods this Pi settled. Works with both
+        arc.py shapes: credits_status(key) next to credits_settle, or credits_status(period_id) +
+        credit_claims(period_id)."""
+        arc = self.arc
+        if not saved or not (arc and getattr(arc, "enabled", False) and getattr(arc, "credits", None) is not None
+                             and hasattr(arc, "credits_status")):
+            return saved
+        hit = self._status.get(key)
+        if not hit or time.time() - hit[0] > 20:
+            try:
+                if hasattr(arc, "credits_settle"):
+                    status = arc.credits_status(key)
+                else:
+                    pid = saved.get("period_id")
+                    status = dict(arc.credits_status(pid))
+                    if hasattr(arc, "credit_claims"):
+                        status["claims"] = arc.credit_claims(pid)
+                hit = (time.time(), status)
+                self._status[key] = hit
+            except Exception as e:
+                log.info("SolarCredits status for %s failed: %s", key, str(e)[:120])
+                return saved
+        out = {**saved, **{k: v for k, v in hit[1].items() if v is not None}}
+        out["period_id"] = saved.get("period_id") or out.get("period_id")  # the id claim() takes, as posted
+        flats = out.get("flats") if isinstance(out.get("flats"), dict) else {}
+        claims = dict(out.get("claims") or {})
+        # Claim tx hashes come from event logs (slow): at most once a minute, and only while a flat
+        # that claimed has no hash yet. "claimed" itself comes from the status (claimed_usdc).
+        waiting = [f for f, x in flats.items() if (x.get("claimed_usdc") or 0) > 0 and not claims.get(f)]
+        if waiting and hasattr(arc, "credit_claims") and hasattr(arc, "credits_settle"):
+            got = self._claims.get(key)
+            if not got or time.time() - got[0] > 60:
+                try:
+                    got = (time.time(), arc.credit_claims(key) or {})
+                    self._claims[key] = got
+                except Exception as e:
+                    log.info("SolarCredits claims for %s failed: %s", key, str(e)[:120])
+            if got:
+                claims.update({f: tx for f, tx in got[1].items() if tx})
+        for f, x in flats.items():
+            x["claimed"] = bool((x.get("claimed_usdc") or 0) > 0 or claims.get(f))
+        out["claims"] = claims
+        return out
 
     def window(self, minutes: int = 15, now: float | None = None) -> dict:
-        """The last few minutes, for the 0G trader: how much is spare and who needs more."""
+        """The last few minutes, for the 0G trader (pi/trader.py TradeLoop calls this as its
+        snapshot, with minutes = its own interval): how much is spare and who needs more."""
         end = int((now or time.time()) // 60 * 60)
         start = end - minutes * 60
         out = settle_period(self.minutes(start, end), self.weights, prices())
@@ -332,47 +384,54 @@ class Ledger:
                      for r in t["routes"] if r.get("to") == "shop")
         return round(max(0.0, want - routed) + SHOP_DEMAND_WH, 4)
 
-    def trade_now(self, minutes: float | None = None, now: float | None = None) -> dict:
-        """Ask the 0G trader where the last window's spare goes (it records the decision)."""
-        if not self.trade:
-            raise RuntimeError("the 0G trader (pi/trader.py) is not in this build")
-        snap = self.window(int(minutes or TRADE_EVERY_MIN), now)
-        if snap["spare_wh"] < TRADE_MIN_SPARE_WH:
-            return {"skipped": "no spare sun in the window", "window": snap}
-        self.last_trade = {"at": int(time.time()), **(self.trade(snap) or {})}
-        return self.last_trade
-
     # ---- on chain (SolarCredits, helpers in arc.py) ----------------------------------------
     def settle(self, arc, period: str = "today") -> dict:
-        """Post a day to SolarCredits and fund it with the shop + grid revenue. Neighbours pay in
-        themselves (payIn); flats claim their share themselves."""
-        if not all(hasattr(arc, f) for f in ("post_credits", "fund_credits")):
-            raise RuntimeError("SolarCredits helpers are not in this build (arc.post_credits / fund_credits)")
+        """Post a period (a day, or a month) to SolarCredits and fund it with the shop + grid
+        revenue. Safe to call twice: it posts once and funds once, as the chain shows. A posted
+        period can't change, so settle a day when it's over. Neighbours pay in themselves (payIn);
+        flats claim their share."""
+        if not hasattr(arc, "credits_settle") and not all(hasattr(arc, f) for f in ("post_credits", "fund_credits")):
+            raise RuntimeError("SolarCredits helpers are not in this build (arc.credits_settle)")
         if not getattr(arc, "enabled", False) or getattr(arc, "credits", None) is None:
             raise RuntimeError("SolarCredits is not set up on this Pi (ARC_PRIVATE_KEY and ARC_CREDITS)")
         p = self.period(period)
-        if len(p["period"]) != 10:
-            raise ValueError("settle one day at a time (period=today or YYYY-MM-DD)")
-        if p["chain"] and p["chain"].get("post_tx"):
-            return p["chain"]
-        pid = period_id(p["period"])
-        scale = _f("BILL_SCALE", 1000)
-        flats = [f for f in FLATS if self.weights.get(f, 0) > 0]
-        unused = [int(round(p["flats"][f]["unused_wh"] * scale)) for f in flats]
-        over = [int(round(p["flats"][f]["over_wh"] * scale)) for f in flats]
-        rate = int(round(p["pool"]["prices"]["neighbor"] * 1e6))
-        post_tx = arc.post_credits(pid, flats, unused, over, rate, bytes.fromhex(p["readings_hash"][2:]))
         k = p["scale"]["real_kwh_per_wh"]
-        outside = (p["pool"]["shop_wh"] * p["pool"]["prices"]["shop"] + p["pool"]["grid_wh"] * p["pool"]["prices"]["export"]) * k
-        amount = int(round(outside * 1e6))
-        fund_tx = arc.fund_credits(pid, amount) if amount > 0 else None
-        claims = arc.credit_claims(pid) if hasattr(arc, "credit_claims") else {f: None for f in flats}
-        chain = {"period_id": "0x" + pid.hex(), "post_tx": post_tx, "fund_tx": fund_tx, "funded_usdc": amount / 1e6,
-                 "claims": claims, "settled_at": int(time.time())}
-        with self._lock:
-            self._db.execute("INSERT OR REPLACE INTO settled (period, chain) VALUES (?, ?)", (p["period"], json.dumps(chain)))
-        self.post_period(p["period"])
+        neighbours_usdc = sum(x["over_wh"] for x in p["flats"].values()) * k * p["pool"]["prices"]["neighbor"]
+        fund_usdc = round(max(0.0, p["pool"]["revenue_usdc"] - neighbours_usdc), 6)  # shop + grid
+        if hasattr(arc, "credits_settle"):
+            flats = {f: x for f, x in p["flats"].items() if self.weights.get(f, 0) > 0}
+            chain = arc.credits_settle(p["period"], flats, p["pool"]["prices"]["neighbor"], fund_usdc, p["readings_hash"])
+        else:  # post_credits + fund_credits (arc.py on pawan/arc-credits)
+            pid = hashlib.sha256(f"dynaura-credits:{p['period']}".encode()).digest()
+            # The chain decides, not our local file: a posted period is immutable (postPeriod reverts
+            # AlreadyPosted), and it is funded once. So a settle after a crash, a wiped credits.db or
+            # a fund that failed after the post picks up where the last one stopped.
+            posted = bool(arc.credits_status(pid).get("posted")) if hasattr(arc, "credits_status") else False
+            txs = arc.credit_txs(pid) if hasattr(arc, "credit_txs") else {}
+            post_tx = txs.get("post_tx") or (p["chain"] or {}).get("post_tx")
+            if not posted and not post_tx:
+                scale = _f("BILL_SCALE", 1000)
+                flats = [f for f in FLATS if self.weights.get(f, 0) > 0]
+                post_tx = arc.post_credits(pid, flats, [int(round(p["flats"][f]["unused_wh"] * scale)) for f in flats],
+                                           [int(round(p["flats"][f]["over_wh"] * scale)) for f in flats],
+                                           int(round(p["pool"]["prices"]["neighbor"] * 1e6)), bytes.fromhex(p["readings_hash"][2:]))
+                self._save(p["period"], {"period_id": "0x" + pid.hex(), "post_tx": post_tx})  # before funding
+            fund_tx = txs.get("fund_tx") or (p["chain"] or {}).get("fund_tx")
+            amount = int(round(fund_usdc * 1e6))
+            if amount > 0 and not fund_tx:
+                fund_tx = arc.fund_credits(pid, amount)
+            chain = {"period_id": "0x" + pid.hex(), "post_tx": post_tx, "fund_tx": fund_tx,
+                     "claims": arc.credit_claims(pid) if hasattr(arc, "credit_claims") else {}}
+        chain = {**chain, "fund_usdc": fund_usdc, "settled_at": int(time.time())}
+        self._save(p["period"], chain)
+        self._status.pop(p["period"], None)
+        if len(p["period"]) == 10:  # a day: its Arkiv record gets the period id and post tx
+            self.post_period(p["period"])
         return chain
+
+    def _save(self, period: str, chain: dict) -> None:
+        with self._lock:
+            self._db.execute("INSERT OR REPLACE INTO settled (period, chain) VALUES (?, ?)", (period, json.dumps(chain)))
 
     # ---- Arkiv -------------------------------------------------------------------------
     def arkiv_body(self, p: dict) -> dict:
@@ -407,7 +466,7 @@ class Ledger:
 
     # ---- threads -----------------------------------------------------------------------
     def _run(self) -> None:
-        last, last_post, last_trades, last_call = time.monotonic(), 0.0, 0.0, time.time()
+        last, last_post, last_trades = time.monotonic(), 0.0, 0.0
         while not self._stop.wait(SAMPLE_S):
             now = time.monotonic()
             try:
@@ -415,12 +474,6 @@ class Ledger:
             except Exception:
                 log.exception("credits sample failed")
             last = now
-            if self.trade and time.time() - last_call >= TRADE_EVERY_MIN * 60:
-                last_call = time.time()
-                try:
-                    self.trade_now()
-                except Exception:
-                    log.exception("credits trade failed")
             try:
                 if time.time() - last_trades > 30:  # a new 0G trade reaches Arkiv within ~30 s
                     last_trades = time.time()
