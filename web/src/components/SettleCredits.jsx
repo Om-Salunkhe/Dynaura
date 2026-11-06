@@ -1,7 +1,7 @@
 // Admin: the fair split for today (each flat's spare, what it earned, what an equal split would
 // give) and "Settle credits", which posts the period to Arc (SolarCredits) via the Pi.
 import { useState } from "react";
-import { FLAT_IDS, settleCredits, units, usdc, useCredits } from "../lib/credits.js";
+import { periodFlats, settleCredits, units, usdc, useCredits } from "../lib/credits.js";
 import Proof from "./Proof.jsx";
 
 export default function SettleCredits() {
@@ -43,7 +43,7 @@ export default function SettleCredits() {
         <span className="text-[11px] text-muted">Left unused</span>
         <span className="text-right text-[11px] text-muted">Earns</span>
         <span className="text-right text-[11px] text-muted">Equal split</span>
-        {FLAT_IDS.map((f) => {
+        {periodFlats(d).map((f) => {
           const x = d.flats?.[f] || {};
           return (
             <div key={f} className="contents">

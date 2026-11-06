@@ -1,6 +1,6 @@
 // Building page: where today's sun went. Panel -> Flats A, B, C, the pump, the shop, the grid as
 // thin horizontal bars, and the latest 0G trade decision with its reason.
-import { FLAT_IDS, units, useCredits } from "../lib/credits.js";
+import { periodFlats, units, useCredits } from "../lib/credits.js";
 import { TradeRow, soldTrades } from "./FairShare.jsx";
 
 const TONE = { flat: "bg-sun", pump: "bg-[#2F9E6A]", shop: "bg-ink-2", grid: "bg-grid" };
@@ -11,12 +11,12 @@ export default function SunFlow() {
   const d = c.data;
   const total = Math.max(d.available_wh || 0, 1);
   const rows = [
-    ...FLAT_IDS.map((f) => {
+    ...periodFlats(d).map((f) => {
       const x = d.flats?.[f] || {};
       const note = x.over_wh > 0 ? `incl. ${units(x.over_wh)} bought from neighbours` : x.unused_wh > 0 ? `${units(x.unused_wh)} of its share left for others` : "its whole share";
       return { key: f, label: `Flat ${f}`, wh: x.used_wh || 0, tone: TONE.flat, note };
     }),
-    { key: "pump", label: "Pump (common)", wh: d.common_wh || 0, tone: TONE.pump, note: "runs on the sun in its slot" },
+    ...(d.common_wh > 0 ? [{ key: "pump", label: "Pump (common)", wh: d.common_wh, tone: TONE.pump, note: "runs on the sun in its slot" }] : []),
     { key: "shop", label: "Shop", wh: d.pool?.shop_wh || 0, tone: TONE.shop, note: d.pool?.prices?.shop != null ? `at ${d.pool.prices.shop} a unit` : "" },
     { key: "grid", label: "Grid", wh: d.pool?.grid_wh || 0, tone: TONE.grid, note: d.pool?.prices?.export != null ? `feed-in at ${d.pool.prices.export}` : "" },
   ];
