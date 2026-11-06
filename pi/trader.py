@@ -141,11 +141,37 @@ def validate(answer: dict, spare_wh: float, needs: dict, shop_order_wh: float, p
     return routes, price, notes
 
 
+def _window_text(window) -> str:
+    """["12:00", "12:15"] or [from_unix, to_unix] -> "12:00-12:15"."""
+    if not window:
+        return "now"
+    parts = []
+    for w in window:
+        n = _num(w)
+        parts.append(datetime.fromtimestamp(n).strftime("%H:%M") if n is not None and n > 1e8 else str(w))
+    return "-".join(parts)
+
+
+def from_ledger(snap: dict) -> dict:
+    """credits.py's window() -> {spare_wh, needs, shop_order_wh, prices, window}.
+    Accepts since/until (unix) and prices.neighbor_default as well as this module's own names."""
+    snap = snap or {}
+    px = dict(snap.get("prices") or {})
+    if "neighbor" not in px and px.get("neighbor_default") is not None:
+        px["neighbor"] = px["neighbor_default"]
+    px = {k: v for k, v in px.items() if k in ("export", "import", "shop", "neighbor") and _num(v) is not None}
+    window = snap.get("window")
+    if not window and snap.get("since") is not None:
+        window = [snap.get("since"), snap.get("until")]
+    return {"spare_wh": snap.get("spare_wh") or 0.0, "needs": snap.get("needs") or {},
+            "shop_order_wh": snap.get("shop_order_wh") or 0.0, "prices": px or None, "window": window}
+
+
 def build_prompt(spare_wh: float, needs: dict, shop_order_wh: float, px: dict, window) -> str:
     over = ", ".join(f"Flat {f} used {w:g} Wh over its share" for f, w in needs.items() if (_num(w) or 0) > 0)
     lo, hi = min(px["export"], px["import"]), max(px["export"], px["import"])
     return (
-        f"Window {'-'.join(window) if window else 'now'}. Spare sun to sell: {spare_wh:g} Wh "
+        f"Window {_window_text(window)}. Spare sun to sell: {spare_wh:g} Wh "
         f"(1 Wh here = {config.BILL_SCALE / 1000:g} kWh in the real building).\n"
         f"Neighbours who need more: {over or 'none'}.\n"
         f"Shop order: {shop_order_wh:g} Wh at {px['shop']} USDC/kWh.\n"
@@ -235,7 +261,8 @@ def trades(store, since_ts: float | None = None, limit: int = 100) -> list[dict]
 
 class TradeLoop:
     """Every TRADE_EVERY_MIN (sim: once per sim window, at most once a real minute) asks
-    snapshot() -> {spare_wh, needs, shop_order_wh, window} | None, and trades when there is spare."""
+    snapshot() -> credits.py's window() (or {spare_wh, needs, shop_order_wh, window}) | None,
+    and trades when there is spare. On the Pi: TradeLoop(lambda: App.credits.window(TRADE_EVERY_MIN), ...)."""
 
     def __init__(self, snapshot, *, store=None, uploader=None, notify=None, speed: float | None = None):
         self.snapshot = snapshot
@@ -251,17 +278,17 @@ class TradeLoop:
     def run_now(self) -> dict:
         with self._lock:
             try:
-                snap = self.snapshot()
+                snap = from_ledger(self.snapshot())
             except Exception as e:
                 self.error = f"credits snapshot failed: {e}"
                 log.exception("credits snapshot failed")
                 return {"skipped": self.error}
-            spare = _num((snap or {}).get("spare_wh")) or 0.0
+            spare = _num(snap["spare_wh"]) or 0.0
             if spare <= TRADE_MIN_WH:
                 return {"skipped": "no spare sun to sell", "spare_wh": round(spare, 3)}
-            self.last = decide_routes(spare, snap.get("needs") or {}, snap.get("shop_order_wh") or 0.0,
-                                      snap.get("prices") or None, store=self.store, uploader=self.uploader,
-                                      notify=self.notify, window=snap.get("window"))
+            self.last = decide_routes(spare, snap["needs"], snap["shop_order_wh"], snap["prices"],
+                                      store=self.store, uploader=self.uploader, notify=self.notify,
+                                      window=snap["window"])
             self.last["at"] = time.time()
             self.error = None
             return self.last

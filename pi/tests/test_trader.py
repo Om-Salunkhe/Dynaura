@@ -57,7 +57,8 @@ class FakeUploader:
 
 
 def answer(routes, price=0.013, reason="B used more than its share; the shop takes the rest."):
-    ROUTER["answer"] = "<think>sell</think>" + json.dumps({"routes": routes, "neighbor_price": price, "reason": reason})
+    body = {"routes": routes, "reason": reason, **({"neighbor_price": price} if price is not None else {})}
+    ROUTER["answer"] = "<think>sell</think>" + json.dumps(body)
 
 
 def point_router(url):
@@ -163,6 +164,18 @@ def test_trader(tmp):
     assert r["mode"] == "ai" and by(r["routes"]) == {"B": (5, 0.013), "grid": (25, 0.006)}, r
     snap["spare_wh"] = 0.2
     assert "skipped" in loop.run_now()
+
+    # 9b. credits.py's window() as it is: since/until (unix), prices.neighbor_default, unused
+    ledger = {"since": 1794380400, "until": 1794381300, "spare_wh": 20, "needs": {"A": 0, "B": 8, "C": 0},
+              "unused": {"A": 15, "B": 0, "C": 5},
+              "prices": {"export": 0.006, "import": 0.02, "neighbor_default": 0.011, "shop": 0.08}}
+    answer([{"to": "B", "wh": 8}], price=None)
+    r = trader.TradeLoop(lambda: ledger, store=store, uploader=up).run_now()
+    assert r["mode"] == "ai" and r["window"] == [1794380400, 1794381300], r
+    assert by(r["routes"]) == {"B": (8, 0.011), "grid": (12, 0.006)}, r["routes"]  # no price from 0G: ledger default
+    d = store.decision(r["decision_id"])
+    assert d["output"]["window"] == [1794380400, 1794381300] and d["output"]["spare_wh"] == 20
+    assert "Window " in ROUTER["seen"][-1]["messages"][-1]["content"] and ":" in ROUTER["seen"][-1]["messages"][-1]["content"]
     assert trader.TradeLoop(lambda: None).run_now()["skipped"]
 
     # 10. 0G unreachable: the whole spare to the grid at feed-in, recorded as no-ai, nothing invented.
