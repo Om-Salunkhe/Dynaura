@@ -34,7 +34,7 @@ wallet **created and still owns** (`.createdBy(w).ownedBy(w)`; see [Trust](#trus
 | **Job → its 0G decision** (proof chip on a job) | `dynaura.decision` | `building = …` **and `og_request_id = <the job's og_request_id>`** | 1 | Joins Arc escrow → Arkiv job → 0G decision with one indexed lookup | Read ready (`fetchDecisionByOgRequest`) |
 | **Resident Bill**, **History** | `dynaura.bill` | `building = …` **and `flat = A`** (or `month = 2026-11`) | `month` desc, 12 | A flat sees its own bills; the committee filters by month | Yes |
 | **Admin trading** | `dynaura.sale` | `building = …` (and `buyer = <shop wallet>`) | `order_id` desc, 20 | A shop can find its own receipts by wallet | Yes |
-| **Verify payout** (a paid job's proof) | `dynaura.reading` | `building`, **`meter = panel`**, **`minute` between the job's `proof_from` and `proof_to`** | `minute` desc | Re-fetch the exact signed readings the escrow paid on and recompute its hash | Read ready (`fetchReadings`); the screen is dy-web's |
+| **Verify payout** (a paid job's proof) | `dynaura.reading` | `building`, **`meter = panel`**, **`minute` between the job's `proof_from` and `proof_to`** | `minute` desc | Re-fetch the exact signed readings the escrow paid on and recompute its hash | Yes: Verify payout (`verifyJobPayout`) checks every signature in the window and the hash against the one on Arc |
 | **Bridge internals** | `daily_output`, `cleaning_job`, `heartbeat` | `day = …` / `case_id = …` (or `job_id`) | 1 | Find today's totals or a request's entity to patch it; recover the live heartbeat after a restart | Yes (bridge) |
 | **Keeper** (every 6 h) | maintenance, bill, sale, daily_output | **`$expiresAt <= head + 30 days`** | 20 | Extend records worth keeping before they lapse | Yes (bridge) |
 
@@ -76,7 +76,7 @@ a few IPs, so the demo uses the public-app key.
 | **Building wallet** | **Not** change a bill, sale, reading, offer, maintenance entry, or a decision with its proof, after it is written | Created with `flags: { readonly: true }`. Arkiv itself refuses the change |
 | **Building wallet** | Add a missing 0G root to a decision **once** (0G Storage was offline when it was written) | The bridge patches only `og_storage_root`, only if the decision has none, and refuses a different one (`409`) |
 | **Anyone else** | Write entities with our schema tags, even hand them to our wallet | Every read requires `$creator = w AND $owner = w`. [`trust-check.mjs`](../bridge/trust-check.mjs) proves it live: a stranger's fake "pay the cleaner twice" decision, transferred to our wallet, shows up under `.ownedBy()` alone and not under ours |
-| **The Pi's device key** (separate from the wallet) | Sign each 1-minute meter summary | `sig` + `signer` stored on every reading; anyone can recover the signer |
+| **The Pi's device key** (separate from the wallet) | Sign each 1-minute meter summary | `sig` + `signer` stored on every reading; anyone can recover the signer. **Checked live (6 Nov):** all 76 readings of `sunrise-apartments` on Arkiv recover to the Pi's device key `0x1EADd213…52Ed` |
 
 ## Expiry as product logic
 

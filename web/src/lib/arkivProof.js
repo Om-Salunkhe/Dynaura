@@ -47,12 +47,15 @@ export function proofHash(rowsNewestFirst) {
 }
 
 /**
- * Verify a paid cleaning job (from fetchCleaningJobs) against Arkiv.
- * Needs the job's proofWindow ([from, to] minutes) and proofHash. The device address is the
- * readings' signer unless one is passed.
+ * Verify a paid cleaning job against Arkiv.
+ * job: { proofWindow: [fromMinute, toMinute], proofHash? } (e.g. a row of fetchCleaningJobs).
+ * opts.expectedHash: the hash to compare with, e.g. the proofHash the escrow stored on Arc
+ *   (preferred: it's what actually released the money); defaults to job.proofHash.
+ * opts.device: the Pi's device address; defaults to the readings' own signer field.
  */
-export async function verifyPayout(ctx, job, { device } = {}) {
-  if (!job?.proofWindow || !job?.proofHash) return { ok: false, reason: "this job has no proof window on Arkiv" };
+export async function verifyPayout(ctx, job, { device, expectedHash } = {}) {
+  const expected = expectedHash ?? job?.proofHash;
+  if (!job?.proofWindow || !expected) return { ok: false, reason: "this job has no proof window or proof hash" };
   const [from, to] = job.proofWindow;
   const rows = await readings(ctx, { meter: "panel", since: from, until: to, limit: 100 });
   if (!rows.length) return { ok: false, reason: "the window's readings are not on Arkiv (expired after 7 days?)" };
@@ -60,13 +63,13 @@ export async function verifyPayout(ctx, job, { device } = {}) {
   const checked = await Promise.all(rows.map(async (r) => ({ ...r, signature: await verifyReading(r, signer) })));
   const computed = proofHash(rows);
   const signaturesOk = checked.every((r) => r.signature.ok);
-  const hashOk = computed.toLowerCase() === String(job.proofHash).toLowerCase();
+  const hashOk = computed.toLowerCase() === String(expected).toLowerCase();
   return {
     ok: signaturesOk && hashOk,
     signaturesOk,
     hashOk,
     computed,
-    expected: job.proofHash,
+    expected,
     signer,
     window: [from, to],
     readings: checked.map((r) => ({ minute: r.minute, avgW: r.avgW, key: r.key, signatureOk: r.signature.ok })),

@@ -44,9 +44,11 @@ export const fetchDailyOutput = (days = 7) => reads.dailyOutput(arkiv(), days);
 /** Signed 1-minute readings: fetchReadings({ meter: "panel", since: unixSeconds }) */
 export const fetchReadings = (opts) => reads.readings(arkiv(), opts);
 
-/** "Verify payout" for a paid job from fetchCleaningJobs: re-fetches its signed panel readings from
- *  Arkiv, checks every signature against the Pi's device key and recomputes the escrow's proof hash.
- *  Returns { ok, signaturesOk, hashOk, computed, expected, signer, window, readings }. */
+/** "Verify payout": re-fetches a paid job's signed panel readings from Arkiv (job.proofWindow),
+ *  checks every signature against the Pi's device key and recomputes the escrow's proof hash.
+ *  verifyJobPayout(job, { expectedHash: <proofHash read from Arc> }) compares with Arc; without it,
+ *  with job.proofHash from Arkiv. Returns { ok, signaturesOk, hashOk, computed, expected, signer,
+ *  window, readings }. */
 export const verifyJobPayout = (job, opts) => verifyPayout(arkiv(), job, opts);
 
 export const ARKIV_BUSY_TEXT = "Arkiv busy, retrying";

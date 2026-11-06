@@ -28,9 +28,12 @@ the scope; humans decided what to build and reviewed the output.
   - It extended `dynaura.cleaning_job` to one entity per request, from 0G's flag to payout,
     patched on every transition, with a lifetime that follows the job.
   - It added `bridge/jobs.mjs` with offline tests.
-- **Payout verification** (`web/src/lib/arkivProof.js`): it rebuilt the Pi's Python strings
-  (signed reading messages, the escrow's proof hash) in JavaScript, checked them against Python's
-  own output, and verified all 76 live readings' signatures from Arkiv.
+- **Checked the payout evidence:**
+  - It rebuilt the Pi's Python strings (the signed reading messages, the escrow's proof hash) in
+    JavaScript and checked them against Python's own output.
+  - It verified that all 76 live readings on Arkiv recover to the Pi's device key.
+  - It wrote `web/src/lib/arkivProof.js` (`verifyJobPayout`): signatures plus hash over the
+    exact window, used by dy-web's "Verify payout" against the hash stored on Arc.
 - **A cleaner-owned work receipt:** created by the building and transferred to the cleaner's
   wallet in one atomic batch.
 - **Measured the public endpoint** under load. When the evening numbers contradicted the morning
