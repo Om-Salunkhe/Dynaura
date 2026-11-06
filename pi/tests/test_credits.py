@@ -87,6 +87,21 @@ def test_ai_trade_sells_to_the_shop_no_ai_does_not():
     assert out["pool"]["shop_wh"] == 0 and out["pool"]["grid_wh"] == 40, "no 0G: nothing is routed to the shop"
 
 
+def test_no_ai_rule_neighbours_first_at_midpoint_no_shop_rest_to_grid():
+    """0G down (approved rule): neighbours' over-use is still settled first at the midpoint, a fixed
+    rule; nothing goes to the shop; the rest goes to the grid. The trade is dy-0g's no-ai output."""
+    row = {"available_wh": 90, "panel_wh": 75, "used": {"A": 5, "B": 45, "C": 25}}  # shares 30: B over 15
+    no_ai = {"mode": "no-ai", "request_id": None, "reason": "fixed rule: drawn energy settled at the midpoint; no AI pricing",
+             "routes": [{"to": "B", "wh": 15, "price": 0.013}, {"to": "shop", "wh": 5, "price": 0.08}, {"to": "grid", "wh": 15, "price": 0.006}]}
+    out = credits.settle_period([row], THREE, P, [no_ai], scale=1.0)
+    pool = out["pool"]
+    assert pool["neighbor_wh"] == 15 and pool["prices"]["neighbor"] == 0.013, "neighbours first, at the midpoint"
+    assert pool["shop_wh"] == 0, "no shop sale without 0G, whatever a route says"
+    assert pool["grid_wh"] == 15, "the rest to the grid"
+    close(pool["revenue_usdc"], 15 * 0.013 + 15 * 0.006)
+    close(out["flats"]["B"]["owes_usdc"], 15 * 0.013)
+
+
 def test_neighbour_price_from_0g_only_inside_the_band():
     row = {"available_wh": 90, "panel_wh": 90, "used": {"A": 10, "B": 50, "C": 30}}
     ok = {"mode": "ai", "routes": [{"to": "B", "wh": 20, "price": 0.015}]}
