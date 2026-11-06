@@ -13,8 +13,8 @@ export const ADDR = {
   escrow: import.meta.env.VITE_ARC_ESCROW || "0xf215116c72784e7490ddf3166dcb53b84855b8b9",
   shop: import.meta.env.VITE_ARC_SHOP || "0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47",
   billing: import.meta.env.VITE_ARC_BILLING || "0x5bd5aecc43968994e90f33df7177fb384401902b",
-  // SolarCredits (fair-share payouts): set VITE_ARC_CREDITS once dy-arc has deployed it from Studio
-  credits: import.meta.env.VITE_ARC_CREDITS || "",
+  // SolarCredits (fair-share payouts, Arc Studio)
+  credits: import.meta.env.VITE_ARC_CREDITS || "0x12b06e364ecc08aead9ce2142382682b9d46859c",
 };
 export const ARC_READY = { escrow: isAddr(ADDR.escrow), shop: isAddr(ADDR.shop), billing: isAddr(ADDR.billing), credits: isAddr(ADDR.credits) };
 
@@ -53,7 +53,19 @@ export const ABI = {
     "function refund(uint256 orderId)",
     "function claimRefund(uint256 orderId)",
   ]),
-  credits: parseAbi(["function claim(bytes32 periodId, string flat)"]),
+  credits: parseAbi([
+    "function claim(bytes32 periodId, string flat)",
+    "function payIn(bytes32 periodId, string flat)",
+    "function claimable(bytes32 periodId, string flat) view returns (uint256)",
+    "function flatInfo(bytes32 periodId, string flat) view returns (bool inPeriod, uint256 unusedWh, uint256 overWh, bool paidIn, uint256 claimed)",
+    "function periodInfo(bytes32 periodId) view returns (bool posted, uint256 neighborRate, bytes32 readingsHash, uint256 totalUnusedWh, uint256 totalIn, uint256 totalClaimed)",
+    "function walletOf(string flat) view returns (address)",
+    "error NothingToClaim()",
+    "error ZeroAddress()",
+    "error AlreadyPaid()",
+    "error NotBuyer()",
+    "error NoPeriod()",
+  ]),
   billing: parseAbi([
     "function key(string flat, string month) pure returns (bytes32)",
     "function billOf(bytes32) view returns (uint256)",

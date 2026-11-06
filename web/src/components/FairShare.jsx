@@ -1,8 +1,8 @@
 // Bill page: "Your share of the sun". Share vs used vs unused, what the spare earned against an
 // equal split, the trades that sold it (with their 0G request ids), and Claim on Arc.
 import { useState } from "react";
-import { ARC_READY, errText, write } from "../lib/arc.js";
-import { flatName, units, usdc, useCredits } from "../lib/credits.js";
+import { ARC_READY, ensureAllowance, errText, short, write } from "../lib/arc.js";
+import { flatName, units, usdc, useCredits, useCreditsChain } from "../lib/credits.js";
 import { isFakeId } from "../lib/scene.js";
 import Proof from "./Proof.jsx";
 
@@ -57,8 +57,6 @@ export default function FairShare({ flat }) {
   const [period, setPeriod] = useState("today");
   const c = useCredits(period);
   const [claimed, setClaimed] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(null);
   if (c.status === "off" || c.status === "loading" || !c.data) {
     return c.status === "error" ? (
       <section className="card rounded-[14px] text-[12.5px] text-muted">Your share of the sun: the Pi didn't answer ({c.error}).</section>
@@ -70,22 +68,8 @@ export default function FairShare({ flat }) {
   const max = Math.max(me.share_wh, me.used_wh, 1);
   const trades = soldTrades(d.trades).slice(-3).reverse();
   const chain = d.chain || {};
-  const claimTx = claimed || chain.claims?.[flat] || null;
-  const canClaim = me.earned_usdc > 0 && !claimTx && (c.demo || (chain.period_id && ARC_READY.credits));
 
-  const claim = async () => {
-    setErr(null);
-    if (c.demo) return setClaimed("0xdemo-claim");
-    setBusy(true);
-    try {
-      setClaimed(await write("credits", "claim", [chain.period_id, flat]));
-      c.reload();
-    } catch (e) {
-      setErr(errText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const claim = () => setClaimed(true); // demo only; live claims are in <OnChain>
 
   return (
     <section className="card flex flex-col gap-3 rounded-[14px]">
@@ -150,21 +134,93 @@ export default function FairShare({ flat }) {
         </div>
       )}
 
-      {me.earned_usdc > 0 && (
-        <div className="flex flex-col gap-1.5 border-t border-line pt-3">
-          {claimTx ? (
-            <Proof kind="arc" id={claimTx} label="Claimed on Arc" className="self-start text-xs" />
-          ) : (
-            <button type="button" className="btn self-start" disabled={busy || !canClaim} onClick={claim}>
-              {busy ? "Confirm in your wallet…" : `Claim ${usdc(me.earned_usdc)} on Arc`}
-            </button>
-          )}
-          {!claimTx && !c.demo && !chain.period_id && <span className="text-[11.5px] text-muted">Not settled on Arc yet: the committee settles the period, then you can claim.</span>}
-          {!claimTx && !c.demo && chain.period_id && !ARC_READY.credits && <span className="text-[11.5px] text-muted">SolarCredits isn't set in this app yet (VITE_ARC_CREDITS).</span>}
-          {c.demo && !claimTx && <span className="text-[11.5px] text-muted">Demo: the claim is simulated. Live, SolarCredits pays this from the pool on Arc, computed on chain.</span>}
-          {err && <span className="text-[12px] text-bad">{err}</span>}
-        </div>
+      {c.demo ? (
+        me.earned_usdc > 0 && (
+          <div className="flex flex-col gap-1.5 border-t border-line pt-3">
+            {claimed ? (
+              <span className="text-[12.5px] text-good">Claimed (demo)</span>
+            ) : (
+              <button type="button" className="btn self-start" onClick={claim}>{`Claim ${usdc(me.earned_usdc)} on Arc`}</button>
+            )}
+            <span className="text-[11.5px] text-muted">Demo: the claim is simulated. Live, SolarCredits pays it from the pool on Arc, computed on chain.</span>
+          </div>
+        )
+      ) : (
+        (me.earned_usdc > 0 || me.over_wh > 0) && <OnChain flat={flat} chain={chain} claimTxFromPi={chain.claims?.[flat]} />
       )}
     </section>
+  );
+}
+
+/** The period on Arc (SolarCredits): claim what's owed, or pay in for sun bought from neighbours. */
+function OnChain({ flat, chain, claimTxFromPi }) {
+  const on = useCreditsChain(chain.period_id, flat);
+  const [busy, setBusy] = useState(null);
+  const [err, setErr] = useState(null);
+  const [tx, setTx] = useState(null);
+  const shell = (children) => <div className="flex flex-col gap-1.5 border-t border-line pt-3">{children}</div>;
+  if (!chain.period_id) return shell(<span className="text-[11.5px] text-muted">Not settled on Arc yet: the committee settles the period, then it can be claimed.</span>);
+  if (!ARC_READY.credits) return shell(<span className="text-[11.5px] text-muted">SolarCredits isn't set in this app (VITE_ARC_CREDITS).</span>);
+  if (!on) return shell(<span className="text-[11.5px] text-muted">Reading the period on Arc…</span>);
+  if (on.error) return shell(<span className="text-[11.5px] text-bad">Couldn't read SolarCredits: {on.error}</span>);
+  if (!on.posted || !on.inPeriod) return shell(<span className="text-[11.5px] text-muted">This period isn't on Arc yet for Flat {flat}.</span>);
+
+  const run = async (which, fn) => {
+    setBusy(which);
+    setErr(null);
+    try {
+      setTx(await fn());
+      on.reload();
+    } catch (e) {
+      setErr(errText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const doneTx = tx || claimTxFromPi;
+  const owes = Number(on.owesUnits) / 1e6;
+
+  return shell(
+    <>
+      {on.claimed > 0 ? (
+        <span className="text-[12.5px] text-good">
+          ✓ {usdc(on.claimed)} paid to Flat {flat}'s wallet <span className="mono">{short(on.wallet)}</span>
+        </span>
+      ) : on.claimable > 0 ? (
+        <>
+          <button type="button" className="btn self-start" disabled={!!busy || on.noWallet} onClick={() => run("claim", () => write("credits", "claim", [chain.period_id, flat]))}>
+            {busy === "claim" ? "Confirm in your wallet…" : `Claim ${usdc(on.claimable)} on Arc`}
+          </button>
+          <span className="text-[11.5px] text-muted">
+            {on.noWallet
+              ? `Flat ${flat} has no wallet registered on SolarCredits yet: the committee registers it.`
+              : `Anyone can send the claim; the USDC always goes to Flat ${flat}'s wallet ${short(on.wallet)}. Computed on chain from the unused share.`}
+          </span>
+        </>
+      ) : null}
+      {owes > 0 &&
+        (on.paidIn ? (
+          <span className="text-[12.5px] text-good">✓ Paid your neighbours {usdc(owes)} on Arc</span>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="btn-ghost self-start"
+              disabled={!!busy}
+              onClick={() =>
+                run("pay", async () => {
+                  await ensureAllowance("credits", on.owesUnits);
+                  return write("credits", "payIn", [chain.period_id, flat]);
+                })
+              }
+            >
+              {busy === "pay" ? "Confirm in your wallet…" : `Pay neighbours ${usdc(owes)}`}
+            </button>
+            <span className="text-[11.5px] text-muted">For the sun you used beyond your share; it goes into the pool the flats that saved are paid from.</span>
+          </>
+        ))}
+      {doneTx && <Proof kind="arc" id={doneTx} label="Arc tx" className="self-start text-xs" />}
+      {err && <span className="text-[12px] text-bad">{err}</span>}
+    </>,
   );
 }

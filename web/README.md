@@ -26,6 +26,7 @@ Every value is public: no secrets go in `VITE_` variables, because they end up i
 | `VITE_ARC_ESCROW` | CleaningEscrow on Arc testnet | `0xf215116c72784e7490ddf3166dcb53b84855b8b9` |
 | `VITE_ARC_SHOP` | ShopTrade on Arc testnet | `0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47` |
 | `VITE_ARC_BILLING` | SolarBilling on Arc testnet | `0x5bd5aecc43968994e90f33df7177fb384401902b` |
+| `VITE_ARC_CREDITS` | SolarCredits (fair-share payouts) on Arc testnet | `0x12b06e364ecc08aead9ce2142382682b9d46859c` |
 
 The admin key and the Arkiv access key are not here on purpose (see below).
 

@@ -4,6 +4,7 @@
 // screens show a demo period built with the same formulas from Pawan's example.
 import { useEffect, useState } from "react";
 import { getJSON, postJSON, useLive } from "./api.js";
+import { ABI, ADDR, ARC_READY, publicClient } from "./arc.js";
 
 export const FLAT_IDS = ["A", "B", "C"];
 const round = (x, d = 4) => Math.round(x * 10 ** d) / 10 ** d;
@@ -146,3 +147,44 @@ export const units = (wh) => {
 };
 export const usdc = (x) => `${Number(x || 0).toFixed(2)} USDC`;
 export const flatName = (to) => (FLAT_IDS.includes(to) ? `Flat ${to}` : to === "shop" ? "the shop" : to === "grid" ? "the grid" : to);
+
+const ZERO = /^0x0{40}$/i;
+const read = (functionName, args) => publicClient.readContract({ address: ADDR.credits, abi: ABI.credits, functionName, args });
+
+/**
+ * A flat's position in a settled period, read from SolarCredits on Arc:
+ * { posted, inPeriod, claimable, claimed, paidIn, owesUnits (USDC base units), wallet, noWallet }.
+ * null while loading or when there's no period / contract.
+ */
+export function useCreditsChain(periodId, flat) {
+  const [st, setSt] = useState(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!periodId || !flat || !ARC_READY.credits) {
+      setSt(null);
+      return undefined;
+    }
+    let alive = true;
+    Promise.all([read("periodInfo", [periodId]), read("flatInfo", [periodId, flat]), read("claimable", [periodId, flat]), read("walletOf", [flat])])
+      .then(([p, f, claimable, wallet]) => {
+        if (!alive) return;
+        const [posted, neighborRate] = p;
+        const [inPeriod, , overWh, paidIn, claimed] = f;
+        setSt({
+          posted,
+          inPeriod,
+          claimable: Number(claimable) / 1e6,
+          claimed: Number(claimed) / 1e6,
+          paidIn,
+          owesUnits: overWh * neighborRate,
+          wallet,
+          noWallet: !wallet || ZERO.test(wallet),
+        });
+      })
+      .catch((e) => alive && setSt({ error: e.shortMessage || e.message }));
+    return () => {
+      alive = false;
+    };
+  }, [periodId, flat, tick]);
+  return st && { ...st, reload: () => setTick((n) => n + 1) };
+}
