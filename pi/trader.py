@@ -46,6 +46,10 @@ NEIGHBOR_RATE_USDC = _rate("NEIGHBOR_RATE_USDC", "")       # empty = midpoint of
 TRADE_EVERY_MIN = float(os.getenv("TRADE_EVERY_MIN", "15") or 15)
 TRADE_MIN_WH = float(os.getenv("TRADE_MIN_WH", "0.5") or 0.5)  # less spare than this: no trade
 TRADE_MIN_GAP_S = 60.0  # never more than one 0G trade call a minute (SIM_SPEED makes windows short)
+# 0gm-1.0 is Qwen3-based and "thinks" first: ~80 s per trade with thinking, ~6 s without (measured
+# Sat 01:00 on router-api.0g.ai). A trade is a short, rule-bound choice, so thinking is off by default.
+TRADE_THINKING = os.getenv("TRADE_THINKING", "false").lower() == "true"
+NO_THINKING = {"chat_template_kwargs": {"enable_thinking": False}}
 
 SYSTEM = """You are Dyna, the market maker for the shared rooftop solar panel of a small apartment building with flats A, B and C.
 Each flat has an equal fair share of the sun. What a flat leaves unused goes into a spare pool. You sell the pool,
@@ -204,8 +208,7 @@ def decide_routes(spare_wh: float, needs: dict, shop_order_wh: float = 0.0, pric
     prompt = build_prompt(spare_wh, needs, shop_order_wh, px, window)
     reply = None
     try:
-        reply = zg.chat([{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}],
-                        max_tokens=4000, temperature=0.2)
+        reply = _ask(prompt)
         answer = zg.extract_json(reply.text)
         routes, price, notes = validate(answer, spare_wh, needs, shop_order_wh, px)
     except zg.ZGUnavailable as e:
@@ -232,6 +235,16 @@ def decide_routes(spare_wh: float, needs: dict, shop_order_wh: float = 0.0, pric
     return {"routes": routes, "reason": reason, "request_id": reply.request_id, "mode": "ai", "decision_id": did,
             "neighbor_price": price, "model": reply.model, "tee": reply.tee_verified, "window": window,
             "notes": notes}
+
+
+def _ask(prompt: str) -> zg.ZGReply:
+    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]
+    if not TRADE_THINKING:
+        try:
+            return zg.chat(messages, max_tokens=4000, temperature=0.2, extra_body=NO_THINKING)
+        except zg.ZGModelUnavailable as e:  # the Router answered but refused the option: ask with thinking
+            log.warning("0G refused enable_thinking=false, asking with thinking: %s", e)
+    return zg.chat(messages, max_tokens=4000, temperature=0.2)
 
 
 def _publish(did: int, uploader, notify, extra: dict | None) -> None:

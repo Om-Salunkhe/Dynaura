@@ -91,7 +91,9 @@ def _find_tee(obj, out=None, path=""):
     return out
 
 
-def chat(messages: list[dict], max_tokens: int = 4000, temperature: float = 0.2, model: str | None = None) -> ZGReply:
+def chat(messages: list[dict], max_tokens: int = 4000, temperature: float = 0.2, model: str | None = None,
+         extra_body: dict | None = None) -> ZGReply:
+    """extra_body: more Router/model options next to verify_tee (e.g. chat_template_kwargs)."""
     model = model or config.ZG_MODEL
     t0 = time.monotonic()
     try:
@@ -100,7 +102,7 @@ def chat(messages: list[dict], max_tokens: int = 4000, temperature: float = 0.2,
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
-            extra_body={"verify_tee": True},
+            extra_body={**(extra_body or {}), "verify_tee": True},
         )
     except ZGUnavailable:
         raise

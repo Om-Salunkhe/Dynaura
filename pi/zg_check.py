@@ -55,8 +55,11 @@ def main() -> int:
         header = raw.headers.get("ZG-Res-Key")
         trace = (json.loads(raw.text) or {}).get("x_0g_trace") or {}
         show("ZG-Res-Key header", bool(header), header or "missing (zg.py falls back to the body id)")
-        show("x_0g_trace.tee_verified", trace.get("tee_verified") is True,
-             f"{trace.get('tee_verified')!r}, provider {trace.get('provider')}")
+        tv = trace.get("tee_verified")
+        if tv is None:  # the Router did not report a check: say "TEE-attested model", never "TEE verified"
+            print(f"WARN x_0g_trace.tee_verified: not reported (provider {trace.get('provider')})")
+        else:
+            show("x_0g_trace.tee_verified", tv is True, f"{tv!r}, provider {trace.get('provider')}")
     except Exception as e:
         show("text call", False, str(e)[:300])
         return 1

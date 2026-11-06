@@ -21,7 +21,7 @@ import trader  # noqa: E402
 import zg  # noqa: E402
 from store import Store  # noqa: E402
 
-ROUTER = {"answer": "", "tee": True, "seen": []}
+ROUTER = {"answer": "", "tee": True, "seen": [], "reject_no_think": False}
 
 
 class FakeRouter(BaseHTTPRequestHandler):
@@ -33,6 +33,15 @@ class FakeRouter(BaseHTTPRequestHandler):
         ROUTER["seen"].append(req)
         assert req.get("verify_tee") is True
         assert req["max_tokens"] >= 3000, "0G gets room to reason"
+        no_think = (req.get("chat_template_kwargs") or {}).get("enable_thinking") is False
+        if no_think and ROUTER["reject_no_think"]:
+            out = json.dumps({"error": {"message": "unknown field chat_template_kwargs", "type": "invalid_request"}}).encode()
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+            return
         n = len(ROUTER["seen"])
         out = json.dumps({
             "id": f"chatcmpl-{n}", "object": "chat.completion", "created": 1, "model": req["model"],
@@ -105,6 +114,15 @@ def test_trader(tmp):
     assert up.episodes[-1][0] == d["id"] and up.episodes[-1][1]["raw_answer"].startswith("<think>")
     assert notified == [d["id"]]
     assert "Flat B used 10 Wh over its share" in ROUTER["seen"][-1]["messages"][-1]["content"]
+    assert ROUTER["seen"][-1]["chat_template_kwargs"] == {"enable_thinking": False}  # trades: thinking off
+
+    # 1b. A Router that refuses the option: asked again with thinking, still an AI trade
+    ROUTER["reject_no_think"] = True
+    calls = len(ROUTER["seen"])
+    r = trader.decide_routes(40, {"B": 10}, 20, **kw)
+    assert r["mode"] == "ai" and len(ROUTER["seen"]) == calls + 2, r
+    assert "chat_template_kwargs" not in ROUTER["seen"][-1]
+    ROUTER["reject_no_think"] = False
 
     # 2. 0G over-routes: the Pi caps every buyer, drops flats that don't need more, clamps the price,
     #    and whatever is left goes to the grid. Routes always add up to the spare exactly.
