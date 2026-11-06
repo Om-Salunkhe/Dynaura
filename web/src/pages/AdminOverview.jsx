@@ -6,7 +6,7 @@ import CleaningAlert from "../components/CleaningAlert.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { admin } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
-import { ARKIV_READY, fetchHeartbeat, useArkiv } from "../lib/arkiv.js";
+import { ARKIV_BUSY_TEXT, ARKIV_READY, fetchHeartbeat, useArkiv } from "../lib/arkiv.js";
 
 /** The Pi renews one Arkiv entity every 30 s with a 2-minute lifetime. If it stops, the entity
  *  expires and this card says "offline": no monitoring server, the expiry is the alarm. */
@@ -24,10 +24,10 @@ function Heartbeat() {
     <section className="card flex items-center justify-between rounded-[14px] py-3 text-sm">
       <span className="flex items-center gap-2 font-medium">
         <span className={`h-2.5 w-2.5 rounded-full ${online ? "bg-sun" : "bg-bad"}`} />
-        {online ? "Building online" : hb.error ? "Arkiv not reachable" : "Building offline"}
+        {online ? "Building online" : hb.limited ? ARKIV_BUSY_TEXT : hb.error ? "Arkiv not reachable" : "Building offline"}
       </span>
       <span className="text-xs text-muted">
-        {online ? `Arkiv heartbeat ${ago}s ago · ${hb.data.mode}` : hb.error ? "can't read the heartbeat" : "heartbeat expired on Arkiv"}
+        {online ? `Arkiv heartbeat ${ago}s ago · ${hb.data.mode}` : hb.limited ? "public endpoint out of queries" : hb.error ? "can't read the heartbeat" : "heartbeat expired on Arkiv"}
       </span>
     </section>
   );

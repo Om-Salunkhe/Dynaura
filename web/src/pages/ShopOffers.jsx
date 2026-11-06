@@ -3,7 +3,7 @@ import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import WalletButton from "../components/WalletButton.jsx";
 import { ABI, ADDR, ARC_READY, ensureAllowance, errText, publicClient, txUrl, write } from "../lib/arc.js";
-import { ARKIV_READY, fetchOffers, short, useArkiv } from "../lib/arkiv.js";
+import { ARKIV_BUSY_TEXT, ARKIV_READY, fetchOffers, short, useArkiv } from "../lib/arkiv.js";
 
 // Demo offer: the plan's solar window closes at 3 PM today
 const demoEnd = () => Math.floor(new Date().setHours(15, 0, 0, 0) / 1000);
@@ -14,8 +14,10 @@ export default function ShopOffers() {
   const [bought, setBought] = useState({}); // offer key -> tx hash (or true in demo)
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
-  const list = offers.live ? offers.data : DEMO;
-  const onChain = offers.live && ARC_READY.shop;
+  // a rate-limited read keeps the real offers it had: still real, not demo
+  const realOffers = offers.live || (offers.limited && offers.data !== DEMO);
+  const list = realOffers ? offers.data : DEMO;
+  const onChain = realOffers && ARC_READY.shop;
 
   // Prepay on Arc: approve USDC once, then ShopTrade.placeOrder. The Pi settles after the window.
   const buy = async (o) => {
@@ -45,7 +47,7 @@ export default function ShopOffers() {
           Offers live on Arkiv and disappear by themselves when the sun window closes. You pay in USDC on Arc, only for the
           kWh the meter delivers.
         </span>
-        {!offers.live && <span className="text-xs text-muted">{ARKIV_READY ? "Arkiv not reachable · demo offer" : "Demo offer"}</span>}
+        {!realOffers && <span className="text-xs text-muted">{offers.limited ? `${ARKIV_BUSY_TEXT} · demo offer meanwhile` : ARKIV_READY ? "Arkiv not reachable · demo offer" : "Demo offer"}</span>}
       </section>
 
       {err && <section className="card text-sm text-bad">{err}</section>}

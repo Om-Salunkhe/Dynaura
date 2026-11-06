@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { verifyPayout } from "./arkivProof.js";
 import * as reads from "./arkivReads.js";
 
-export const OWNER = import.meta.env.VITE_ARKIV_OWNER || "";
+// The building wallet that writes the live records (public); VITE_ARKIV_OWNER overrides it
+export const OWNER = import.meta.env.VITE_ARKIV_OWNER || "0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd";
 export const BUILDING = import.meta.env.VITE_BUILDING_ID || "sunrise-apartments";
 export const ARKIV_READY = /^0x[0-9a-fA-F]{40}$/.test(OWNER);
 export const EXPLORER = "https://rabdi.explorer.arkiv.network";
