@@ -1,5 +1,6 @@
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import SunFlow from "../components/SunFlow.jsx";
 import { today } from "../data/demo.js";
 import { shortId, useLive } from "../lib/api.js";
 import { routingStory, usePlan } from "../lib/plan.js";
@@ -64,6 +65,8 @@ export default function Building() {
           </div>
         </section>
       )}
+
+      <SunFlow />
 
       {(away.length > 0 || story.reason) && (
         <section className="card flex items-start gap-3 rounded-[14px]">
