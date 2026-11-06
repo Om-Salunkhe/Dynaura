@@ -10,6 +10,15 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
 const BRIDGE = process.env.BRIDGE_URL || "http://127.0.0.1:5100"
 const reads = await import("../web/src/lib/arkivReads.js")
 
+// viem errors quote the RPC URL, which carries the access key: never print one raw.
+const say = (e) => reads.redact(String(e?.shortMessage || e?.message || e).split("\n")[0])
+for (const ev of ["uncaughtException", "unhandledRejection"]) {
+  process.on(ev, (e) => {
+    console.error(`smoke crashed: ${say(e)}`)
+    process.exit(1)
+  })
+}
+
 const results = []
 let failures = 0
 
@@ -25,8 +34,8 @@ async function step(name, fn) {
   } catch (e) {
     const ms = Math.round(performance.now() - t0)
     failures++
-    results.push({ step: name, ms, ok: false, error: String(e?.shortMessage || e?.message || e) })
-    console.log(`FAIL ${String(ms).padStart(6)} ms  ${name}: ${e?.shortMessage || e?.message || e}`)
+    results.push({ step: name, ms, ok: false, error: say(e) })
+    console.log(`FAIL ${String(ms).padStart(6)} ms  ${name}: ${say(e)}`)
     return null
   }
 }
@@ -55,6 +64,7 @@ if (health.building === "sunrise-apartments") {
 }
 console.log(`bridge ${BRIDGE} · wallet ${health.wallet} · building ${health.building} · block ${health.block}\n`)
 const ctx = { client: reads.arkivClient(process.env.ARKIV_ACCESS_KEY || ""), owner: health.wallet, building: health.building }
+const entity = (k) => reads.withBackoff(() => ctx.client.getEntity(k))
 
 const now = Math.floor(Date.now() / 1000)
 const minute = now - (now % 60)
@@ -78,7 +88,7 @@ const rd = await step("write readings (4 meters, 1 batch tx)", async () => {
 })
 
 const hb1 = await step("write heartbeat", () => post("/heartbeat", { mode: "plan", flats: { A: "solar", B: "grid", C: "solar" }, pump: true, solar_w: 3.2, used_w: 2.9 }))
-const hb1Expiry = hb1 && (await ctx.client.getEntity(hb1.key)).$expiresAt
+const hb1Expiry = hb1 && (await entity(hb1.key)).$expiresAt
 await step("read heartbeat (web: Admin online badge)", async () => {
   const h = await reads.heartbeat(ctx)
   expect(h && h.key === hb1?.key, `heartbeat key ${h?.key} vs ${hb1?.key}`)
@@ -92,7 +102,7 @@ const hb2 = await step("renew heartbeat (patch + extend, 1 tx)", async () => {
 await step("heartbeat renew moved the expiry forward", async () => {
   const h = await reads.heartbeat(ctx)
   expect(h.flats === "A:solar,B:solar,C:solar", `flats ${h.flats}`)
-  const after = (await ctx.client.getEntity(hb2.key)).$expiresAt
+  const after = (await entity(hb2.key)).$expiresAt
   expect(after > hb1Expiry, `expiresAt ${hb1Expiry} -> ${after}`)
   return { note: `block ${hb1Expiry} -> ${after}, ${h.expiresInS}s left` }
 })
@@ -104,42 +114,64 @@ const dec = await step("write decision (0G plan with proof)", () =>
     kind: "plan",
     mode: "ai",
     day: today,
-    request_id: `smoke-${run}`,
+    og_request_id: `smoke-${run}`,
     model: "0gm-1.0-35b-a3b",
-    storage_root: "0x" + "ab".repeat(32),
+    og_storage_root: "0x" + "ab".repeat(32),
     summary: "Smoke test: pump at 12:00, Flat B away so its share goes to A. ".repeat(4),
   }),
 )
 
+// 0G Storage was offline: the decision goes to Arkiv without its root, and the root is patched in
+// once when the upload lands (DECISIONS 01:30). A second, different root is refused.
+const late = await step("write decision without its 0G root (0G offline)", async () => {
+  const r = await post("/decision", { decision_id: decisionId + 2, kind: "cleaning", mode: "meter", day: today, og_request_id: `smoke-dust-${run}`, summary: "Smoke: panel at 52%, dust check" })
+  expect(r.sealed === false, "a decision without its root must stay patchable")
+  return r
+})
+await step("late 0G root patched into the same decision", async () => {
+  const r = await post("/decision", { decision_id: decisionId + 2, arkiv_key: late.key, og_storage_root: "0x" + "cd".repeat(32) })
+  expect(r.patched === true && r.key === late.key, "patched in place") // the read-back is checked below
+  return r
+})
+await step("a different root for the same decision is refused", async () => {
+  try {
+    await post("/decision", { decision_id: decisionId + 2, arkiv_key: late.key, og_storage_root: "0x" + "ef".repeat(32) })
+  } catch (e) {
+    expect(/409|already has/.test(e.message), e.message)
+    return { note: "409" }
+  }
+  throw new Error("second root was accepted")
+})
+
 const d1 = await step("write daily totals (create)", () => post("/daily", { day: today, panel_wh: 12.5, flats_wh: 10.1, solar_pct: 81.2 }))
-const d1Entity = d1 && (await ctx.client.getEntity(d1.key))
+const d1Entity = d1 && (await entity(d1.key))
 const d2 = await step("write daily totals again (patch)", async () => {
   const r = await post("/daily", { day: today, panel_wh: 14.0, flats_wh: 11.0, solar_pct: 83.4 })
   expect(r.patched && r.key === d1?.key, "second daily post should patch the same entity")
   return r
 })
 await step("patch kept the expiry (daily_output)", async () => {
-  const after = await ctx.client.getEntity(d2.key)
+  const after = await entity(d2.key)
   expect(after.$expiresAt === d1Entity.$expiresAt, `expiresAt ${d1Entity.$expiresAt} -> ${after.$expiresAt}`)
   return { note: `still block ${after.$expiresAt}` }
 })
 
 const off = await step("write shop offer (expires when the window closes)", () =>
-  post("/offer", { day: today, kwh: 0.42, price_usdc: 0.08, window_end: now + 10 * 60, request_id: `smoke-${run}` }),
+  post("/offer", { day: today, kwh: 0.42, price_usdc: 0.08, window_end: now + 10 * 60, og_request_id: `smoke-${run}` }),
 )
 
 const jobId = 800_000 + (run % 99_999)
 const deadline = now + 60 * 60
 const j1 = await step("write cleaning job (escrow open)", () =>
-  post("/cleaning_job", { job_id: jobId, status: "open", fee_usdc: 2, deadline, output_before: 52.3, arc_tx: "0x" + "11".repeat(32) }),
+  post("/cleaning_job", { job_id: jobId, status: "open", fee_usdc: 2, deadline, output_before: 52.3, arc_tx: "0x" + "11".repeat(32), og_request_id: `smoke-dust-${run}` }),
 )
-const j1Entity = j1 && (await ctx.client.getEntity(j1.key))
+const j1Entity = j1 && (await entity(j1.key))
 await step("cleaning job -> accepted (patch)", () => post("/cleaning_job", { job_id: jobId, status: "accepted" }))
 const j3 = await step("cleaning job -> paid at 94% (patch)", () =>
-  post("/cleaning_job", { job_id: jobId, status: "paid", output_after: 94.1, arc_tx: "0x" + "22".repeat(32) }),
+  post("/cleaning_job", { job_id: jobId, status: "paid", output_after: 94.1, arc_tx: "0x" + "22".repeat(32), og_storage_root: "0x" + "cd".repeat(32) }),
 )
 await step("patch kept the expiry (cleaning_job)", async () => {
-  const after = await ctx.client.getEntity(j3.key)
+  const after = await entity(j3.key)
   expect(after.$expiresAt === j1Entity.$expiresAt, `expiresAt ${j1Entity.$expiresAt} -> ${after.$expiresAt}`)
   return { note: `still block ${after.$expiresAt}` }
 })
@@ -153,12 +185,12 @@ for (const flat of ["A", "B", "C"]) {
   const b = await step(`write bill flat ${flat}`, () => post("/bill", { flat, month, kwh: 41.5, solar_pct: 72, usdc: 0.62, arc_tx: "0x" + "44".repeat(32) }))
   billKeys.push(b?.key)
 }
-await step("bills, sales, readings, decisions are sealed (readonly); the heartbeat is not", async () => {
-  const sealed = await Promise.all([billKeys[0], sale?.key, rd?.keys?.[0], dec?.key].map((k) => ctx.client.getEntity(k)))
+await step("bills, sales, readings, complete decisions are sealed; heartbeat, late decision are not", async () => {
+  const sealed = await Promise.all([billKeys[0], sale?.key, rd?.keys?.[0], dec?.key].map((k) => entity(k)))
   expect(sealed.every((e) => e.$creationFlags?.readonly === true), "readonly flag on fact records")
-  const hb = await ctx.client.getEntity(hb1.key)
-  expect(hb.$creationFlags?.readonly === false, "heartbeat must stay patchable")
-  return { note: "4 sealed, heartbeat patchable" }
+  const open = await Promise.all([hb1.key, late.key].map((k) => entity(k)))
+  expect(open.every((e) => e.$creationFlags?.readonly === false), "heartbeat and late-root decision must stay patchable")
+  return { note: "4 sealed, 2 patchable" }
 })
 
 // ---- the queue: posts that arrive together are written one by one, never on the same nonce --
@@ -187,6 +219,11 @@ await step("read decisions (web: History, Home)", async () => {
   expect(d && d.id === decisionId && d.requestId === `smoke-${run}` && d.summary.startsWith("Smoke test"), "decision row")
   return { note: `${rows.length} rows` }
 })
+await step("job -> its 0G decision by og_request_id (web: proof chip)", async () => {
+  const d = await reads.decisionByOgRequest(ctx, `smoke-dust-${run}`)
+  expect(d && d.key === late?.key && d.storageRoot === "0x" + "cd".repeat(32), `decision ${JSON.stringify(d)}`)
+  return { note: `decision #${d.id}` }
+})
 await step("read maintenance (web: Admin upkeep, History)", async () => {
   const rows = await reads.maintenance(ctx, 5)
   expect(rows.some((x) => x.key === mnt?.key && x.text.includes("52%")), "maintenance row")
@@ -201,6 +238,7 @@ await step("read cleaning jobs with status=paid (web: Cleaner jobs)", async () =
   const rows = await reads.cleaningJobs(ctx, { status: "paid" })
   const j = rows.find((x) => x.jobId === jobId)
   expect(j && j.outputAfter === 94.1 && j.outputBefore === 52.3, "paid job row")
+  expect(j.ogRequestId === `smoke-dust-${run}` && j.ogStorageRoot === "0x" + "cd".repeat(32), "0G proof on the job")
   const open = await reads.cleaningJobs(ctx, { status: "open" })
   expect(!open.some((x) => x.jobId === jobId), "paid job must not show as open")
   return { note: `${rows.length} paid` }

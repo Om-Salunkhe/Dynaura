@@ -45,6 +45,13 @@ export async function withBackoff(fn, { tries = 4, base = 400 } = {}) {
   }
 }
 
+/** viem errors quote the RPC URL, which carries the access key: never show or log them raw. */
+export function redact(text) {
+  return String(text)
+    .replace(/(rpc\.rabdi\.db-chain\.testnet\.arkiv\.network)\/[^\s"'`]+/g, "$1/<access-key>")
+    .replace(/\bark_[A-Za-z0-9_-]{8,}/g, "<access-key>");
+}
+
 const text = (v) => {
   try {
     return hexToString(v);
@@ -62,7 +69,7 @@ export function decisions(ctx, limit = 20) {
     const page = await scoped(
       ctx,
       ctx.client
-        .select({ $key: true, kind: true, mode: true, decision_id: true, day: true, request_id: true, model: true, storage_root: true, summary: true })
+        .select({ $key: true, kind: true, mode: true, decision_id: true, day: true, og_request_id: true, model: true, og_storage_root: true, summary: true })
         .from(Decision)
         .where(eq("building", ctx.building)),
     )
@@ -75,11 +82,30 @@ export function decisions(ctx, limit = 20) {
       mode: e.mode.value,
       id: Number(e.decision_id.value),
       day: e.day.value,
-      requestId: e.request_id?.value,
+      requestId: e.og_request_id?.value,
       model: e.model?.value,
-      storageRoot: e.storage_root?.value,
+      storageRoot: e.og_storage_root?.value,
       summary: text(e.summary.value),
     }));
+  });
+}
+
+/** The decision behind a 0G request ID: links a cleaning job (or offer) to the AI call that made it. */
+export function decisionByOgRequest(ctx, ogRequestId) {
+  return withBackoff(async () => {
+    const page = await scoped(
+      ctx,
+      ctx.client
+        .select({ $key: true, kind: true, decision_id: true, day: true, og_request_id: true, og_storage_root: true, summary: true })
+        .from(Decision)
+        .where(and(eq("building", ctx.building), eq("og_request_id", ogRequestId))),
+    )
+      .limit(1)
+      .fetch();
+    const e = page.entities[0];
+    return e
+      ? { key: e.$key, kind: e.kind.value, id: Number(e.decision_id.value), day: e.day.value, requestId: e.og_request_id?.value, storageRoot: e.og_storage_root?.value, summary: text(e.summary.value) }
+      : null;
   });
 }
 
@@ -140,7 +166,7 @@ export function offers(ctx, limit = 20) {
     const page = await scoped(
       ctx,
       ctx.client
-        .select({ $key: true, day: true, kwh: true, price_usdc: true, window_end: true, request_id: true, $expiresAt: true })
+        .select({ $key: true, day: true, kwh: true, price_usdc: true, window_end: true, og_request_id: true, $expiresAt: true })
         .from(Offer)
         .where(eq("building", ctx.building)),
     )
@@ -153,7 +179,7 @@ export function offers(ctx, limit = 20) {
       kwh: Number(e.kwh.value),
       price: Number(e.price_usdc.value),
       windowEnd: Number(e.window_end.value),
-      requestId: e.request_id?.value,
+      requestId: e.og_request_id?.value,
     }));
   });
 }
@@ -165,7 +191,7 @@ export function cleaningJobs(ctx, { status, limit = 20 } = {}) {
     const page = await scoped(
       ctx,
       ctx.client
-        .select({ $key: true, job_id: true, status: true, fee_usdc: true, deadline: true, output_before: true, output_after: true, arc_tx: true, $expiresAt: true })
+        .select({ $key: true, job_id: true, status: true, fee_usdc: true, deadline: true, output_before: true, output_after: true, arc_tx: true, og_request_id: true, og_storage_root: true, $expiresAt: true })
         .from(CleaningJob)
         .where(where),
     )
@@ -181,6 +207,8 @@ export function cleaningJobs(ctx, { status, limit = 20 } = {}) {
       outputBefore: Number(e.output_before.value),
       outputAfter: e.output_after ? Number(e.output_after.value) : null,
       arcTx: e.arc_tx?.value,
+      ogRequestId: e.og_request_id?.value,
+      ogStorageRoot: e.og_storage_root?.value,
     }));
   });
 }

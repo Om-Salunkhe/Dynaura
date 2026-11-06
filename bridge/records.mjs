@@ -5,6 +5,7 @@ import { and, desc, eq, lte } from "@arkiv-network/sdk/query"
 import { addr, dec, u64 } from "@arkiv-network/sdk/schema"
 import { hexToBytes, stringToBytes } from "viem"
 import { account, addHealth, BUILDING, publicClient, read, route, walletClient, write } from "./bridge.mjs"
+import { redact } from "./retry.mjs"
 import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale } from "./schemas.mjs"
 
 // Decimals as plain strings ("0.004167"), never scientific notation
@@ -123,21 +124,43 @@ addHealth(async (block) => {
   return { heartbeat: { key: heartbeatKey, alive: Boolean(e), expires_in_s: e ? Number(e.$expiresAt - block) * 2 : 0 } }
 })
 
-// POST /decision  {decision_id, kind, mode, request_id, model, storage_root, summary, day}
+// 0G proof fields: final names og_request_id / og_storage_root (DECISIONS 01:30). The old
+// request_id / storage_root are still accepted from older Pi code.
+const ogRequestId = (b) => b.og_request_id ?? b.request_id
+const ogStorageRoot = (b) => b.og_storage_root ?? b.storage_root
+
+// POST /decision  {decision_id, kind, mode, og_request_id, model, og_storage_root, summary, day, arkiv_key?}
+// A decision written with its 0G Storage root is sealed. One written without it (0G Storage was
+// offline) stays patchable, and when the upload lands the Pi sends the saved arkiv_key: the bridge
+// fills in og_storage_root, once. A root that is already there is never replaced.
 route("POST", "/decision", async (b) => {
+  const root = ogStorageRoot(b) ? String(ogStorageRoot(b)) : undefined
+  if (b.arkiv_key) {
+    if (!root) return { key: b.arkiv_key, patched: false }
+    return write("decision root", async (tx) => {
+      const current = await read(() => publicClient.getEntity(b.arkiv_key, Decision))
+      if (current.$creator?.toLowerCase() !== account.address.toLowerCase()) throw Object.assign(new Error("not our decision"), { status: 409 })
+      const have = current.og_storage_root?.value
+      if (have === root) return { key: b.arkiv_key, patched: false }
+      if (have) throw Object.assign(new Error(`decision already has og_storage_root ${have}`), { status: 409 })
+      const r = await walletClient.patchEntity(Decision, b.arkiv_key, { set: { og_storage_root: root } }, tx)
+      return { key: b.arkiv_key, txHash: r.txHash, patched: true }
+    })
+  }
   const values = {
     building: BUILDING,
     kind: String(b.kind),
     mode: String(b.mode),
     decision_id: u64(BigInt(b.decision_id)),
     day: String(b.day),
-    ...(b.request_id ? { request_id: String(b.request_id).slice(0, 120) } : {}),
+    ...(ogRequestId(b) ? { og_request_id: String(ogRequestId(b)).slice(0, 120) } : {}),
     ...(b.model ? { model: String(b.model).slice(0, 120) } : {}),
-    ...(b.storage_root ? { storage_root: String(b.storage_root) } : {}),
+    ...(root ? { og_storage_root: root } : {}),
     summary: stringToBytes(String(b.summary || "")),
   }
-  const r = await write("decision", (tx) => walletClient.createEntity(Decision, values, { expiration: days(30), flags: SEALED }, tx))
-  return { key: r.entityKey, txHash: r.txHash }
+  const opts = { expiration: days(30), ...(root ? { flags: SEALED } : {}) }
+  const r = await write("decision", (tx) => walletClient.createEntity(Decision, values, opts, tx))
+  return { key: r.entityKey, txHash: r.txHash, sealed: Boolean(root) }
 })
 
 // POST /daily  {day, panel_wh, flats_wh, solar_pct}: one entity per day, patched as the day goes on
@@ -198,7 +221,7 @@ route("POST", "/maintenance", async (b) => {
   return { key: r.entityKey, txHash: r.txHash }
 })
 
-// POST /offer  {day, kwh, price_usdc, window_end (unix s), request_id}
+// POST /offer  {day, kwh, price_usdc, window_end (unix s), og_request_id}
 // The offer expires exactly when the solar window closes: shops simply stop seeing it.
 route("POST", "/offer", async (b) => {
   const windowEnd = Math.floor(Number(b.window_end))
@@ -208,13 +231,13 @@ route("POST", "/offer", async (b) => {
     kwh: d(b.kwh, 3),
     price_usdc: d(b.price_usdc, 4),
     window_end: u64(BigInt(windowEnd)),
-    ...(b.request_id ? { request_id: String(b.request_id).slice(0, 120) } : {}),
+    ...(ogRequestId(b) ? { og_request_id: String(ogRequestId(b)).slice(0, 120) } : {}),
   }
   const r = await write("offer", (tx) => walletClient.createEntity(Offer, values, { expiration: until(windowEnd), flags: SEALED }, tx))
   return { key: r.entityKey, txHash: r.txHash, expiresAt: r.expiresAt }
 })
 
-// POST /cleaning_job  {job_id, status, fee_usdc, deadline, output_before, output_after?, arc_tx?}
+// POST /cleaning_job  {job_id, status, fee_usdc, deadline, output_before, output_after?, arc_tx?, og_request_id?, og_storage_root?}
 // Created when the escrow opens, patched as it is accepted / paid / refunded. It lives until a
 // day after the deadline (the escrow refunds at the deadline); the lasting record is Maintenance.
 const jobKeys = new Map()
@@ -225,6 +248,8 @@ route("POST", "/cleaning_job", async (b) => {
     status: String(b.status),
     ...(b.output_after != null ? { output_after: d(b.output_after, 1) } : {}),
     ...(b.arc_tx ? { arc_tx: String(b.arc_tx) } : {}),
+    ...(ogRequestId(b) ? { og_request_id: String(ogRequestId(b)).slice(0, 120) } : {}),
+    ...(ogStorageRoot(b) ? { og_storage_root: String(ogStorageRoot(b)) } : {}),
   }
   return write(`cleaning_job ${id} ${set.status}`, async (tx) => {
     let k = jobKeys.get(id)
@@ -320,5 +345,5 @@ route("POST", "/keeper", () => runKeeper())
 addHealth(async () => ({ keeper: keeperLast }))
 
 const KEEPER_EVERY_MS = 6 * 3600 * 1000
-setTimeout(() => runKeeper().catch((e) => console.warn("keeper failed:", e?.message)), 60_000)
-setInterval(() => runKeeper().catch((e) => console.warn("keeper failed:", e?.message)), KEEPER_EVERY_MS).unref()
+setTimeout(() => runKeeper().catch((e) => console.warn("keeper failed:", redact(e?.shortMessage || e?.message))), 60_000)
+setInterval(() => runKeeper().catch((e) => console.warn("keeper failed:", redact(e?.shortMessage || e?.message))), KEEPER_EVERY_MS).unref()

@@ -19,6 +19,8 @@ export const fetchDecisions = (limit = 20) => reads.decisions(arkiv(), limit);
 export const fetchMaintenance = (limit = 20) => reads.maintenance(arkiv(), limit);
 /** The building's heartbeat entity: if it expired (Pi off > 2 min), there is none. */
 export const fetchHeartbeat = () => reads.heartbeat(arkiv());
+/** The 0G decision behind a request ID (e.g. a cleaning job's og_request_id), or null. */
+export const fetchDecisionByOgRequest = (ogRequestId) => reads.decisionByOgRequest(arkiv(), ogRequestId);
 /** Live offers of spare solar. Expired ones (solar window closed) are simply not returned. */
 export const fetchOffers = (limit = 20) => reads.offers(arkiv(), limit);
 /** Cleaner job board: fetchCleaningJobs({ status: "open" }) */
@@ -40,7 +42,7 @@ export function useArkiv(fn, fallback, deps = []) {
     let alive = true;
     fn()
       .then((data) => alive && setState({ data, live: true, error: null }))
-      .catch((error) => alive && setState({ data: fallback, live: false, error: String(error?.shortMessage || error) }));
+      .catch((error) => alive && setState({ data: fallback, live: false, error: reads.redact(error?.shortMessage || error) }));
     return () => {
       alive = false;
     };

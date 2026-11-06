@@ -37,16 +37,17 @@ export const DailyOutput = defineSchema("dynaura.daily_output", {
   solar_pct: dec(),
 })
 
-// Every 0G decision (plan, ask, dust, clean) with its proof. Lives 30 days.
+// Every 0G decision (plan, ask, cleaning) with its proof. Lives 30 days. Sealed when it is written
+// with its 0G Storage root; if the upload came later (0G offline), the root is patched in once.
 export const Decision = defineSchema("dynaura.decision", {
   building: str().indexed(),
-  kind: str().indexed(),
-  mode: str().indexed(), // ai | no-ai
+  kind: str().indexed(), // plan | ask | cleaning
+  mode: str().indexed(), // ai | no-ai | meter
   decision_id: u64().indexed(),
   day: str().indexed(),
-  request_id: str().optional(), // 0G ZG-Res-Key
+  og_request_id: str().indexed().optional(), // 0G Router request ID (ZG-Res-Key): joins jobs to decisions
   model: str().optional(),
-  storage_root: str().optional(), // 0G Storage root of the full episode
+  og_storage_root: str().optional(), // 0x bytes32: 0G Storage root of the full episode log
   summary: bytes(), // UTF-8, can be longer than 128 bytes
 })
 
@@ -57,7 +58,7 @@ export const Offer = defineSchema("dynaura.offer", {
   kwh: dec(),
   price_usdc: dec(), // per kWh
   window_end: u64(), // unix seconds
-  request_id: str().optional(),
+  og_request_id: str().optional(), // the 0G plan that found the spare solar
 })
 
 // A sale to a shop, settled on Arc. Lives ~6 months.
@@ -81,6 +82,8 @@ export const CleaningJob = defineSchema("dynaura.cleaning_job", {
   output_before: dec(), // % of expected output when posted
   output_after: dec().optional(),
   arc_tx: str().optional(),
+  og_request_id: str().indexed().optional(), // the 0G dust check behind the job (DECISIONS 01:30)
+  og_storage_root: str().optional(), // its episode log on 0G Storage, patched in when the upload lands
 })
 
 // Maintenance history of the solar asset. Lives ~6 months (extend).
