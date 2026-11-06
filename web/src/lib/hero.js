@@ -32,6 +32,7 @@ function useCleaningRoots(on, key) {
           for (const r of rows) {
             const id = r.output?.job_id;
             if (id != null && r.storage_root) out[`${id}:${r.output.status}`] ??= r.storage_root;
+            if (id != null && r.episode_tx) out[`${id}:${r.output.status}:tx`] ??= r.episode_tx; // EpisodeRegistry record
           }
           setRoots(out);
         })
@@ -101,7 +102,10 @@ export function useHero(live) {
   const h = c ? fromLive(c, live, done) : demoHero(scene, now);
   const roots = useCleaningRoots(!!c, `${h.job?.id}:${h.stage}`);
 
-  if (c && h.job) h.og = { open: roots[`${h.job.id}:open`], paid: roots[`${h.job.id}:paid`] };
+  if (c && h.job) {
+    const id = h.job.id;
+    h.og = { open: roots[`${id}:open`], paid: roots[`${id}:paid`], openTx: roots[`${id}:open:tx`], paidTx: roots[`${id}:paid:tx`] };
+  }
   if (demo && h.job) h.og = { open: "0xdemo-root-open", paid: h.stage === "paid" ? "0xdemo-root-paid" : null };
   if (h.pct != null && h.actualW == null) h.actualW = +(2.1 * (h.pct / 100)).toFixed(2);
   // The panel meter only reads while a flat draws from it: no load, no watts to compare
@@ -128,6 +132,3 @@ export function useHero(live) {
   return h;
 }
 
-/** Optional explorer link for a 0G Storage root, e.g. VITE_OG_STORAGE_URL=https://…/{root} */
-const OG_TPL = import.meta.env.VITE_OG_STORAGE_URL || "";
-export const ogStorageUrl = (root) => (OG_TPL && root && !root.startsWith("0xdemo") ? OG_TPL.replace("{root}", root) : null);

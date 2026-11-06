@@ -6,6 +6,7 @@ import WalletButton from "../components/WalletButton.jsx";
 import { cleaner } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
 import { ARC_READY, errText, short, useWallet, write } from "../lib/arc.js";
+import { fetchCleaningJobs, useArkiv } from "../lib/arkiv.js";
 import { stageIndex, useHero } from "../lib/hero.js";
 
 const STEPS = [
@@ -24,6 +25,9 @@ export default function CleanerJobs() {
   const i = stageIndex(hero.stage);
   const step = i <= 2 ? 0 : i <= 4 ? 1 : 2;
   const paidNow = hero.stage === "paid" ? hero.job?.fee || 0 : 0;
+  // The public job board on Arkiv: every escrow the building opened, with its status
+  const board = useArkiv(() => fetchCleaningJobs({ limit: 10 }), null, [hero.stage]);
+  const arkJobs = board.live && board.data.length ? board.data : null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -68,7 +72,31 @@ export default function CleanerJobs() {
         })}
       </section>
 
-      {!hero.live && (
+      {arkJobs && (
+        <section className="card flex flex-col gap-1 rounded-[26px]">
+          <span className="text-base font-bold">Job board on Arkiv</span>
+          <span className="pb-1 text-xs text-muted">Every cleaning escrow the building opened. Anyone can check it.</span>
+          {arkJobs.map((j) => (
+            <div key={j.key} className="flex flex-col gap-1.5 border-t border-line py-2.5 text-sm first-of-type:border-0">
+              <div className="flex items-center justify-between">
+                <span className="font-bold">Job #{j.jobId}</span>
+                <span className={`chip py-0.5 text-[11px] ${j.status === "paid" ? "bg-[rgba(47,158,106,0.16)] text-good" : j.status === "refunded" ? "bg-[rgba(180,35,24,0.12)] text-bad" : "bg-sun-soft text-sun-ink"}`}>
+                  {j.status} · {j.feeUsdc.toFixed(2)} USDC
+                </span>
+              </div>
+              <span className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="text-muted">
+                  {Math.round(j.outputBefore)}%{j.outputAfter != null ? ` → ${Math.round(j.outputAfter)}%` : ""} output
+                </span>
+                <Proof kind="arc" id={j.arcTx} />
+                <Proof kind="arkiv" id={j.key} />
+              </span>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {!hero.live && !arkJobs && (
         <section className="card flex flex-col gap-1 rounded-[26px]">
           <span className="pb-1 text-base font-bold">Paid jobs</span>
           {cleaner.paid.map((p) => (

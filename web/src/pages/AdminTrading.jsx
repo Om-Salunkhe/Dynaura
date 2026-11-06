@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
 import PageHeader from "../components/PageHeader.jsx";
+import Proof from "../components/Proof.jsx";
 import { admin } from "../data/demo.js";
 import { postJSON } from "../lib/api.js";
-import { txUrl } from "../lib/arc.js";
-import { fetchMaintenance, short, useArkiv } from "../lib/arkiv.js";
+import { fetchMaintenance, fetchSales, short, useArkiv } from "../lib/arkiv.js";
 
 export default function AdminTrading() {
   const [price, setPrice] = useState(admin.price);
   const [editing, setEditing] = useState(false);
   const fromArkiv = useArkiv(() => fetchMaintenance(20), null);
+  const sales = useArkiv(() => fetchSales({ limit: 10 }), null);
+  const liveSales = sales.live && sales.data.length ? sales.data : null;
   const [records, setRecords] = useState(admin.maintenance);
   const [note, setNote] = useState("");
   useEffect(() => {
     if (fromArkiv.live)
-      setRecords(fromArkiv.data.map((m) => ({ date: m.date, title: m.title, text: m.text, link: m.arcTx ? `Arc ${short(m.arcTx)}` : `Arkiv ${short(m.key)}`, href: m.arcTx ? txUrl(m.arcTx) : null })));
+      setRecords(fromArkiv.data.map((m) => ({ date: m.date, title: m.title, text: m.text, arcTx: m.arcTx, key: m.key })));
   }, [fromArkiv]);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ title: "", text: "" });
@@ -64,7 +66,24 @@ export default function AdminTrading() {
             </button>
           )}
         </div>
-        {admin.sales.map((s) => (
+        {liveSales?.map((s) => (
+          <div key={s.key} className="inner flex flex-col gap-1.5 px-3 py-2.5">
+            <span className="flex items-center gap-2.5">
+              <span className="flex flex-1 flex-col gap-0.5">
+                <span className="text-sm font-bold">{s.name || short(s.buyer)}</span>
+                <span className="text-xs text-muted">
+                  {s.kwh.toFixed(2)} kWh · order #{s.orderId}
+                </span>
+              </span>
+              <span className="text-[13px] font-bold">{s.usdc.toFixed(2)} USDC</span>
+            </span>
+            <span className="flex flex-wrap gap-1.5 text-[11px]">
+              <Proof kind="arc" id={s.arcTx} />
+              <Proof kind="arkiv" id={s.key} />
+            </span>
+          </div>
+        ))}
+        {!liveSales && admin.sales.map((s) => (
           <div key={s.buyer} className="inner flex items-center gap-2.5 px-3 py-2.5">
             <span className="flex flex-1 flex-col gap-0.5">
               <span className="text-sm font-bold">{s.buyer}</span>
@@ -116,13 +135,10 @@ export default function AdminTrading() {
               <span className="text-sm font-bold">{m.title}</span>
               <span className="text-xs text-muted">{m.text}</span>
             </span>
-            {m.href ? (
-              <a href={m.href} target="_blank" rel="noreferrer" className="text-xs font-bold text-link">
-                {m.link}
-              </a>
-            ) : (
-              <span className="text-xs font-bold text-muted">{m.link}</span>
-            )}
+            <span className="flex flex-col items-end gap-1 text-[11px]">
+              {m.arcTx && <Proof kind="arc" id={m.arcTx} />}
+              {m.key ? <Proof kind="arkiv" id={m.key} /> : <span className="font-bold text-muted">{m.link || "demo"}</span>}
+            </span>
           </div>
         ))}
       </section>

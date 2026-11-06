@@ -25,6 +25,7 @@ export default function HeroSteps({ hero, size = "md" }) {
       proofs: j && [
         ["arc", j.openTx, "Arc tx"],
         ["og", hero.og?.open, "0G proof"],
+        ["ogtx", hero.og?.openTx, "0G registry"],
       ],
     },
     {
@@ -56,6 +57,7 @@ export default function HeroSteps({ hero, size = "md" }) {
       proofs: (j?.releaseTx || j?.refundTx) && [
         ["arc", j.releaseTx || j.refundTx, "Arc tx"],
         ["og", hero.og?.paid, "0G proof"],
+        ["ogtx", hero.og?.paidTx, "0G registry"],
       ],
     },
   ];
