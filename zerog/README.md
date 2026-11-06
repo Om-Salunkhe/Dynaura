@@ -45,7 +45,13 @@ cast call <address> "episodeOf(bytes32)(uint256)" <root> --rpc-url https://evmrp
 
 ## Deployment
 
-The address, deploy transaction, owner and device are in `deployments.json`. That file is written by `deploy.sh`.
+| | |
+|---|---|
+| Network | 0G Galileo testnet (chain ID 16602) |
+| EpisodeRegistry | [`0xb62f4531f035d5cd188799d96bac553b5d7da984`](https://chainscan-galileo.0g.ai/address/0xb62f4531f035d5cd188799d96bac553b5d7da984) (source verified on chainscan-galileo) |
+| Deploy tx | [`0xd1337649…a568`](https://chainscan-galileo.0g.ai/tx/0xd1337649a30e4cf939fcfd0292930fceff2e287a987132c4984f501c02eaa568), block 64198274 |
+
+The owner, device and compiler settings are in `deployments.json` (written by `deploy.sh`).
 
 ## Build, test, deploy
 
