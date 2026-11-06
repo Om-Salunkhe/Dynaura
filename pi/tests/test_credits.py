@@ -404,6 +404,38 @@ def test_real_board_available_sun_never_hammers_a_dead_forecast():
         config.PANEL_BEST_W = old
 
 
+def test_real_board_panel_reads_the_sun_not_a_common_load():
+    """Real board: the panel meter shows the sun it could give (voltage or its own load), not what
+    was drawn. Flats on grid draw nothing from it, so all of it is spare, none of it is "the pump"."""
+    m = int(time.mktime(time.strptime("2026-11-07", "%Y-%m-%d"))) + 12 * 3600
+    rows = [{"minute": m, "meter": "panel", "wh": 0.0167, "solar_wh": 0.0167, "sig": "s"},
+            {"minute": m, "meter": "A", "wh": 0.0, "solar_wh": 0.0, "sig": "s"}]
+
+    class RealHw(FakeHw):
+        panel_meter_reads_available = True
+
+    led = credits.Ledger(FakeStore(rows), RealHw(1.0), path=str(Path(tempfile.mkdtemp()) / "c.db"))
+    close(led.window(5, now=m + 120)["spare_wh"], 0.0167)
+    old = credits.Ledger(FakeStore(rows), FakeHw(1.0), path=str(Path(tempfile.mkdtemp()) / "c.db"))
+    assert old.window(5, now=m + 120)["spare_wh"] < 0.001, "without the flag the panel looked like a common load"
+
+
+def test_sell_now_counts_the_minute_in_progress():
+    m = int(time.mktime(time.strptime("2026-11-07", "%Y-%m-%d"))) + 12 * 3600
+
+    class RealHw(FakeHw):
+        panel_meter_reads_available = True
+
+    led = credits.Ledger(FakeStore([]), RealHw(1.0), path=str(Path(tempfile.mkdtemp()) / "c.db"))
+    for i in range(6):  # 30 s of lamp at 1 W in the minute that is still running
+        led.sample(5, now=m + i * 5)
+    led.live_minute = lambda: {"minute": m, "panel_wh": 30 / 3600, "used": {"A": 0.0, "B": 0.0, "C": 0.0}, "sigs": []}
+    assert led.window(5, now=m + 30)["spare_wh"] == 0, "the trade loop still waits for the signed minute"
+    snap = led.window(5, now=m + 30, include_now=True)
+    close(snap["spare_wh"], 30 / 3600, eps=1e-4)  # spare_wh is rounded to 0.1 mWh
+    assert snap["until"] == m + 30
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

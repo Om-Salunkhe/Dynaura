@@ -397,7 +397,7 @@ function SellScenario({ live, connected, run, title, n }) {
   const orders = market?.orders || [];
   const sales = market?.sales || [];
   const sellNow = async () => {
-    const r = await postJSON("/api/admin/credits/trade", { minutes: 5 }, { admin: true });
+    const r = await postJSON("/api/admin/credits/trade", { minutes: 5, include_now: true }, { admin: true });
     reloadMarket();
     reloadTrades();
     return r;
@@ -409,7 +409,7 @@ function SellScenario({ live, connected, run, title, n }) {
         title={title}
         story="The sun is shining, no shared job is waiting and the flats aren't using their share. Instead of wasting it, Dyna on 0G sells the spare: first to a neighbour who needs more, then to a nearby shop, and the rest to the grid. Shops prepay in USDC on Arc."
         steps={[
-          { text: `Spare sun: panel gives ${W(panelW)}, flats on solar use ${W(usedW)}`, done: panelW - usedW > 0.05, hint: "Keep the lamp on for a minute: the Pi counts the spare over the last 5 minutes" },
+          { text: `Spare sun: panel gives ${W(panelW)}, flats on solar use ${W(usedW)}`, done: panelW - usedW > 0.05, hint: "Keep the lamp on for about 30 seconds: “Sell” counts the last 5 minutes and the one in progress" },
           { text: "Dyna on 0G decides who buys the spare", done: !!t && t.mode === "ai", hint: "Press “Sell the spare now” (it also runs by itself every few minutes)" },
           { text: "A nearby shop sees the offer and prepays on Arc", done: orders.some((o) => o.status === "open" || o.status === "settled"), hint: "Pawan's phone: Shop → Offers" },
           { text: "After the window the Pi settles what was delivered", done: sales.length > 0 },

@@ -71,6 +71,15 @@ class MeterLoop:
             if m == "panel" or sources.get(m) == "solar":
                 a["solar_wh"] += w * self.interval / 3600
 
+    def partial(self) -> dict | None:
+        """The minute in progress (not signed yet): {minute, panel_wh, used: {flat: solar Wh}}.
+        Only for the demo's "sell now"; settlements use the signed 1-minute summaries."""
+        minute, acc = self._minute, dict(self._acc)
+        if minute is None or not acc:
+            return None
+        return {"minute": minute, "panel_wh": round((acc.get("panel") or {}).get("solar_wh", 0.0), 6),
+                "used": {f: round((acc.get(f) or {}).get("solar_wh", 0.0), 6) for f in FLATS}, "sigs": []}
+
     def _flush(self) -> list[dict]:
         out = []
         for m, a in self._acc.items():

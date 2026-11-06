@@ -97,6 +97,7 @@ async def lifespan(_: FastAPI):
     App.scheduler.start()
     if credits.ENABLED:  # fair share + solar credits (dy-arkiv); off = no change
         App.credits = credits.Ledger(App.store, App.hw, App.arkiv, sales=App.sales, arc=App.arc)
+        App.credits.live_minute = App.loop.partial
         App.sales.routed = lambda order: App.credits.routed_shop_wh(
             order["day"], since=order.get("detected_at"), until=order.get("deadline"))
         App.credits.start()
@@ -419,12 +420,13 @@ def decisions(kind: str | None = None, limit: int = 20):
 
 
 # ---- fair share + solar credits (pi/credits.py) ---------------------------------------------
-def _trade_loop(trader, minutes: float | None = None):
+def _trade_loop(trader, minutes: float | None = None, include_now: bool = False):
     """A TradeLoop whose snapshot is the ledger's window. The window matches the loop's interval
-    (so no spare is routed twice); a one-off run may ask for a longer window."""
+    (so no spare is routed twice); a one-off run may ask for a longer window, and include the
+    minute in progress (the demo's "sell now": half a minute of lamp is already spare)."""
     loop = trader.TradeLoop(None, store=App.store, uploader=App.uploader, notify=App.brain.notify)
     win = minutes or max(1, round(loop.interval_s / 60))
-    loop.snapshot = lambda: App.credits.window(int(win))
+    loop.snapshot = lambda: App.credits.window(max(1, int(win)), include_now=include_now)
     loop.on_trade = lambda trade, snap: App.sales.offer_from_trade(trade, snap)
     return loop
 
@@ -455,7 +457,9 @@ def trade_credits(body: dict | None = None, x_admin_key: str | None = Header(def
     if not App.trader:
         raise HTTPException(status_code=503, detail="the 0G trader (pi/trader.py) is not in this build")
     import trader
-    return _trade_loop(trader, float((body or {}).get("minutes") or trader.TRADE_EVERY_MIN)).run_now()
+    body = body or {}
+    return _trade_loop(trader, float(body.get("minutes") or trader.TRADE_EVERY_MIN),
+                       include_now=bool(body.get("include_now", True))).run_now()
 
 
 @app.post("/api/admin/credits/settle")
