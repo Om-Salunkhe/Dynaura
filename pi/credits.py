@@ -200,6 +200,7 @@ class Ledger:
         self.arkiv = arkiv
         self.arc = arc  # Arc client (arc.py): SolarCredits status for chain{}
         self._status: dict[str, tuple[float, dict]] = {}  # key -> (fetched at, credits_status)
+        self._claims: dict[str, tuple[float, dict]] = {}  # key -> (fetched at, {flat: claim tx})
         self.sales = sales  # ShopSettler: today's open shop orders are the shop's demand
         self.weights = parse_shares(shares if shares is not None else os.getenv("FLAT_SHARES", ""))
         self._db = sqlite3.connect(path or CREDITS_DB, check_same_thread=False, isolation_level=None)
@@ -329,6 +330,24 @@ class Ledger:
                 return saved
         out = {**saved, **{k: v for k, v in hit[1].items() if v is not None}}
         out["period_id"] = saved.get("period_id") or out.get("period_id")  # the id claim() takes, as posted
+        flats = out.get("flats") if isinstance(out.get("flats"), dict) else {}
+        claims = dict(out.get("claims") or {})
+        # Claim tx hashes come from event logs (slow): at most once a minute, and only while a flat
+        # that claimed has no hash yet. "claimed" itself comes from the status (claimed_usdc).
+        waiting = [f for f, x in flats.items() if (x.get("claimed_usdc") or 0) > 0 and not claims.get(f)]
+        if waiting and hasattr(arc, "credit_claims") and hasattr(arc, "credits_settle"):
+            got = self._claims.get(key)
+            if not got or time.time() - got[0] > 60:
+                try:
+                    got = (time.time(), arc.credit_claims(key) or {})
+                    self._claims[key] = got
+                except Exception as e:
+                    log.info("SolarCredits claims for %s failed: %s", key, str(e)[:120])
+            if got:
+                claims.update({f: tx for f, tx in got[1].items() if tx})
+        for f, x in flats.items():
+            x["claimed"] = bool((x.get("claimed_usdc") or 0) > 0 or claims.get(f))
+        out["claims"] = claims
         return out
 
     def window(self, minutes: int = 15, now: float | None = None) -> dict:

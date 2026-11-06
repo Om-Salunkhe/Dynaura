@@ -280,7 +280,12 @@ def test_settle_through_dy_arcs_credits_settle_and_status():
 
         def credits_status(self, key):
             self.status_calls += 1
-            return {"period_id": "0xpid", "posted": True, "claims": {"A": "0xclaimA"}, "post_tx": None}
+            return {"period_id": "0xpid", "posted": True, "post_tx": None,
+                    "flats": {"A": {"claimed_usdc": 0.4, "claimable_usdc": 0}, "C": {"claimed_usdc": 0, "claimable_usdc": 0.1}}}
+
+        def credit_claims(self, key):
+            self.claim_calls = getattr(self, "claim_calls", 0) + 1
+            return {"A": "0xclaimA"}
 
     arc = Arc2()
     led = credits.Ledger(FakeStore(rows), FakeHw(5.4), path=str(Path(tempfile.mkdtemp()) / "c.db"), arc=arc)
@@ -294,10 +299,11 @@ def test_settle_through_dy_arcs_credits_settle_and_status():
     close(flats["B"]["over_wh"], 0.02)
     p = led.period("2026-11-07", now=m)
     close(fund, p["pool"]["revenue_usdc"] - 0.02 * 0.013)  # shop + grid only: B pays its part with payIn
-    assert chain["post_tx"] == "0xpost" and p["chain"]["claims"]["A"] == "0xclaimA", "claims refresh from the chain"
+    assert chain["post_tx"] == "0xpost" and p["chain"]["claims"]["A"] == "0xclaimA", "claim tx from the logs"
+    assert p["chain"]["flats"]["A"]["claimed"] is True and p["chain"]["flats"]["C"]["claimed"] is False
     assert p["chain"]["post_tx"] == "0xpost", "a None from status doesn't hide what settle saved"
     led.period("2026-11-07", now=m)
-    assert arc.status_calls == 1, "status is cached for 20 s"
+    assert arc.status_calls == 1 and arc.claim_calls == 1, "status cached 20 s, claim logs 60 s"
     led.settle(arc, "2026-11")  # a month works too (dy-arc's keys)
     assert arc.settles[1][0] == "2026-11"
 
