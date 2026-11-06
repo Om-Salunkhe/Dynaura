@@ -1,5 +1,6 @@
 import { useState } from "react";
 import DemoBadge from "../components/DemoBadge.jsx";
+import FairShare from "../components/FairShare.jsx";
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import Proof from "../components/Proof.jsx";
@@ -142,6 +143,8 @@ export default function Bill() {
         <Line k="Rates" v={b.rule} />
         {live && <Line k="Proof" v={<span className="mono text-xs">{pi.data.readings_hash.slice(0, 10)}… of {pi.data.minutes} signed minutes</span>} />}
       </section>
+
+      <FairShare flat={who.flat} />
 
       {arkBills?.length > 0 && (
         <section className="card flex flex-col gap-1 rounded-[14px]">
