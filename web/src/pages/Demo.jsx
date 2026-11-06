@@ -47,8 +47,8 @@ export default function Demo() {
     noon: connected
       ? [
           { label: "Sun out", fn: () => postJSON("/api/moment/sun", {}, { admin: true }) },
-          { label: "Flat B away", fn: () => postJSON("/api/moment/away-B", {}, { admin: true }) },
-          { label: "Flat B home", fn: () => postJSON("/api/moment/home-B", {}, { admin: true }) },
+          { label: "Flat A light", fn: () => postJSON("/api/moment/light-A", {}, { admin: true }) },
+          { label: "Flat B heavy", fn: () => postJSON("/api/moment/heavy-B", {}, { admin: true }) },
           { label: "Run the pump", fn: () => postJSON("/api/moment/pump", {}, { admin: true }) },
         ]
       : [],
@@ -256,7 +256,7 @@ function demoBuilding(live, scene, hero, offline) {
   if (!live.demo) return { panelW: live.meters?.panel?.w ?? 0, flats: live.flats || {}, meters: live.meters || {}, pump: live.pump?.on };
   const flats = {
     A: { source: offline ? "grid" : "solar", away: false },
-    B: { source: "grid", away: true },
+    B: { source: offline ? "grid" : "solar", away: false },
     C: { source: offline ? "grid" : "solar", away: false },
   };
   // nothing draws from the panel while every flat is on grid, so its meter reads ~0

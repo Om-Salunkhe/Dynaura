@@ -60,16 +60,17 @@ export function creditsModel({ period = "today", available, common, used, weight
   };
 }
 
-// Pawan's example, exactly as dy-arkiv's unit test: the panel makes 100 units, shares A:1 B:1
-// (50 each), A uses 20 and B 40, so 40 are spare (A left 30, B 10). A earns 75% of what they
-// sell and B 25%; an equal split would be 50/50. The shop buys 25 units, the grid the rest.
+// The 3-flat demo period (DECISIONS Sat 00:20, Pawan's numbers): the panel can give 150, so each
+// flat's share is 50. A uses 20, B 40, C 50: 40 are spare (A left 30, B 10, C 0), so A earns 75%
+// of what they sell, B 25%, C 0, where today's equal split pays each flat a third.
+// The shop buys 25 units, the grid the rest.
 const DEMO_PRICES = { neighbor: 0.013, shop: 0.08, export: 0.006 };
 export const DEMO_CREDITS = creditsModel({
   period: "today",
-  available: 100,
+  available: 150,
   common: 0,
-  weights: { A: 1, B: 1 },
-  used: { A: 20, B: 40 },
+  weights: { A: 1, B: 1, C: 1 },
+  used: { A: 20, B: 40, C: 50 },
   shopOrder: 25,
   prices: DEMO_PRICES,
   trades: [
