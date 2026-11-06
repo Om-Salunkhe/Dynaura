@@ -9,7 +9,7 @@ import { cleaner } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
 import { ARC_READY, errText, short, useWallet, write } from "../lib/arc.js";
 import { fetchCleaningJobs, fetchWorkReceipts, useArkiv } from "../lib/arkiv.js";
-import { verifyPayout } from "../lib/verify.js";
+import { usePiDevice, verifyPayout } from "../lib/verify.js";
 import { stageIndex, useHero } from "../lib/hero.js";
 
 const STEPS = [
@@ -146,6 +146,7 @@ const BAD = new Set(["refunded", "rejected", "disputed", "no_check"]);
 function BoardRow({ j }) {
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
+  const device = usePiDevice();
   const fee = Number(j.feeUsdc) || 0;
   const before = j.dustyPct ?? j.outputBefore;
   const after = j.afterPct ?? j.outputAfter;
@@ -154,7 +155,7 @@ function BoardRow({ j }) {
   const verify = async () => {
     setBusy(true);
     try {
-      setRes(await verifyPayout({ id: j.jobId, proofWindow: j.proofWindow }));
+      setRes(await verifyPayout({ id: j.jobId, proofWindow: j.proofWindow }, device));
     } catch (e) {
       setRes({ ok: false, why: e.shortMessage || e.message });
     } finally {
@@ -189,7 +190,7 @@ function BoardRow({ j }) {
       {res && (
         <span className={`text-[11.5px] ${res.ok ? "text-good" : "text-bad"}`}>
           {res.ok
-            ? `✓ Signed by ${res.piSigner ? "the Pi" : "the signer"} (${res.signer.slice(0, 6)}…${res.signer.slice(-4)}) and matches the proof on Arc`
+            ? `✓ Signed by the Pi's device key (${res.signer.slice(0, 6)}…${res.signer.slice(-4)}) and matches the proof on Arc`
             : `✗ ${res.why || (!res.signaturesOk ? "A reading isn't signed by the Pi" : "Doesn't match the proof on Arc")}`}
         </span>
       )}

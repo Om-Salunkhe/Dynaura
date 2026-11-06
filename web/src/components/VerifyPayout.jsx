@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ARC_READY } from "../lib/arc.js";
 import { ARKIV_READY } from "../lib/arkiv.js";
-import { verifyPayout } from "../lib/verify.js";
+import { usePiDevice, verifyPayout } from "../lib/verify.js";
 
 const short = (h) => (h && h.length > 14 ? `${h.slice(0, 8)}…${h.slice(-6)}` : h || "–");
 const teeOk = (tee) => tee === true || (tee && typeof tee === "object" && Object.entries(tee).some(([k, v]) => /verif/i.test(k) && v === true));
@@ -11,6 +11,7 @@ const teeOk = (tee) => tee === true || (tee && typeof tee === "object" && Object
 export default function VerifyPayout({ hero }) {
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState(null);
+  const device = usePiDevice();
   const j = hero.job;
   if (hero.stage !== "paid" || !j) return null;
   const v = hero.verdict || {};
@@ -28,7 +29,7 @@ export default function VerifyPayout({ hero }) {
     setBusy(true);
     setRes(null);
     try {
-      setRes(await verifyPayout({ id: j.id, proofWindow: j.proofWindow, releasedAt: j.releasedAt }));
+      setRes(await verifyPayout({ id: j.id, proofWindow: j.proofWindow, releasedAt: j.releasedAt }, device));
     } catch (e) {
       setRes({ ok: false, why: e.shortMessage || e.message });
     } finally {
@@ -60,8 +61,7 @@ export default function VerifyPayout({ hero }) {
           {res.signer && (
             <span className={`text-[12px] ${res.signaturesOk ? "text-good" : "text-bad"}`}>
               {res.signaturesOk ? "✓" : "✗"} {res.signaturesOk ? "All readings signed by" : "Not every reading is signed by"}{" "}
-              {res.piSigner ? "the Pi" : "the signer"} <span className="mono">{short(res.signer)}</span>
-              {res.piSigner ? "" : " (not the Pi's published device key)"}
+              the Pi's device key <span className="mono" title={res.signer}>{short(res.signer)}</span>
             </span>
           )}
           {res.computed && (
