@@ -163,7 +163,7 @@ Deploy transactions: [escrow](https://explorer.testnet.arc.io/tx/0x7bc2adcd3d0ef
 
 **Safety:** OpenZeppelin `SafeERC20`, `ReentrancyGuard` and `Ownable2Step` (ownership can't be renounced), nothing `payable`, and an event for every state change. Neither the oracle nor the committee can accept a cleaning job, so neither can pay itself. A payout to a frozen USDC address doesn't block the job: the amount waits for its recipient to claim.
 
-**Roles:** the Pi is the oracle; it opens an escrow only after the committee approves in the app. The committee resolves disputes on chain from its own wallet, not the Pi's. Committee wallet: [`0x6c11…63D6`](https://explorer.testnet.arc.io/address/0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6), owner of all three contracts. For the demo the treasury is the Pi's wallet; in a real building it, and the committee, would be the society's multisig.
+**Roles:** the Pi is the oracle; it opens an escrow only after the committee approves in the app. The committee resolves disputes on chain from its own wallet, not the Pi's. Committee wallet: [`0x6c11…63D6`](https://explorer.testnet.arc.io/address/0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6), owner of all four contracts. For the demo the treasury is the Pi's wallet; in a real building it, and the committee, would be the society's multisig.
 
 **Transactions:** *live* = the hero run on the Pi (0G flagged real dust, the committee approved, escrow job #3); *e2e* = our scripted run of every path ([`contracts/scripts/e2e.mjs`](contracts/scripts/e2e.mjs)).
 
