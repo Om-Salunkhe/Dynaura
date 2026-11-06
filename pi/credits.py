@@ -230,7 +230,9 @@ class Ledger:
         PANEL_BEST_W x this hour's forecast radiation / 1000 W/m2. None when unknown: the minute then
         counts only what was drawn, so no spare is made up."""
         if hasattr(self.hw, "solar_available_w"):
-            return float(self.hw.solar_available_w())
+            v = self.hw.solar_available_w()  # the real board may say None: then the settings below
+            if v is not None:
+                return float(v)
         fixed = _f("PANEL_AVAILABLE_W", 0)
         if fixed:
             return fixed

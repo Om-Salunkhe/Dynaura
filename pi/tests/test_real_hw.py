@@ -89,6 +89,10 @@ ok(set(r) == {"panel", "A", "B", "C"}, "a reading for every meter")
 ok(r["panel"].v == 5.2 and r["panel"].ma == 300.0, f"panel 5.2 V 300 mA (got {r['panel']})")
 ok(r["A"].v == 5.0 and r["A"].ma == 10.5, f"flat A: low-side volts from SUPPLY_V, 10.5 mA (got {r['A']})")
 ok(abs(r["A"].w - 0.0525) < 1e-6, "flat A watts = 5 V x 10.5 mA")
+ok(abs(hw.solar_available_w() - r["panel"].w) < 1e-9, "available sun = the panel meter (its own load)")
+os.environ["PANEL_READS_AVAILABLE"] = "false"
+ok(hw.solar_available_w() is None, "PANEL_READS_AVAILABLE=false: unknown, credits fall back to settings")
+del os.environ["PANEL_READS_AVAILABLE"]
 
 hw.set_flat("B", "solar")
 ok(outs[27].on is True and hw.flat_source("B") == "solar", "B to solar clicks GPIO27 on")

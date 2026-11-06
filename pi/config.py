@@ -53,6 +53,10 @@ PLAN_HOUR = int(os.getenv("PLAN_HOUR", "20") or 20)          # make tomorrow's p
 SOLAR_MIN_W = float(os.getenv("SOLAR_MIN_W", "0.3") or 0.3)  # panel must give at least this to switch flats to solar
 PUMP_SECONDS = float(os.getenv("PUMP_SECONDS", "8") or 8)    # model pump has no float switch: fixed run time
 IGNORE_CLOCK = os.getenv("IGNORE_CLOCK", "false").lower() == "true"  # demo under a lamp at night: ignore plan hours
+# Scenario 2: when a flat is away and the panel has spare power, 0G decides whether the tank pump runs now
+SPARE_PUMP = os.getenv("SPARE_PUMP", "true").lower() == "true"
+SPARE_PUMP_MIN_W = float(os.getenv("SPARE_PUMP_MIN_W", "") or SOLAR_MIN_W)   # spare power needed to run it
+SPARE_PUMP_COOLDOWN_S = float(os.getenv("SPARE_PUMP_COOLDOWN_S", "180") or 180)  # at most one 0G ask per this
 ADMIN_KEY = os.getenv("ADMIN_KEY", "").strip()               # needed for admin changes from the web app
 
 # 0G Storage (Go CLI from github.com/0glabs/0g-storage-client)
