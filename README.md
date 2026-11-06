@@ -27,6 +27,7 @@ Maharashtra now lets the residents of an apartment building share one solar syst
 Once a building shares one roof, someone has to run it:
 - **Who used how much sun?** Each flat's share has to come from a meter, not an estimate.
 - **When should the shared loads run?** The tank pump, the borewell and the EV charger should run in the strongest sun, not at dawn on grid power.
+- **Who earns from the spare sun?** Sun the flats don't use is sold to the grid or a neighbour, and today that money is split equally. The flat that left its share unused gets the same as the one that used it all.
 - **Who keeps the panel clean?** A dusty panel quietly loses output for weeks. Paying a cleaner today means trusting someone's word that the job was done.
 
 Today that's a committee member with a spreadsheet and a WhatsApp group. Dynaura runs it with a meter that signs its readings, an AI that has to show its work, a payment only the meter can release, and a record book anyone can check.
@@ -36,14 +37,15 @@ Today that's a committee member with a spreadsheet and a WhatsApp group. Dynaura
 The hero flow, as shown in the demo:
 
 1. **Plan (0G).** Every evening the Pi sends Dyna tomorrow's sun forecast, the last 7 days of use (read back from Arkiv) and who is away. Dyna answers on **0G Compute** with a plan: the solar window, when each shared job runs, and tips per flat. The Pi keeps the 0G request ID and uploads the full episode log to **0G Storage**.
-2. **Run.** Relays move each flat between solar (yellow LED) and grid (blue LED), and the pump runs at its planned slot. The Pi meters everything once a second and signs every 1-minute summary with its device key.
-3. **Look (0G).** Tracing paper on the panel plays the dust. When output falls below 70% of what the panel should give, or the committee presses *Scan panel*, the Pi takes a frame of the panel and asks 0G: is it dirty, how much is covered, and why? The verdict comes back with its 0G request ID. A meter alone can't tell dust from a cloud.
-4. **Approve.** A dirty verdict becomes a cleaning request. The committee sees the frame and 0G's verdict in the app and approves it. Only then does the Pi lock a **2 USDC fee in an escrow on Arc**, tagged with that 0G request ID. A rejected request moves no money.
-5. **Clean.** A cleaner accepts the job from their own wallet, cleans the panel and taps *Mark done* (that moves no money).
-6. **Paid by the meter.** The Pi measures the output again. When it's back to at least 90% of a clean panel, and at least 15 points above the dusty reading, the Pi (the escrow's only oracle) releases the USDC to the cleaner, with the hash of the signed readings as proof. If not, it keeps waiting, and after the deadline the society gets its money back. The cleaner can dispute, and the committee decides.
-7. **Remembered (Arkiv).** Every reading, decision, cleaning request, sale and bill is written to Arkiv by the building's wallet, so the app, the cleaner and any judge can read and check them without asking us.
+2. **Run.** Relays move each flat between solar (yellow LED) and grid (blue LED), and the pump runs on the sun in its planned slot. The Pi meters everything once a second and signs every 1-minute summary with its device key.
+3. **Share (0G).** Each flat has a fair share of the sun. When a flat leaves part of its share unused, Dyna on 0G sells that spare to the best buyer: a neighbour flat that needs more, the shop next door, or the grid. The money is paid back in proportion to what each flat left unused, not split equally ([Fair share](#fair-share-pay-the-flat-that-saved)).
+4. **Look (0G).** Tracing paper on the panel plays the dust. When output falls below 70% of what the panel should give, or the committee presses *Scan panel*, the Pi takes a frame of the panel and asks 0G: is it dirty, how much is covered, and why? The verdict comes back with its 0G request ID. A meter alone can't tell dust from a cloud.
+5. **Approve.** A dirty verdict becomes a cleaning request. The committee sees the frame and 0G's verdict in the app and approves it. Only then does the Pi lock a **2 USDC fee in an escrow on Arc**, tagged with that 0G request ID. A rejected request moves no money.
+6. **Clean.** A cleaner accepts the job from their own wallet, cleans the panel and taps *Mark done* (that moves no money).
+7. **Paid by the meter.** The Pi measures the output again. When it's back to at least 90% of a clean panel, and at least 15 points above the dusty reading, the Pi (the escrow's only oracle) releases the USDC to the cleaner, with the hash of the signed readings as proof. If not, it keeps waiting, and after the deadline the society gets its money back. The cleaner can dispute, and the committee decides.
+8. **Remembered (Arkiv).** Every reading, decision, trade, credit period, cleaning request, sale and bill is written to Arkiv by the building's wallet, so the app, the cleaner and any judge can read and check them without asking us.
 
-**If 0G is unreachable,** Dyna never fakes a decision. The building drops to a safe stop (every flat on grid, the pump off), a dust check flags nothing, and the outage itself is logged.
+**If 0G is unreachable,** Dyna never fakes a decision. The building drops to a safe stop (every flat on grid, the pump off), a dust check flags nothing, spare sun goes to the grid at the feed-in rate, and the outage itself is logged.
 
 ### Architecture
 
@@ -56,16 +58,16 @@ flowchart LR
   end
   Pi["Raspberry Pi 4 · pi/<br/>1 s meter loop · signed 1-min summaries<br/>plan runner · safe stop · FastAPI + SSE"]
   B <--> Pi
-  Pi -- "plan · dust check on a camera frame<br/>(request ID)" --> ZC["0G Compute Router<br/>0gm-1.0-35b-a3b (text + image)"]
+  Pi -- "plan · dust check on a camera frame · spare-sun trades<br/>(request ID)" --> ZC["0G Compute Router<br/>0gm-1.0-35b-a3b (text + image)"]
   Pi -- "episode log per decision" --> ZS["0G Storage<br/>(root hash)"]
   Pi -- "root + request ID" --> ZR["0G Chain<br/>EpisodeRegistry"]
-  Pi -- "oracle: open / release escrow,<br/>post bills, settle sales" --> Arc["Arc testnet · USDC<br/>CleaningEscrow · SolarBilling · ShopTrade"]
+  Pi -- "oracle: open / release escrow,<br/>post bills, settle sales, post credit periods" --> Arc["Arc testnet · USDC<br/>CleaningEscrow · SolarBilling · ShopTrade · SolarCredits"]
   Pi --> Br["bridge/ (Node)<br/>@arkiv-network/sdk"]
-  Br --> Ak["Arkiv (Rabdi)<br/>readings · decisions · jobs<br/>offers · sales · bills"]
+  Br --> Ak["Arkiv (Rabdi)<br/>readings · decisions · jobs<br/>offers · sales · bills · trades · credits"]
   Ak -- "last 7 days → planner" --> Br
   Web["web/ (React)<br/>resident · committee · cleaner · shop"] -- "live state (SSE) · approve / reject · Mark done" --> Pi
   Web -- "reads records" --> Ak
-  Web -- "accept job · dispute · resolve · pay bill · buy sun<br/>(the user's own wallet)" --> Arc
+  Web -- "accept job · dispute · resolve · pay bill · buy sun · claim credit<br/>(the user's own wallet)" --> Arc
 ```
 
 As an image: [`docs/img/architecture.png`](docs/img/architecture.png), with the escrow steps in [`docs/diagram.md`](docs/diagram.md). Wiring and roles: [`docs/architecture.md`](docs/architecture.md).
@@ -86,6 +88,24 @@ A three-flat cardboard building under a desk lamp:
 
 The same code runs without the board in **SIM mode** (`DYNAURA_HW=sim`), with a simulated sun, sample camera frames and demo buttons for cloud, dust and cleaning.
 
+## Fair share: pay the flat that saved
+
+Say the panel makes 100 units and the two flats sharing it have 50 each. Flat A uses 20 and Flat B uses 40, so 40 units are spare and get sold. A left 30 of its share unused and B left 10.
+
+| | Unused share | Equal split (today) | Dynaura |
+|---|---|---|---|
+| Flat A | 30 | 50% | **75%** |
+| Flat B | 10 | 50% | **25%** |
+
+**The flat that saved gets paid.** Each period (live, then per day and month), from the Pi's signed 1-minute readings:
+- Common loads (the pump) come off the top; the rest is split into equal shares (configurable).
+- `unused = share − used` for each flat, and `over = used − share` for a flat that needed more.
+- **Dyna is the market maker.** It routes the spare pool to the best buyer: a neighbour flat that is over its share (at a price inside the band between the feed-in and the grid price), the shop's prepaid order, or the grid. Each routing is a 0G decision with a request ID and a reason. If 0G is unreachable, the spare simply goes to the grid at the feed-in rate and is logged as `no-ai`; a routing is never made up.
+- The revenue `R` (neighbour payments + shop + grid export) is paid out as **`earned[flat] = R × unused[flat] / Σ unused`**. The app shows it next to the equal split, so each flat sees the difference.
+- **On chain:** the Pi posts each period's measured `unused` and `over` to `SolarCredits` on Arc. Shop and grid revenue is funded in, buyers pay in, and each flat **claims its pro-rata share, computed by the contract**. Every routing and period is also kept on Arkiv (`dynaura.trade`, `dynaura.credit_period`).
+
+The ledger is in `pi/credits.py`, the trading decision in `pi/trader.py`, and the feature sits behind `CREDITS_ENABLED`.
+
 ## 0G: the brain
 
 *Track: **Physical AI: Agents with a Body** (and the best-build-on-real-hardware prize).*
@@ -93,16 +113,17 @@ The same code runs without the board in **SIM mode** (`DYNAURA_HW=sim`), with a 
 
 0G is the brain at the building's checkpoints. The Pi is the spinal cord: it meters, switches relays and keeps everything safe on its own.
 
-- **0G inside the decision loop, at two checkpoints.**
+- **0G inside the decision loop, at three checkpoints.**
   - **The day's plan.** [`pi/planner.py`](pi/planner.py) asks the [0G Compute Router](https://router-api.0g.ai/v1) (OpenAI-compatible, `verify_tee: true`, model `0gm-1.0-35b-a3b`) for the plan, and the relays and pump follow the validated JSON ([`pi/jobs.py`](pi/jobs.py)).
   - **Is the panel dirty?** When the meter sees output drop, or the committee presses *Scan panel*, `pi/camera.py` captures a frame and `zg.check_dust` sends it to 0G's own model, `0gm-1.0-35b-a3b`, which takes text and images, and asks whether the panel is dirty, how much of it is covered, and why. If the image call isn't available, the same check decides from the meter and the cloud forecast, and the decision is marked `meter-only`. Only a dirty verdict creates a cleaning request, and no money moves until the committee approves it.
-- **An episode log on 0G Storage with a request ID per decision.** Every decision (plan, dust check, Ask Dyna, safe stop) is saved as an episode: the input, the raw 0G answer, the request ID, the model, any TEE fields the Router returns and the building's state, chained to the previous episode by hash. [`pi/og_storage.py`](pi/og_storage.py) uploads it to 0G Storage and retries until it lands.
+  - **Who buys the spare sun?** `pi/trader.py` asks 0G which buyers get the spare (neighbour flats that need more, the shop, the grid) and at what neighbour price. The Pi checks the answer: the routes can't exceed the spare, only flats over their share can buy, and the price must sit between the feed-in and grid rates.
+- **An episode log on 0G Storage with a request ID per decision.** Every decision (plan, dust check, trade, Ask Dyna, safe stop) is saved as an episode: the input, the raw 0G answer, the request ID, the model, any TEE fields the Router returns and the building's state, chained to the previous episode by hash. [`pi/og_storage.py`](pi/og_storage.py) uploads it to 0G Storage and retries until it lands.
 - **Every episode indexed on 0G Chain.** After each upload the Pi calls [`EpisodeRegistry`](zerog/src/EpisodeRegistry.sol)`.record(root, requestId, ai)` on Galileo ([`0xb62f…a984`](https://chainscan-galileo.0g.ai/address/0xb62f4531f035d5cd188799d96bac553b5d7da984), source verified). That gives judges one contract where every decision is listed in order, AI or not.
-- **A safe stop, never a fake verdict.** If 0G can't be reached, the plan is cleared, every flat goes to grid and the pump stops ([`pi/brain.py`](pi/brain.py)). A dust check that can't reach 0G flags nothing and is logged as `no_check`. Outages are uploaded and anchored like any other decision.
+- **A safe stop, never a fake verdict.** If 0G can't be reached, the plan is cleared, every flat goes to grid and the pump stops ([`pi/brain.py`](pi/brain.py)). A dust check that can't reach 0G flags nothing and is logged as `no_check`. A trade that can't reach 0G sends the spare to the grid at the feed-in rate, logged as `no-ai`. Outages are uploaded and anchored like any other decision.
 - **Real hardware**, demoed live at the 0G booth, plus a replayable SIM mode.
 - **A reason to come back tomorrow.** Every evening Dyna plans the next day from the forecast and the last 7 days on Arkiv, and every resident sees their own tips on Home.
 
-**What breaks if 0G is removed:** Without 0G the building can't see its own panel: a meter alone can't tell dust from a cloud, so it would either pay a cleaner every cloudy afternoon or never notice the dust.
+**What breaks if 0G is removed:** Without 0G the building can't see its own panel: a meter alone can't tell dust from a cloud, so it would either pay a cleaner every cloudy afternoon or never notice the dust. And its spare sun would simply go to the grid at the lowest price, instead of to the neighbour or shop that needs it.
 
 **About TEE:** 0G lists `0gm-1.0-35b-a3b` as TEE-attested and the Router marks every call `x-0g-e2ee: sealed`. The Router doesn't return a per-call verification flag, so we never show a call as "TEE verified"; we record any TEE fields that come back.
 
@@ -125,13 +146,14 @@ Explorers: [0G Storage (Galileo)](https://storagescan-galileo.0g.ai) · [0G Chai
 
 *Track: **Best Smart Contracts with Advanced Stablecoin Logic** (In Arc Studio).*
 
-Three USDC contracts, **written, tested and deployed in [Arc Studio](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852)** to Arc testnet (chain 5042002), with the source verified on the explorer. They use USDC (the ERC-20 at `0x3600…0000`, 6 decimals) for both money and gas. The **oracle** is the Pi's wallet: the only address allowed to release a fee, settle a sale or post a bill, and only from what its own meters measured. The **owner** is the society committee: it resolves disputes and can change the oracle and treasury.
+Our USDC contracts were **written, tested and deployed in [Arc Studio](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852)** to Arc testnet (chain 5042002), with the source verified on the explorer. They use USDC (the ERC-20 at `0x3600…0000`, 6 decimals) for both money and gas. The **oracle** is the Pi's wallet: the only address allowed to release a fee, settle a sale, post a bill or post a credit period, and only from what its own meters measured. The **owner** is the society committee: it resolves disputes and can change the oracle and treasury.
 
 | Contract | Stablecoin logic | Address |
 |---|---|---|
 | [`CleaningEscrow`](contracts/src/CleaningEscrow.sol) | **Conditional escrow with on-chain dispute and automatic release.** Once 0G flags the dust and the committee approves, the Pi locks the fee together with the 0G request ID of that verdict. A cleaner accepts, cleans and taps Mark done. The oracle releases the fee only when the meter shows the panel back to at least 90% (checked on chain) and clearly better than the dusty reading, storing the hash of the signed readings that proved it. The cleaner can dispute (on a cloudy day, say), and the committee resolves it from its own wallet. After the deadline anyone can refund the society. `linkEpisode` ties each job to the 0G Storage root of its episode log | [`0xf215…b8b9`](https://explorer.testnet.arc.io/address/0xf215116c72784e7490ddf3166dcb53b84855b8b9) |
 | [`SolarBilling`](contracts/src/SolarBilling.sol) | **Payment splitting.** Each month the oracle posts every flat's bill from its own meter, with the hash of the signed readings behind it. One payment is split by where the power came from: the solar part goes to the society treasury and the grid part to the electricity board, in the same transaction | [`0x5bd5…902b`](https://explorer.testnet.arc.io/address/0x5bd5aecc43968994e90f33df7177fb384401902b) |
 | [`ShopTrade`](contracts/src/ShopTrade.sol) | **Multi-step settlement.** A nearby shop prepays for spare noon sun. After the window the oracle settles by the Wh actually delivered: the society is paid and the shop gets the rest back in one transaction. If the meter never settles, the shop takes its deposit back after the deadline | [`0x17b2…ef47`](https://explorer.testnet.arc.io/address/0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47) |
+| [`SolarCredits`](contracts/src/SolarCredits.sol) | **Pro-rata payout by measured contribution.** The oracle posts each period's measured unused and over-share Wh per flat. Revenue is funded in, and a flat over its share pays in for what it bought from its neighbours. Each flat then claims `pool × unused / Σ unused`, **computed on chain**, to its registered wallet, once. Reusable for any "pay contributors by measured contribution" pool | **TBD** <!-- TODO(dy-arc): address after the Studio deploy --> |
 
 Deploy transactions: [escrow](https://explorer.testnet.arc.io/tx/0x7bc2adcd3d0ef6e07fa149b7bad08fc9e62a52bccb23cbded3c393b82c649063) · [billing](https://explorer.testnet.arc.io/tx/0x7588f283b6e87e6c74b8d1b990b890f71b5156bf5bfd4b5fc3edf6aae29101bb) · [shop trade](https://explorer.testnet.arc.io/tx/0xc31cf4804ad4fae68b765af046fe043ff88af0ab555d570526b7e700f811bb3f). All addresses and settings: [`contracts/deployments.json`](contracts/deployments.json).
 
@@ -154,8 +176,11 @@ Deploy transactions: [escrow](https://explorer.testnet.arc.io/tx/0x7bc2adcd3d0ef
 | Cleaner disputes → committee resolves | `dispute(jobId, reason)` → `resolve(jobId, payCleaner)` | e2e: [dispute](https://explorer.testnet.arc.io/tx/0x7567890a9452e35bfaae8ef36e86f02d75a2d7c82dd63f1dbca898f1d72ab745) → [resolve by the committee](https://explorer.testnet.arc.io/tx/0xdf7ba154225fd9f0514323b596aad4f6b27fdf76f80cffb1dd77b9352b0631e8) (the Pi's resolve is refused) |
 | A flat pays its bill (split solar / grid) | `SolarBilling.pay(billId)` | e2e: [postBill](https://explorer.testnet.arc.io/tx/0x86132eba80d909c0416f530d35f89603bd38fa88f5659fba743a615cf09a3b24) → [pay, split](https://explorer.testnet.arc.io/tx/0x21e8b1741c1550a00324935587b16028da566f1dd87a73e426c17faf5c0cfd87) |
 | A shop order settles | `ShopTrade.settle(orderId, deliveredWh)` | TBD |
+| A credit period is posted | `SolarCredits.postPeriod(periodId, flats, unusedWh, overWh, neighborRate, readingsHash)` | TBD <!-- TODO(dy-arc) --> |
+| Shop / grid revenue in · a buyer pays in | `fund(periodId, amount)` · `payIn(periodId, flat)` | TBD |
+| Flats claim their fair share (A gets 3× B) | `claim(periodId, flat)` | TBD |
 
-**Reusable by other builders:** `CleaningEscrow` is a generic "pay when a device proves the job is done" escrow. Swap the panel meter for any sensor (a water-tank level, a lift's uptime, an air-quality reading) and it works unchanged.
+**Reusable by other builders:** `CleaningEscrow` is a generic "pay when a device proves the job is done" escrow, and `SolarCredits` a generic "pay contributors by measured contribution" pool. Swap the panel meter for any sensor (a water-tank level, a lift's uptime, an air-quality reading) and it works unchanged.
 
 ## Arkiv: the record book
 
@@ -167,7 +192,7 @@ What expiry does for us:
 - **Heartbeat, 2 minutes, renewed every 30 s.** If the Pi goes quiet, the entity expires and the app shows "Building offline". There is no monitoring server; the expiry is the alarm.
 - **Shop offers expire when the solar window closes.** The market closes itself.
 - **Cleaning requests expire after their deadline.** Each one carries its state (flagged, approved, paid, rejected…) and its 0G proof. The lasting record is the maintenance entry written when a job is paid.
-- **Readings last 7 days, daily totals and bills about 6 months.**
+- **Each 0G trade lasts 30 days; credit periods, like daily totals and bills, about 6 months.** Readings last 7 days.
 
 What reads from Arkiv: Dyna's planner (the last 7 days of daily totals go into every 0G prompt), the cleaner's job board, the History timeline, Bill, Trading, shop offers, the maintenance log and the "Building online" badge. The app reads them straight from the browser, with no server in between.
 
@@ -215,10 +240,10 @@ The web app on Vercel is served over https, so it can't call the Pi's plain-http
 
 | Folder | What's in it |
 |---|---|
-| [`pi/`](pi/) | Python on the Pi: meter loop, 0G planner and dust check, camera, job runner, cleaning flow, Arc and Arkiv clients, FastAPI |
+| [`pi/`](pi/) | Python on the Pi: meter loop, 0G planner, dust check and spare-sun trader, camera, job runner, cleaning flow, fair-share credits, Arc and Arkiv clients, FastAPI |
 | [`pi/hw/`](pi/hw/) | Hardware layer: `sim.py` (simulated building) and `real.py` (INA219s + relays) |
 | [`bridge/`](bridge/) | Node service that writes and reads Arkiv entities for the Pi |
-| [`contracts/`](contracts/) | Solidity for Arc (escrow, billing, shop trade), built in Arc Studio, with tests |
+| [`contracts/`](contracts/) | Solidity for Arc (escrow, billing, shop trade, solar credits), built in Arc Studio, with tests |
 | [`zerog/`](zerog/) | `EpisodeRegistry` on 0G Chain (Foundry) |
 | [`web/`](web/) | React app for residents, the committee, the cleaner and shops |
 | [`arkiv/`](arkiv/) | Arkiv schema and judging files |
