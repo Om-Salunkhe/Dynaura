@@ -44,9 +44,14 @@ export function TradeRow({ t }) {
           .join(" · ")}
       </span>
       {t.reason && <span className="text-[12px] text-ink-2">“{t.reason}”</span>}
-      {t.mode === "ai" && t.request_id && (
-        <span className="mono text-[11px] text-muted" title={t.request_id}>
-          0G · req {isFakeId(t.request_id) ? "demo" : shortId(t.request_id)}
+      {((t.mode === "ai" && t.request_id) || t.key) && (
+        <span className="flex flex-wrap items-center gap-2">
+          {t.mode === "ai" && t.request_id && (
+            <span className="mono text-[11px] text-muted" title={t.request_id}>
+              0G · req {isFakeId(t.request_id) ? "demo" : shortId(t.request_id)}
+            </span>
+          )}
+          {t.key && <Proof kind="arkiv" id={t.key} label="Read from Arkiv" className="text-[11px]" />}
         </span>
       )}
     </div>
