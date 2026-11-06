@@ -1,42 +1,50 @@
 # contracts
 
-Solidity contracts for Arc. They are written here, then **pasted into Arc Studio, deployed from Arc Studio and shown in Studio in the demo** (every Arc prize asks for that).
+Dynaura's USDC contracts on Arc. They are **generated, tested and deployed in Arc Studio** (see [STUDIO.md](STUDIO.md) for how, and for the Studio prompts in `studio/`). `src/` is byte-for-byte the code in our Studio project, and `deployments.json` has the addresses.
 
 | Contract | What it does |
 |---|---|
-| `CleaningEscrow.sol` | Dusty panel → fee locked in USDC → cleaner accepts → the meter releases it when output is back above 90%, or the society gets a refund after the deadline |
-| `ShopTrade.sol` | A nearby shop prepays for spare noon solar → after the window the meter settles: society is paid per Wh delivered, the shop gets the rest back in the same tx |
-| `SolarBilling.sol` | Each month the meter posts every flat's bill (split by its own meter, with the hash of the signed readings) → the resident pays in USDC straight to the society treasury |
+| `CleaningEscrow` | The panel is dusty, so its cleaning fee is locked in USDC. A cleaner accepts the job, and **the meter releases the fee once output is back to at least 90%**. If nobody cleans it by the deadline, the society is refunded. The cleaner can dispute (on a cloudy day, for example), and the committee then decides. Each job carries the **0G request ID** of the AI decision that opened it and the **0G Storage root** of that decision's episode log, and each payout carries the hash of the meter readings that proved the clean. |
+| `ShopTrade` | A nearby shop prepays for spare noon solar. After the window, the meter settles **in one transaction**: the society is paid per Wh delivered (rounded down) and the shop gets the rest back. If the meter never settles, the shop takes its deposit back after the deadline. |
+| `SolarBilling` | Each month the meter posts each flat's bill, computed from that flat's own meter, along with the hash of the signed readings behind it. **One payment is split by where the power came from:** the solar part goes to the society treasury and the grid part to the electricity board. |
 
-USDC on Arc testnet is the ERC-20 at `0x3600000000000000000000000000000000000000` (6 decimals). Every amount in these contracts is in those 6-decimal units (`2000000` = 2 USDC).
+## Shared rules
 
-The **oracle** is the Pi's wallet (`ARC_PRIVATE_KEY` in `.env`): it is the only address allowed to release a fee, settle a sale or post a bill, and only from what its own meters measured.
+- **USDC** is the ERC-20 at `0x3600000000000000000000000000000000000000`, with 6 decimals: `2000000` = 2 USDC. Nothing is `payable`, and there are no native transfers.
+- **The oracle** is the Pi's wallet. It is the only address that can release a fee, settle a sale or post a bill, and it only does so from what its own meters measured. The **owner** (the society committee) can change the oracle and treasury and resolve disputes. Both are set in the constructor, because Studio deploys from its own wallet.
+- **Safety:** OpenZeppelin `SafeERC20`, `ReentrancyGuard` and `Ownable2Step` (ownership can't be renounced). Contracts use checks-effects-interactions and custom errors, and emit an event for every state change. Neither the oracle nor the committee can accept a cleaning job, so neither can pay itself.
+- **Frozen wallets can't block a job:** if a payout can't be delivered (for example, the USDC issuer froze the recipient's address), the job still settles and the amount waits in `pendingPayout` / `pendingRefund` for that recipient to `claimPayout` / `claimRefund`.
+- **Balance invariant:** the escrow always holds at least `totalLocked`, checked by an invariant test.
 
-## Check locally (optional)
+## The escrow, step by step
+
+```
+openJob(fee, deadline, outputBefore, ogRequestId)    payer locks USDC          -> Open
+accept(jobId)                                         a cleaner takes it        -> Accepted
+release(jobId, outputAfter >= 90, proof)              oracle: meter says clean  -> Paid (USDC to the cleaner)
+linkEpisode(jobId, ogStorageRoot)                     oracle: 0G Storage root of the AI episode
+cancel(jobId)                                         payer/oracle, still Open  -> Cancelled (USDC back)
+dispute(jobId, reason)                                cleaner, before deadline  -> Disputed
+resolve(jobId, payCleaner)                            committee                 -> Paid or Refunded
+refund(jobId)                                         anyone, after the deadline (disputed: +3 days) -> Refunded
+```
+
+## Tests
+
+**211 Foundry tests:**
+- `test/*.t.sol`: 161 tests written by Arc Studio, including fuzz and invariant tests.
+- `test/acceptance/`: our 50 tests, written independently from the same spec. They ran inside Studio too, and Studio didn't change them.
 
 ```bash
 cd contracts
-npm install
-npm run build                       # compiles, writes abi/*.json
-pip install "web3>=7" "eth-tester[py-evm]"
-python test/test_contracts.py       # runs every rule on an in-memory chain
+npm install                                   # OpenZeppelin + solc for the ABIs
+forge install foundry-rs/forge-std --no-git   # once
+forge test                                    # 211 tests
+npm run build                                 # writes abi/*.json (read by pi/ and web/)
 ```
 
-`test/MockUSDC.sol` is only for these tests. Never deploy it to Arc.
+Mock tokens (`test/MockUSDC.sol`, `test/acceptance/AcceptanceUSDC.sol`) exist only for these tests. Never deploy them.
 
-## Deploy in Arc Studio
+## After a deploy
 
-1. Make two wallets (MetaMask is fine) and get testnet USDC for both from the Circle faucet (faucet.circle.com, pick Arc testnet). USDC is also the gas on Arc.
-   - **Pi wallet** = oracle. Its key goes in `.env` as `ARC_PRIVATE_KEY`.
-   - **Society treasury**: for the demo this can be the same Pi wallet (fees and sales then loop back to it).
-2. Open Arc Studio, create a project called **Dynaura**, add the three `.sol` files from this folder (not `test/`).
-3. Compile with Solidity 0.8.24 or newer, then deploy each one from Studio with these constructor arguments:
-
-| Contract | Arguments |
-|---|---|
-| `CleaningEscrow` | `usdc_` = `0x3600000000000000000000000000000000000000`, `oracle_` = Pi wallet |
-| `ShopTrade` | `usdc_`, `oracle_` = Pi wallet, `treasury_` = treasury, `pricePerKwh_` = `80000` (0.08 USDC) |
-| `SolarBilling` | `usdc_`, `oracle_` = Pi wallet, `treasury_` = treasury |
-
-4. Copy the three addresses and the Studio project link into `deployments.json` (this file is what judges read), into `.env` (`ARC_ESCROW`, `ARC_SHOP`, `ARC_BILLING`) and into `web/.env` (`VITE_ARC_ESCROW`, `VITE_ARC_SHOP`, `VITE_ARC_BILLING`).
-5. In the demo video, show the Studio project with the three deployed contracts and one paid escrow.
+Copy the three addresses into `deployments.json`, into `.env` (`ARC_ESCROW`, `ARC_SHOP`, `ARC_BILLING`) and into `web/.env` (`VITE_ARC_ESCROW`, `VITE_ARC_SHOP`, `VITE_ARC_BILLING`).

@@ -3,11 +3,31 @@
   "chainId": 5042002,
   "rpc": "https://rpc.testnet.arc.io",
   "explorer": "https://explorer.testnet.arc.io",
-  "studioProject": "",
+  "studioProject": "https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852",
+  "deployedBy": "Arc Studio (Circle smart wallet via ERC-4337, gas sponsored by a paymaster)",
+  "studioDeployer": "0x5b12ce46c7194ad57d143bc22847224047b1ef42",
+  "paymaster": "0x7cea357b5ac0639f89f9e378a1f03aa5005c0a25",
+  "entryPoint": "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789",
+  "compiler": "solc 0.8.28, optimizer 200 runs, evm cancun",
+  "sourceVerified": true,
+  "bytecodeCheck": "runtime bytecode of all three equals a local build of src/ (only the metadata hash differs)",
   "usdc": "0x3600000000000000000000000000000000000000",
-  "oracle": "",
-  "treasury": "",
-  "CleaningEscrow": "",
-  "ShopTrade": "",
-  "SolarBilling": ""
+  "oracle": "0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf",
+  "owner": "0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf",
+  "treasury": "0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf",
+  "gridPayee": "0x69E52f183FE1D423Da95619986a648194cbFF140",
+  "pricePerKwh": 80000,
+  "CleaningEscrow": {
+    "address": "0xf215116c72784e7490ddf3166dcb53b84855b8b9",
+    "deployTx": "0x7bc2adcd3d0ef6e07fa149b7bad08fc9e62a52bccb23cbded3c393b82c649063"
+  },
+  "ShopTrade": {
+    "address": "0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47",
+    "deployTx": "0xc31cf4804ad4fae68b765af046fe043ff88af0ab555d570526b7e700f811bb3f"
+  },
+  "SolarBilling": {
+    "address": "0x5bd5aecc43968994e90f33df7177fb384401902b",
+    "deployTx": "0x7588f283b6e87e6c74b8d1b990b890f71b5156bf5bfd4b5fc3edf6aae29101bb"
+  },
+  "demoTxs": {}
 }

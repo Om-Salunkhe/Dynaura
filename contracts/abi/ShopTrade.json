@@ -20,6 +20,11 @@
     "internalType": "uint64",
     "name": "pricePerKwh_",
     "type": "uint64"
+   },
+   {
+    "internalType": "address",
+    "name": "owner_",
+    "type": "address"
    }
   ],
   "stateMutability": "nonpayable",
@@ -32,7 +37,17 @@
  },
  {
   "inputs": [],
+  "name": "BadPrice",
+  "type": "error"
+ },
+ {
+  "inputs": [],
   "name": "BadStatus",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NotAllowed",
   "type": "error"
  },
  {
@@ -42,12 +57,66 @@
  },
  {
   "inputs": [],
-  "name": "NotOwner",
+  "name": "NotShop",
   "type": "error"
  },
  {
   "inputs": [],
-  "name": "NotShop",
+  "name": "NothingPending",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "owner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnableInvalidOwner",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "account",
+    "type": "address"
+   }
+  ],
+  "name": "OwnableUnauthorizedAccount",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "ReentrancyGuardReentrantCall",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint8",
+    "name": "bits",
+    "type": "uint8"
+   },
+   {
+    "internalType": "uint256",
+    "name": "value",
+    "type": "uint256"
+   }
+  ],
+  "name": "SafeCastOverflowedUintDowncast",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "token",
+    "type": "address"
+   }
+  ],
+  "name": "SafeERC20FailedOperation",
   "type": "error"
  },
  {
@@ -57,8 +126,21 @@
  },
  {
   "inputs": [],
-  "name": "TransferFailed",
+  "name": "ZeroAddress",
   "type": "error"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": false,
+    "internalType": "address",
+    "name": "oracle",
+    "type": "address"
+   }
+  ],
+  "name": "OracleChanged",
+  "type": "event"
  },
  {
   "anonymous": false,
@@ -169,6 +251,44 @@
   "anonymous": false,
   "inputs": [
    {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferStarted",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferred",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
     "indexed": false,
     "internalType": "uint64",
     "name": "pricePerKwh",
@@ -177,6 +297,115 @@
   ],
   "name": "PriceSet",
   "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "orderId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "shop",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "amount",
+    "type": "uint256"
+   }
+  ],
+  "name": "RefundClaimed",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "orderId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "shop",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "amount",
+    "type": "uint256"
+   }
+  ],
+  "name": "RefundDeferred",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": false,
+    "internalType": "address",
+    "name": "treasury",
+    "type": "address"
+   }
+  ],
+  "name": "TreasuryChanged",
+  "type": "event"
+ },
+ {
+  "inputs": [],
+  "name": "MAX_DAY_BYTES",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "MAX_PRICE_PER_KWH",
+  "outputs": [
+   {
+    "internalType": "uint64",
+    "name": "",
+    "type": "uint64"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "acceptOwnership",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "orderId",
+    "type": "uint256"
+   }
+  ],
+  "name": "claimRefund",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
  },
  {
   "inputs": [
@@ -291,6 +520,38 @@
   "type": "function"
  },
  {
+  "inputs": [],
+  "name": "pendingOwner",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "name": "pendingRefund",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
   "inputs": [
    {
     "internalType": "string",
@@ -346,6 +607,13 @@
   "type": "function"
  },
  {
+  "inputs": [],
+  "name": "renounceOwnership",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
   "inputs": [
    {
     "internalType": "address",
@@ -374,6 +642,19 @@
  {
   "inputs": [
    {
+    "internalType": "address",
+    "name": "treasury_",
+    "type": "address"
+   }
+  ],
+  "name": "setTreasury",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
     "internalType": "uint256",
     "name": "orderId",
     "type": "uint256"
@@ -385,6 +666,32 @@
    }
   ],
   "name": "settle",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "totalLocked",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "transferOwnership",
   "outputs": [],
   "stateMutability": "nonpayable",
   "type": "function"
