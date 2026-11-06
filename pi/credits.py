@@ -179,7 +179,15 @@ def settle_period(minutes: list[dict], weights: dict[str, float], p: dict | None
 # ---- the ledger on the Pi --------------------------------------------------------------------
 
 def _range(period: str, now: float | None = None) -> tuple[str, int, int]:
-    """'today' | 'month' | 'YYYY-MM-DD' | 'YYYY-MM' -> (label, start, end) in unix seconds."""
+    """'today' | 'month' | 'YYYY-MM-DD' | 'YYYY-MM' -> (label, start, end) in unix seconds.
+    A '#tag' (e.g. 'today#rehearsal') covers the same readings but is a separate period on chain:
+    a posted period can never change, so a rehearsal settles a tagged period and leaves the plain
+    day for the real run."""
+    period, _, tag = (period or "").partition("#")
+    tag = "".join(c for c in tag if c.isalnum() or c in "-_")[:32]
+    if tag:
+        label, start, end = _range(period, now)
+        return f"{label}#{tag}", start, end
     now_dt = datetime.fromtimestamp(now or time.time())
     if period in ("today", "", None):
         period = now_dt.strftime("%Y-%m-%d")

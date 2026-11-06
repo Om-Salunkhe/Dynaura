@@ -360,6 +360,26 @@ def test_settle_resumes_from_the_chain_never_posts_or_funds_twice():
     assert arc.calls == ["post", "fund"], "never posted or funded twice"
 
 
+def test_a_tagged_period_is_the_same_day_but_its_own_period_on_chain():
+    label, start, end = credits._range("2026-11-07#rehearsal")
+    assert label == "2026-11-07#rehearsal" and end - start == 86400
+    assert credits._range("2026-11-07")[1:] == (start, end)
+    assert credits._range("today#a b!c", now=start + 3600)[0] == "2026-11-07#abc", "tag cleaned"
+    day0 = start
+    m = day0 + 12 * 3600
+    rows = [{"minute": m, "meter": "panel", "wh": 0.06, "solar_wh": 0.06, "sig": "s"},
+            {"minute": m, "meter": "A", "wh": 0.02, "solar_wh": 0.02, "sig": "s"}]
+    arc = FakeArc()
+    led = credits.Ledger(FakeStore(rows), FakeHw(6.0), FakeArkiv(), path=str(Path(tempfile.mkdtemp()) / "c.db"), shares="A:1,B:1,C:0")
+    for i in range(13):
+        led.sample(5, now=m + i * 5)
+    led.settle(arc, "2026-11-07#rehearsal")
+    import hashlib
+    assert arc.calls[0][1][0] == hashlib.sha256(b"dynaura-credits:2026-11-07#rehearsal").digest(), "its own period id"
+    assert led.period("2026-11-07", now=m)["chain"] is None, "the plain day is still free to settle"
+    assert not led.arkiv.posts, "a tagged rehearsal isn't written to Arkiv as the day"
+
+
 def test_real_board_available_sun_never_hammers_a_dead_forecast():
     import config
     calls = []
