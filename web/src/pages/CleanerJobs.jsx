@@ -4,6 +4,7 @@ import PageHeader from "../components/PageHeader.jsx";
 import Proof from "../components/Proof.jsx";
 import WalletButton from "../components/WalletButton.jsx";
 import { DisputeButton } from "../components/Dispute.jsx";
+import VerifyPayout from "../components/VerifyPayout.jsx";
 import { cleaner } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
 import { ARC_READY, errText, short, useWallet, write } from "../lib/arc.js";
@@ -219,6 +220,7 @@ function JobCard({ hero, onChain, me }) {
           <Proof kind="og" id={hero.og?.paid} label="0G proof" />
           {paid && j.proof && <Proof kind="hash" id={j.proof} label="Meter proof" />}
         </span>
+        <VerifyPayout hero={hero} />
       </section>
     );
   }

@@ -4,6 +4,7 @@ import HeroSteps from "../components/HeroSteps.jsx";
 import Icon from "../components/Icon.jsx";
 import CleaningAlert from "../components/CleaningAlert.jsx";
 import { ResolveDispute } from "../components/Dispute.jsx";
+import VerifyPayout from "../components/VerifyPayout.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import Proof from "../components/Proof.jsx";
 import { panel } from "../data/demo.js";
@@ -99,6 +100,7 @@ export default function PanelHealth() {
           {j && <span className="chip bg-inner py-1 text-xs">{j.fee.toFixed(2)} USDC</span>}
         </div>
         <HeroSteps hero={hero} />
+        <VerifyPayout hero={hero} />
         <ScanPanel hero={hero} />
         {!hero.live && ["clean", "paid", "refunded", "resolved"].includes(hero.stage) && (
           <button type="button" className="btn-ghost" onClick={hero.actions.dust}>
