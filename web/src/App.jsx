@@ -11,13 +11,14 @@ import CleanerJobs from "./pages/CleanerJobs.jsx";
 import Demo from "./pages/Demo.jsx";
 import History from "./pages/History.jsx";
 import Home from "./pages/Home.jsx";
+import Landing from "./pages/Landing.jsx";
 import PanelHealth from "./pages/PanelHealth.jsx";
 import ShopOffers from "./pages/ShopOffers.jsx";
 import Society from "./pages/Society.jsx";
 
 const NAV = {
   resident: [
-    { to: "/", label: "Home", icon: "home" },
+    { to: "/home", label: "Home", icon: "home" },
     { to: "/society", label: "Society", icon: "society" },
     { to: "/building", label: "Building", icon: "bolt" },
     { to: "/bill", label: "Bill", icon: "bill" },
@@ -33,7 +34,7 @@ const NAV = {
   shop: [{ to: "/shop", label: "Offers", icon: "trade" }],
 };
 
-const HOME = { resident: "/", admin: "/admin", cleaner: "/jobs", shop: "/shop" };
+const HOME = { resident: "/home", admin: "/admin", cleaner: "/jobs", shop: "/shop" };
 
 function Routed() {
   const [who] = useRole();
@@ -41,8 +42,9 @@ function Routed() {
     <Routes>
       <Route path="/ask" element={<AskDyna />} />
       <Route path="/demo" element={<Demo />} />
+      <Route path="/" element={<Landing />} />
       <Route element={<Layout nav={NAV[who.role]} />}>
-        <Route path="/" element={who.role === "resident" ? <Home /> : <Navigate to={HOME[who.role]} replace />} />
+        <Route path="/home" element={who.role === "resident" ? <Home /> : <Navigate to={HOME[who.role]} replace />} />
         <Route path="/society" element={<Society />} />
         <Route path="/building" element={<Building />} />
         <Route path="/bill" element={<Bill />} />

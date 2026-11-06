@@ -56,7 +56,7 @@ export default function History() {
 
       <section className="card flex flex-col gap-3 rounded-[14px]">
         <div className="flex items-baseline justify-between">
-          <span className="text-base font-semibold">Panel output, 7 days</span>
+          <span className="text-base font-medium">Panel output, 7 days</span>
           <span className="text-xs text-muted">{days ? "Wh per day · Arkiv" : "% of forecast · demo"}</span>
         </div>
         {days ? (
@@ -109,7 +109,7 @@ export default function History() {
                 <span className="text-xs text-muted">
                   {t.when} · {t.title}
                 </span>
-                <span className="text-sm font-semibold">{t.text}</span>
+                <span className="text-sm font-medium">{t.text}</span>
                 {t.ids ? (
                   <span className="flex flex-wrap gap-1.5 pt-0.5 text-[11px]">
                     {t.proof && <span className="mono py-1 text-muted">{t.proof}</span>}
@@ -118,7 +118,7 @@ export default function History() {
                     ))}
                   </span>
                 ) : (
-                  <span className="mono text-[11px] font-semibold text-muted">{t.proof} · demo</span>
+                  <span className="mono text-[11px] font-medium text-muted">{t.proof} · demo</span>
                 )}
               </span>
             </div>

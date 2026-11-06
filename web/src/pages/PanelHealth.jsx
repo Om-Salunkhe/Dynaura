@@ -41,7 +41,7 @@ export default function PanelHealth() {
       <PageHeader
         kicker="Admin · Sunrise Apartments"
         title="Panel health"
-        right={<span className="rounded-md bg-btn px-2 py-1 text-[11px] font-semibold tracking-wider text-btn-ink">ADMIN</span>}
+        right={<span className="rounded-md bg-btn px-2 py-1 text-[11px] font-medium tracking-wider text-btn-ink">ADMIN</span>}
       />
 
       <section className="card flex items-center gap-4 rounded-[14px]">
@@ -60,14 +60,14 @@ export default function PanelHealth() {
           ))}
           <div className="grid h-[84px] w-[84px] place-items-center rounded-full bg-card-solid text-center leading-tight">
             <span>
-              <span className="block text-2xl font-semibold">{pct ?? "–"}%</span>
+              <span className="block text-2xl font-medium">{pct ?? "–"}%</span>
               <span className="text-[10px] text-muted">of clean</span>
             </span>
           </div>
         </div>
         <div className="flex min-w-0 flex-col gap-1">
-          <span className={`text-[11px] font-semibold tracking-wider ${tone}`}>{kicker}</span>
-          <span className="text-sm font-semibold">{text}</span>
+          <span className={`text-[11px] font-medium tracking-wider ${tone}`}>{kicker}</span>
+          <span className="text-sm font-medium">{text}</span>
           <span className="text-xs text-muted">
             Alert under {hero.dustPct}% · pays at {hero.cleanPct}%{hero.live ? " · live from the meter" : " · demo"}
           </span>
@@ -77,19 +77,19 @@ export default function PanelHealth() {
       <div className="grid grid-cols-2 gap-2.5">
         <div className="card flex flex-col gap-0.5 rounded-[14px] p-3.5">
           <span className="text-xs text-muted">Expected now</span>
-          <span className="text-xl font-semibold">{hero.expectedW != null ? `${hero.expectedW.toFixed(2)} W` : "–"}</span>
+          <span className="text-xl font-medium">{hero.expectedW != null ? `${hero.expectedW.toFixed(2)} W` : "–"}</span>
           <span className="text-[11px] text-muted">a clean panel in this light</span>
         </div>
         <div className="card flex flex-col gap-0.5 rounded-[14px] p-3.5">
           <span className="text-xs text-muted">Actual now</span>
-          <span className={`text-xl font-semibold ${dusty ? "text-bad" : ""}`}>{hero.actualW != null ? `${hero.actualW.toFixed(2)} W` : "–"}</span>
+          <span className={`text-xl font-medium ${dusty ? "text-bad" : ""}`}>{hero.actualW != null ? `${hero.actualW.toFixed(2)} W` : "–"}</span>
           <span className="text-[11px] text-muted">{hero.idle ? "no flat is drawing from it" : "from the panel meter"}</span>
         </div>
       </div>
 
       <section className="card flex flex-col gap-3 rounded-[14px]">
         <div className="flex items-center justify-between">
-          <span className="text-base font-semibold">{j ? `Cleaning job #${j.id}` : "Cleaning, step by step"}</span>
+          <span className="text-base font-medium">{j ? `Cleaning job #${j.id}` : "Cleaning, step by step"}</span>
           {j && <span className="chip bg-inner py-1 text-xs">{j.fee.toFixed(2)} USDC</span>}
         </div>
         <HeroSteps hero={hero} />
@@ -107,10 +107,10 @@ export default function PanelHealth() {
 
       <section className="card flex items-center justify-between rounded-[14px]">
         <span className="flex flex-col">
-          <span className="text-sm font-semibold">Panel record on Arkiv</span>
+          <span className="text-sm font-medium">Panel record on Arkiv</span>
           <span className="text-xs text-muted">{panel.record}</span>
         </span>
-        <Link to="/history" className="text-sm font-semibold text-link">
+        <Link to="/history" className="text-sm font-medium text-link">
           History
         </Link>
       </section>
@@ -145,7 +145,7 @@ function ManualPost({ hero }) {
 
   return (
     <details className="card rounded-[14px]">
-      <summary className="cursor-pointer list-none text-sm font-semibold">
+      <summary className="cursor-pointer list-none text-sm font-medium">
         Post a cleaning job by hand
         <span className="block text-xs font-normal text-muted">Usually not needed: the Pi posts it after a minute under {hero.dustPct}%.</span>
       </summary>
@@ -153,11 +153,11 @@ function ManualPost({ hero }) {
         <div className="grid grid-cols-2 gap-2.5">
           <label className="inner flex flex-col gap-1 p-3 text-xs text-muted">
             Fee (USDC)
-            <input className="bg-transparent text-lg font-semibold text-ink outline-none" inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} />
+            <input className="bg-transparent text-lg font-medium text-ink outline-none" inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} />
           </label>
           <label className="inner flex flex-col gap-1 p-3 text-xs text-muted">
             Deadline
-            <select className="bg-transparent text-lg font-semibold text-ink outline-none" value={deadline} onChange={(e) => setDeadline(Number(e.target.value))}>
+            <select className="bg-transparent text-lg font-medium text-ink outline-none" value={deadline} onChange={(e) => setDeadline(Number(e.target.value))}>
               {DEADLINES.map((d) => (
                 <option key={d.min} value={d.min}>
                   {d.label}

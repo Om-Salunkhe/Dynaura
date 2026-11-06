@@ -51,8 +51,8 @@ export default function Building() {
       {mine && (
         <section className="card flex flex-col gap-2.5 rounded-[14px]">
           <div className="flex items-baseline justify-between">
-            <span className="text-base font-semibold">Your day so far</span>
-            <span className="text-lg font-semibold">{day.kwh.toFixed(2)} kWh</span>
+            <span className="text-base font-medium">Your day so far</span>
+            <span className="text-lg font-medium">{day.kwh.toFixed(2)} kWh</span>
           </div>
           <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
             <span className="bg-sun" style={{ width: `${day.solarPct}%` }} />
@@ -71,7 +71,7 @@ export default function Building() {
             <Icon name="sun" />
           </span>
           <span className="flex flex-col gap-0.5">
-            <span className="text-sm font-semibold">{story.text}</span>
+            <span className="text-sm font-medium">{story.text}</span>
             {story.reason && (
               <span className="text-xs text-ink-2">
                 Dyna: “{story.reason}”{story.requestId ? <span className="mono text-muted"> · 0G {shortId(story.requestId)}</span> : null}
@@ -97,10 +97,10 @@ function Row({ icon, title, value, tone, highlight, extra }) {
         <Icon name={icon} />
       </span>
       <span className="flex flex-1 flex-col">
-        <span className="text-sm font-semibold">{title}</span>
+        <span className="text-sm font-medium">{title}</span>
         {extra && <span className="text-xs text-muted">{extra}</span>}
       </span>
-      <span className={`text-sm font-semibold ${tone === "sun" ? "text-sun-ink" : tone === "idle" ? "text-muted" : ""}`}>{value}</span>
+      <span className={`text-sm font-medium ${tone === "sun" ? "text-sun-ink" : tone === "idle" ? "text-muted" : ""}`}>{value}</span>
     </div>
   );
 }

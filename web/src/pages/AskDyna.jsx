@@ -48,7 +48,7 @@ export default function AskDyna() {
         <button
           type="button"
           aria-label="Back"
-          onClick={() => (window.history.length > 1 ? go(-1) : go("/"))}
+          onClick={() => (window.history.length > 1 ? go(-1) : go("/home"))}
           className="flex h-11 w-11 flex-none items-center justify-center rounded-full border border-line bg-card-solid"
         >
           <Icon name="back" size={18} stroke={2.2} />
@@ -57,7 +57,7 @@ export default function AskDyna() {
           <Icon name="spark" size={22} />
         </span>
         <span className="flex flex-1 flex-col gap-0.5">
-          <span className="text-lg font-semibold">Dyna</span>
+          <span className="text-lg font-medium">Dyna</span>
           <span className="text-xs text-muted">Knows your meter, bills and the sun · 1 iAI per answer</span>
         </span>
       </header>

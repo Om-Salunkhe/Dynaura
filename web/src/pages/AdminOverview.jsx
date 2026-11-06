@@ -21,7 +21,7 @@ function Heartbeat() {
   const ago = online ? Math.max(0, Math.round(Date.now() / 1000 - hb.data.updated)) : null;
   return (
     <section className="card flex items-center justify-between rounded-[14px] py-3 text-sm">
-      <span className="flex items-center gap-2 font-semibold">
+      <span className="flex items-center gap-2 font-medium">
         <span className={`h-2.5 w-2.5 rounded-full ${online ? "bg-sun" : "bg-bad"}`} />
         {online ? "Building online" : hb.error ? "Arkiv not reachable" : "Building offline"}
       </span>
@@ -41,7 +41,7 @@ export default function AdminOverview() {
       <PageHeader
         kicker={`Sunrise Apartments · ${admin.month}`}
         title="Building overview"
-        right={<span className="rounded-md bg-btn px-2 py-1 text-[11px] font-semibold tracking-wider text-btn-ink">ADMIN</span>}
+        right={<span className="rounded-md bg-btn px-2 py-1 text-[11px] font-medium tracking-wider text-btn-ink">ADMIN</span>}
       />
 
       <div className="grid grid-cols-2 gap-2.5">
@@ -54,7 +54,7 @@ export default function AdminOverview() {
       <Heartbeat />
 
       <section className="card flex items-center justify-between rounded-[14px] py-3">
-        <span className="flex items-center gap-2 text-sm font-semibold">
+        <span className="flex items-center gap-2 text-sm font-medium">
           Right now <DemoBadge demo={live.demo} />
         </span>
         <span className="text-sm">
@@ -64,13 +64,13 @@ export default function AdminOverview() {
 
       <section className="card flex flex-col gap-2.5 rounded-[14px]">
         <div className="flex items-center justify-between">
-          <span className="text-base font-semibold">By flat</span>
+          <span className="text-base font-medium">By flat</span>
           <Legend />
         </div>
         {admin.flats.map((f) => (
           <div key={f.id} className="flex flex-col gap-1.5">
             <div className="flex justify-between text-sm">
-              <span className="font-semibold">{f.label}</span>
+              <span className="font-medium">{f.label}</span>
               <span>
                 {f.kwh} kWh · {f.usdc.toFixed(2)} USDC
               </span>
@@ -86,7 +86,7 @@ export default function AdminOverview() {
 
       <section className="card flex flex-col gap-2.5 rounded-[14px]">
         <div className="flex items-baseline justify-between">
-          <span className="text-base font-semibold">Export to DISCOM</span>
+          <span className="text-base font-medium">Export to DISCOM</span>
           <span className="text-xs text-muted">last 7 days</span>
         </div>
         <div className="grid h-14 grid-cols-7 items-end gap-2">
@@ -108,8 +108,8 @@ function Tile({ label, value, note, good }) {
   return (
     <div className="card flex flex-col gap-0.5 rounded-[14px] p-3.5">
       <span className="text-xs text-muted">{label}</span>
-      <span className="text-[22px] font-semibold">{value}</span>
-      <span className={`text-[11px] ${good ? "font-semibold text-good" : "text-muted"}`}>{note}</span>
+      <span className="text-[22px] font-medium">{value}</span>
+      <span className={`text-[11px] ${good ? "font-medium text-good" : "text-muted"}`}>{note}</span>
     </div>
   );
 }

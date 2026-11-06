@@ -55,7 +55,7 @@ export function ConnectionBar() {
     <button
       type="button"
       onClick={() => openConnection()}
-      className={`mb-3 flex w-full items-center gap-2 rounded-full px-3 py-1.5 text-left text-[11px] font-semibold sm:hidden ${st.tone}`}
+      className={`mb-3 flex w-full items-center gap-2 rounded-full px-3 py-1.5 text-left text-[11px] font-medium sm:hidden ${st.tone}`}
     >
       <span className={`h-2 w-2 flex-none rounded-full ${st.dot}`} />
       <span className="truncate">{st.label}</span>
@@ -70,8 +70,8 @@ export function MixedContentBanner() {
   if (!isBlocked(piUrl)) return null;
   return (
     <section role="alert" className="mb-3 flex flex-col gap-2 rounded-[14px] border-2 border-bad bg-[rgba(180,35,24,0.10)] p-4 text-sm">
-      <span className="text-[11px] font-semibold tracking-wider text-bad">PI URL MUST BE HTTPS</span>
-      <span className="font-semibold">
+      <span className="text-[11px] font-medium tracking-wider text-bad">PI URL MUST BE HTTPS</span>
+      <span className="font-medium">
         This page is https, so the browser blocks the http Pi at <span className="mono">{piUrl}</span>. You're seeing demo data.
       </span>
       <span className="text-xs text-ink-2">
@@ -144,7 +144,7 @@ export function ConnectionDialog() {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <span className="text-lg font-semibold">Connection</span>
+          <span className="text-lg font-medium">Connection</span>
           <button type="button" aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full bg-inner" onClick={closeConnection}>
             <Icon name="close" size={16} />
           </button>
@@ -154,7 +154,7 @@ export function ConnectionDialog() {
         <label className="inner flex flex-col gap-1 p-3 text-xs text-muted">
           Pi address (on Vercel: the https tunnel URL)
           <input
-            className="mono bg-transparent text-sm font-semibold text-ink outline-none"
+            className="mono bg-transparent text-sm font-medium text-ink outline-none"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://….trycloudflare.com"
@@ -175,7 +175,7 @@ export function ConnectionDialog() {
         <div className="my-1 h-px bg-line" />
         {conn.adminKey ? (
           <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2 text-sm font-semibold text-good">
+            <span className="flex items-center gap-2 text-sm font-medium text-good">
               <Icon name="check" size={16} /> Admin unlocked on this browser
             </span>
             <button type="button" className="btn-ghost" onClick={lockAdmin}>
@@ -187,7 +187,7 @@ export function ConnectionDialog() {
           <label className="inner flex flex-col gap-1 p-3 text-xs text-muted">
             Committee admin key (unlocks admin actions; stays in this browser until you lock it)
             <input
-              className="mono bg-transparent text-sm font-semibold text-ink outline-none"
+              className="mono bg-transparent text-sm font-medium text-ink outline-none"
               type="password"
               value={key}
               onChange={(e) => setKey(e.target.value)}

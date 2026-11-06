@@ -23,7 +23,7 @@ export default function Proof({ kind = "arc", id, label, className = "" }) {
   const href = fake ? null : kind === "og" ? ogUrl : k.href ? k.href(id) : null;
   const body = (
     <>
-      <span className="font-semibold">{label || k.name}</span>
+      <span className="font-medium">{label || k.name}</span>
       <span className="mono opacity-80">{fake ? "demo" : short(id)}</span>
     </>
   );

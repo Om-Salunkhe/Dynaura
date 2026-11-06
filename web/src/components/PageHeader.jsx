@@ -11,7 +11,9 @@ export default function PageHeader({ kicker, title, right }) {
       <div className="flex flex-none items-center gap-2">
         <ConnectionPill />
         {right}
-        <AccountButton />
+        <span className="lg:hidden">
+          <AccountButton />
+        </span>
       </div>
     </header>
   );

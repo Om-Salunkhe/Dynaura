@@ -8,8 +8,8 @@ export function SafeStopBanner({ live }) {
   if (live.runner?.mode !== "safe-stop") return null;
   return (
     <section role="alert" className="mb-3 flex flex-col gap-1 rounded-[14px] border-2 border-grid bg-[rgba(110,155,255,0.12)] p-4 text-sm">
-      <span className="text-[11px] font-semibold tracking-wider text-link">SAFE STOP</span>
-      <span className="font-semibold">The Pi stopped switching{live.safe_stop?.reason ? ` (${live.safe_stop.reason})` : ""}. Every flat is on grid until it recovers.</span>
+      <span className="text-[11px] font-medium tracking-wider text-link">SAFE STOP</span>
+      <span className="font-medium">The Pi stopped switching{live.safe_stop?.reason ? ` (${live.safe_stop.reason})` : ""}. Every flat is on grid until it recovers.</span>
     </section>
   );
 }
@@ -20,8 +20,8 @@ export default function OfflineBanner({ size = "md" }) {
     // one line, for the projector's other moments
     return (
       <section role="status" className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-full border-2 border-bad bg-[rgba(180,35,24,0.10)] px-6 py-3 text-xl">
-        <span className="font-semibold tracking-wider text-bad">0G OFFLINE</span>
-        <span className="font-semibold">Flats on grid · pump on a timer · no AI decisions</span>
+        <span className="font-medium tracking-wider text-bad">0G OFFLINE</span>
+        <span className="font-medium">Flats on grid · pump on a timer · no AI decisions</span>
       </section>
     );
   }
@@ -41,8 +41,8 @@ export default function OfflineBanner({ size = "md" }) {
           <Icon name="spark" size={xl ? 32 : 18} />
         </span>
         <span className="flex flex-col">
-          <span className={`font-semibold tracking-wider text-bad ${xl ? "text-2xl" : "text-[11px]"}`}>0G OFFLINE</span>
-          <span className={`font-semibold ${xl ? "text-5xl" : "text-[15px]"}`}>Dyna can't be reached, so nothing is guessed.</span>
+          <span className={`font-medium tracking-wider text-bad ${xl ? "text-2xl" : "text-[11px]"}`}>0G OFFLINE</span>
+          <span className={`font-medium ${xl ? "text-5xl" : "text-[15px]"}`}>Dyna can't be reached, so nothing is guessed.</span>
         </span>
       </span>
       <span className={`flex flex-wrap ${xl ? "gap-4" : "gap-2"}`}>

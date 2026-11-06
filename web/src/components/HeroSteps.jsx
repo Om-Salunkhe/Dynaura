@@ -73,14 +73,14 @@ export default function HeroSteps({ hero, size = "md" }) {
         return (
           <li key={s.at} className={`flex items-start ${xl ? "gap-4 2xl:gap-5" : "gap-3"} ${!done && !active ? "opacity-40" : ""}`}>
             <span
-              className={`grid flex-none place-items-center rounded-full font-semibold ${xl ? "h-11 w-11 text-xl 2xl:h-14 2xl:w-14 2xl:text-2xl" : "h-8 w-8 text-sm"} ${
+              className={`grid flex-none place-items-center rounded-full font-medium ${xl ? "h-11 w-11 text-xl 2xl:h-14 2xl:w-14 2xl:text-2xl" : "h-8 w-8 text-sm"} ${
                 done ? (refunded && s.at === 5 ? "bg-bad text-white" : "bg-good text-white") : active ? "animate-pulse bg-sun text-[#111418]" : "bg-inner text-muted"
               }`}
             >
               {done ? <Icon name="check" size={xl ? 28 : 16} /> : s.at}
             </span>
             <span className="flex min-w-0 flex-col gap-1">
-              <span className={`font-semibold ${xl ? "text-2xl 2xl:text-3xl" : "text-[15px]"}`}>{s.title}</span>
+              <span className={`font-medium ${xl ? "text-2xl 2xl:text-3xl" : "text-[15px]"}`}>{s.title}</span>
               <span className={`text-muted ${xl ? "text-lg 2xl:text-xl [@media(max-height:820px)]:hidden" : "text-xs"}`}>{s.text}</span>
               {s.proofs && (done || active) && (
                 <span className={`flex flex-wrap gap-2 ${xl ? "pt-1 text-base 2xl:text-lg" : "text-[11px]"}`}>

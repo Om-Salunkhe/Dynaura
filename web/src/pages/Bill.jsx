@@ -83,7 +83,7 @@ export default function Bill() {
         >
           <div className="grid h-[84px] w-[84px] place-items-center rounded-full bg-card-solid text-center">
             <span className="leading-tight">
-              <span className="block text-xl font-semibold">{pct}%</span>
+              <span className="block text-xl font-medium">{pct}%</span>
               <span className="text-[11px] text-muted">solar</span>
             </span>
           </div>
@@ -93,7 +93,7 @@ export default function Bill() {
             You owe <DemoBadge demo={!live} />
           </span>
           <span className="flex items-baseline gap-1">
-            <span className="text-[40px] font-semibold leading-none tracking-[-1px]">{b.owe.toFixed(2)}</span>
+            <span className="text-[40px] font-light leading-none tracking-[-1px]">{b.owe.toFixed(2)}</span>
             <span className="text-sm text-muted">USDC</span>
           </span>
           <span className="chip w-fit bg-sun-soft py-1 text-xs text-sun-ink">
@@ -127,7 +127,7 @@ export default function Bill() {
           </button>
         )}
         {tx && (
-          <a className="text-center text-xs font-semibold text-link" href={txUrl(tx)} target="_blank" rel="noreferrer">
+          <a className="text-center text-xs font-medium text-link" href={txUrl(tx)} target="_blank" rel="noreferrer">
             View payment on Arc
           </a>
         )}
@@ -145,13 +145,13 @@ export default function Bill() {
 
       {arkBills?.length > 0 && (
         <section className="card flex flex-col gap-1 rounded-[14px]">
-          <span className="text-base font-semibold">Bills on Arkiv</span>
+          <span className="text-base font-medium">Bills on Arkiv</span>
           <span className="pb-1 text-xs text-muted">Read straight from Arkiv: anyone can check them</span>
           {arkBills.map((p) => (
             <div key={p.key} className="flex flex-col gap-1.5 border-t border-line py-2.5 text-sm first-of-type:border-0">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{monthName(p.month)}</span>
-                <span className="font-semibold">{p.usdc.toFixed(2)} USDC</span>
+                <span className="font-medium">{p.usdc.toFixed(2)} USDC</span>
               </div>
               <span className="flex flex-wrap items-center gap-2 text-[11px]">
                 <span className="text-muted">
@@ -167,12 +167,12 @@ export default function Bill() {
 
       {!live && !arkBills?.length && (
         <section className="card flex flex-col gap-1 rounded-[14px]">
-          <span className="pb-1 text-base font-semibold">Past bills</span>
+          <span className="pb-1 text-base font-medium">Past bills</span>
           {demoBill.past.map((p) => (
             <div key={p.month} className="flex items-center justify-between py-2 text-sm">
               <span className="font-medium">{p.month}</span>
-              <span className="font-semibold">{p.amount.toFixed(2)} USDC</span>
-              <span className="text-xs font-semibold text-muted">{p.status}</span>
+              <span className="font-medium">{p.amount.toFixed(2)} USDC</span>
+              <span className="text-xs font-medium text-muted">{p.status}</span>
             </div>
           ))}
         </section>
@@ -185,7 +185,7 @@ function Line({ k, v }) {
   return (
     <div className="flex items-center justify-between gap-3 py-3 text-sm">
       <span className="text-muted">{k}</span>
-      <span className="text-right font-semibold">{v}</span>
+      <span className="text-right font-medium">{v}</span>
     </div>
   );
 }

@@ -10,7 +10,7 @@ export default function WalletButton({ className = "" }) {
           <span className="h-2 w-2 rounded-full bg-sun" /> {short(w.address)} · Arc testnet
         </span>
       ) : (
-        <button type="button" className="chip w-fit border border-line bg-card-solid py-1.5 text-xs font-semibold" onClick={connect} disabled={w.busy}>
+        <button type="button" className="chip w-fit border border-line bg-card-solid py-1.5 text-xs font-medium" onClick={connect} disabled={w.busy}>
           {w.busy ? "Connecting…" : "Connect wallet"}
         </button>
       )}

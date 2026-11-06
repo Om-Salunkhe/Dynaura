@@ -4,7 +4,6 @@ import DemoBadge from "../components/DemoBadge.jsx";
 import Icon from "../components/Icon.jsx";
 import Legend from "../components/Legend.jsx";
 import PageHeader from "../components/PageHeader.jsx";
-import AccountButton from "../components/AccountButton.jsx";
 import StackBars from "../components/StackBars.jsx";
 import { bill, hourly, plan as demoPlan, recommendations, timeline, today } from "../data/demo.js";
 import { planToView } from "../data/society.js";
@@ -52,7 +51,6 @@ export default function Home() {
         </div>
         <div className="flex w-full max-w-[460px] items-center gap-2">
           <AskBar big />
-          <AccountButton />
         </div>
       </header>
 
@@ -98,7 +96,7 @@ function UsingNow({ flat, live, className = "" }) {
             Using right now <DemoBadge demo={live.demo} />
           </span>
           <span className="flex items-baseline gap-1.5 pt-1">
-            <span className="num text-[48px] font-semibold leading-none lg:text-[60px]">{(meter?.w ?? 0).toFixed(2)}</span>
+            <span className="num text-[52px] font-light leading-none lg:text-[68px]">{(meter?.w ?? 0).toFixed(2)}</span>
             <span className="text-[15px] text-muted">W</span>
           </span>
         </div>
@@ -120,7 +118,7 @@ function HourChart({ className = "" }) {
   return (
     <section className={`card flex flex-col gap-2.5 rounded-[14px] px-[18px] lg:p-6 ${className}`}>
       <div className="flex items-center justify-between">
-        <span className="text-[15px] font-semibold">Today by hour</span>
+        <span className="text-[15px] font-medium">Today by hour</span>
         <Legend />
       </div>
       <div className="lg:hidden">
@@ -135,7 +133,7 @@ function HourChart({ className = "" }) {
         <StackBars data={hourly} nowIndex={NOW} height={140} gap={10} />
         <div className="grid text-center text-[11px] text-muted" style={{ gridTemplateColumns: `repeat(${HOURS.length}, minmax(0,1fr))`, columnGap: 10 }}>
           {HOURS.map((h, i) => (
-            <span key={h} className={i === NOW ? "font-semibold text-ink" : ""}>
+            <span key={h} className={i === NOW ? "font-medium text-ink" : ""}>
               {i === NOW ? "Now" : h}
             </span>
           ))}
@@ -163,7 +161,7 @@ function Schedule({ api, className = "" }) {
     <section className={`card flex-col gap-3 rounded-[14px] p-6 ${className}`}>
       <div className="flex items-start justify-between gap-3">
         <span className="flex flex-col gap-0.5">
-          <span className="text-[15px] font-semibold">Society schedule</span>
+          <span className="text-[15px] font-medium">Society schedule</span>
           <span className="text-[13px] text-muted">Common-area jobs 0G placed in {live ? view.date : "tomorrow"}'s peak sun</span>
         </span>
         <Link to="/society" className="chip flex-none border border-line bg-card-solid text-ink-2">
@@ -183,14 +181,15 @@ function Schedule({ api, className = "" }) {
         <div key={j.name} className="grid grid-cols-[150px_1fr] items-center gap-3">
           <span className="flex flex-col leading-tight">
             <span className="text-[13.5px] font-medium">{j.name}</span>
-            <span className={`text-[11px] ${j.running ? `font-semibold ${GROUP_INK[j.group] || "text-sun-ink"}` : "text-muted"}`}>
+            <span className={`text-[11px] ${j.running ? `font-medium ${GROUP_INK[j.group] || "text-sun-ink"}` : "text-muted"}`}>
               {j.group} · {j.running ? "running now" : j.label}
             </span>
           </span>
-          <span className="relative h-6 overflow-hidden rounded-[6px] bg-inner">
-            <span className="absolute inset-y-0 bg-sun-soft" style={{ left: `${pct(10)}%`, width: `${pct(14) - pct(10)}%` }} />
+          <span className="relative h-5 overflow-hidden rounded-[4px]">
+            <span className="absolute inset-y-0 bg-sun-soft opacity-70" style={{ left: `${pct(10)}%`, width: `${pct(14) - pct(10)}%` }} />
+            <span className="absolute inset-x-0 top-1/2 h-px bg-line" />
             <span
-              className={`absolute bottom-[5px] top-[5px] rounded-[3px] ${GROUP_COLOR[j.group] || "bg-sun"}`}
+              className={`absolute top-1/2 h-[4px] -translate-y-1/2 rounded-full ${GROUP_COLOR[j.group] || "bg-sun"}`}
               style={{ left: `${pct(j.start)}%`, width: `${Math.max(pct(S0 + j.hours), 4)}%` }}
             />
           </span>
@@ -207,7 +206,7 @@ function Recommended({ recs, reqId, className = "" }) {
   return (
     <section className={`card flex flex-col gap-3 rounded-[14px] px-[18px] lg:p-6 ${className}`}>
       <span className="flex flex-col gap-0.5">
-        <span className="text-[15px] font-semibold">Recommended for you</span>
+        <span className="text-[15px] font-medium">Recommended for you</span>
         <span className="text-xs text-muted">By 0G from tomorrow's sun · <span className="mono text-[11px]">{reqId}</span></span>
       </span>
       {recs.length === 0 && <span className="text-sm text-muted">No tips today. Your use already follows the sun.</span>}
@@ -217,7 +216,7 @@ function Recommended({ recs, reqId, className = "" }) {
             <Icon name={r.icon} size={16} />
           </span>
           <span className="flex flex-1 flex-col gap-0.5">
-            <span className="text-sm font-semibold lg:text-[15px]">{r.title}</span>
+            <span className="text-sm font-medium lg:text-[15px]">{r.title}</span>
             <span className="text-xs text-muted">{r.why}</span>
           </span>
           <button type="button" className="btn-ghost min-h-[34px] px-3 text-[12.5px]">
@@ -237,7 +236,7 @@ function BuildingNow({ live, me, className = "" }) {
   ];
   return (
     <section className={`card flex-col rounded-[14px] p-6 ${className}`}>
-      <span className="pb-2 text-[15px] font-semibold">Building now</span>
+      <span className="pb-2 text-[15px] font-medium">Building now</span>
       <Row k="Roof panel" v={`${(live.meters?.panel?.w ?? 0).toFixed(2)} W`} />
       {rows.map(([id, label]) => {
         const f = live.flats?.[id] || {};
@@ -268,9 +267,9 @@ function Row({ k, v, tone = "" }) {
 function BillCard({ className = "" }) {
   return (
     <section className={`card flex-col gap-2 rounded-[14px] p-6 ${className}`}>
-      <span className="text-[15px] font-semibold">{bill.month} bill</span>
+      <span className="text-[15px] font-medium">{bill.month} bill</span>
       <span className="flex items-baseline gap-1.5 pt-2">
-        <span className="num text-[40px] font-semibold leading-none">{bill.owe.toFixed(2)}</span>
+        <span className="num text-[40px] font-light leading-none">{bill.owe.toFixed(2)}</span>
         <span className="text-base text-muted">USDC</span>
       </span>
       <span className="text-[13px] font-medium text-[#2F9E6A]">Includes {bill.credit.toFixed(2)} credit for sharing</span>
@@ -288,7 +287,7 @@ function RecentArkiv({ className = "" }) {
     : timeline.slice(0, 3).map((t) => ({ when: `${t.when} · ${t.title}`, text: t.text, proof: t.proof.startsWith("0G") ? "0G proof" : "Arc tx" }));
   return (
     <section className={`card flex-col rounded-[14px] p-6 ${className}`}>
-      <span className="pb-2 text-[15px] font-semibold">Recent on Arkiv</span>
+      <span className="pb-2 text-[15px] font-medium">Recent on Arkiv</span>
       {items.map((t) => (
         <Link key={t.when + t.text} to="/history" className="flex flex-col gap-0.5 border-b border-line py-2.5 last:border-0">
           <span className="text-[11px] text-muted">{t.when}</span>
@@ -304,7 +303,7 @@ function Stat({ label, value, accent }) {
   return (
     <div className="flex min-w-0 flex-col gap-1 px-3 py-2.5 lg:px-4 lg:py-3">
       <span className="truncate text-[11.5px] text-muted">{label}</span>
-      <span className={`num truncate text-[15px] font-semibold lg:text-[17px] ${accent ? "text-sun-ink" : ""}`}>{value}</span>
+      <span className={`num truncate text-[15px] font-medium lg:text-[17px] ${accent ? "text-sun-ink" : ""}`}>{value}</span>
     </div>
   );
 }

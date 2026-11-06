@@ -40,7 +40,7 @@ export default function ShopOffers() {
       <PageHeader kicker="Corner grocery · Andheri East" title="Solar from next door" right={onChain ? <WalletButton /> : null} />
 
       <section className="card flex flex-col gap-1 rounded-[14px] text-sm">
-        <span className="font-semibold">Buy spare rooftop solar from Sunrise Apartments</span>
+        <span className="font-medium">Buy spare rooftop solar from Sunrise Apartments</span>
         <span className="text-xs text-muted">
           Offers live on Arkiv and disappear by themselves when the sun window closes. You pay in USDC on Arc, only for the
           kWh the meter delivers.
@@ -57,11 +57,11 @@ export default function ShopOffers() {
         return (
           <section key={o.key} className="card flex flex-col gap-3 rounded-[14px]">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold tracking-wider text-sun-ink">SPARE SOLAR · UNTIL {ends.toUpperCase()}</span>
+              <span className="text-[11px] font-medium tracking-wider text-sun-ink">SPARE SOLAR · UNTIL {ends.toUpperCase()}</span>
               <span className="mono text-[11px] text-muted">{o.requestId?.startsWith("0x") && o.requestId.length > 12 ? short(o.requestId) : o.requestId}</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-3xl font-semibold">{o.kwh} kWh</span>
+              <span className="text-3xl font-medium">{o.kwh} kWh</span>
               <span className="text-sm text-muted">{o.price.toFixed(2)} USDC / kWh</span>
             </div>
             <div className="inner flex items-center justify-between p-3 text-sm">
@@ -74,7 +74,7 @@ export default function ShopOffers() {
               {busy === o.key ? "Confirm in your wallet…" : bought[o.key] ? (onChain ? "Prepaid on Arc" : "Reserved (demo)") : "Buy this solar"}
             </button>
             {typeof bought[o.key] === "string" && (
-              <a className="text-center text-xs font-semibold text-link" href={txUrl(bought[o.key])} target="_blank" rel="noreferrer">
+              <a className="text-center text-xs font-medium text-link" href={txUrl(bought[o.key])} target="_blank" rel="noreferrer">
                 View on Arc · settled when the window closes, unused USDC comes back
               </a>
             )}

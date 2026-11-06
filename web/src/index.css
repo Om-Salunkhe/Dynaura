@@ -4,15 +4,15 @@
 
 /* Light: paper and graphite, amber for solar, blue for grid */
 :root {
-  --page: #f5f6f8;
+  --page: #f6f6f7;
   --card: #ffffff;
   --card-solid: #ffffff;
-  --inner: #f3f4f6;
-  --line: #e4e7eb;
-  --ink: #0f1115;
-  --ink-2: #3a414b;
-  --muted: #69727d;
-  --idle: #dde1e6;
+  --inner: #f3f3f5;
+  --line: #e6e6e9;
+  --ink: #0b0b0c;
+  --ink-2: #3d3f45;
+  --muted: #6e7179;
+  --idle: #e0e1e4;
   --sun: #f29a1f;
   --sun-ink: #b4690e;
   --sun-soft: rgba(242, 154, 31, 0.12);
@@ -20,42 +20,50 @@
   --good: #1c8a55;
   --bad: #c2341f;
   --link: #2c5bd0;
-  --btn: #0f1115;
+  --btn: #0b0b0c;
   --btn-ink: #ffffff;
-  --nav: rgba(255, 255, 255, 0.92);
-  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
-  /* Home hero: a low sun in the top-right corner, grid light in the bottom-left */
-  --hero: radial-gradient(120% 150% at 100% 0%, rgba(242, 154, 31, 0.18) 0%, rgba(242, 154, 31, 0.05) 38%, transparent 62%),
-    radial-gradient(90% 120% at 0% 100%, rgba(62, 111, 224, 0.07) 0%, transparent 60%), #ffffff;
-  --wash: linear-gradient(180deg, rgba(242, 154, 31, 0.07) 0%, rgba(242, 154, 31, 0) 340px);
+  --nav: rgba(255, 255, 255, 0.8);
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  /* Home hero: a low sun in the top-right corner */
+  --hero: radial-gradient(120% 150% at 100% 0%, rgba(242, 154, 31, 0.16) 0%, rgba(242, 154, 31, 0.04) 38%, transparent 62%), #ffffff;
+  --ambient: radial-gradient(1100px 520px at 88% -8%, rgba(242, 154, 31, 0.08), transparent 62%), #f6f6f7;
+  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.58));
+  --glass-edge: linear-gradient(135deg, rgba(255, 255, 255, 1), rgba(11, 11, 12, 0.06) 45%, rgba(11, 11, 12, 0.05) 60%, rgba(255, 255, 255, 0.9));
+  --glass-hi: rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 10px 30px rgba(16, 24, 40, 0.07);
+  --glass-pill: rgba(255, 255, 255, 0.95);
   color-scheme: light;
 }
 
-/* Dark: near-black graphite */
+/* Dark: pure black, near-black hairline cards */
 :root[data-theme="dark"] {
-  --page: #0a0b0d;
-  --card: #111316;
-  --card-solid: #15181c;
-  --inner: #191c21;
-  --line: rgba(255, 255, 255, 0.08);
-  --ink: #ecedef;
-  --ink-2: #c4c8ce;
-  --muted: #868d97;
+  --page: #000000;
+  --card: #0a0a0b;
+  --card-solid: #0f0f10;
+  --inner: #141416;
+  --line: rgba(255, 255, 255, 0.075);
+  --ink: #f4f4f5;
+  --ink-2: #c9c9ce;
+  --muted: #85858c;
   --idle: rgba(255, 255, 255, 0.1);
-  --sun: #f2a33a;
-  --sun-ink: #f6b85c;
-  --sun-soft: rgba(242, 163, 58, 0.12);
-  --grid: #6a93f7;
-  --good: #34c38f;
-  --bad: #f26d6d;
-  --link: #8ab4ff;
-  --btn: #ecedef;
-  --btn-ink: #0a0b0d;
-  --nav: rgba(14, 16, 19, 0.92);
-  --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
-  --hero: radial-gradient(120% 150% at 100% 0%, rgba(242, 163, 58, 0.24) 0%, rgba(242, 163, 58, 0.06) 40%, transparent 64%),
-    radial-gradient(90% 120% at 0% 100%, rgba(106, 147, 247, 0.1) 0%, transparent 60%), #111316;
-  --wash: linear-gradient(180deg, rgba(242, 163, 58, 0.06) 0%, rgba(242, 163, 58, 0) 340px);
+  --sun: #f5a53c;
+  --sun-ink: #f7b75e;
+  --sun-soft: rgba(245, 165, 60, 0.12);
+  --grid: #7097ff;
+  --good: #3ccf91;
+  --bad: #f27171;
+  --link: #8fb4ff;
+  --btn: #f4f4f5;
+  --btn-ink: #000000;
+  --nav: rgba(16, 16, 18, 0.7);
+  --shadow: none;
+  --hero: radial-gradient(120% 150% at 100% 0%, rgba(245, 165, 60, 0.2) 0%, rgba(245, 165, 60, 0.05) 40%, transparent 64%), #0a0a0b;
+  --ambient: radial-gradient(1100px 520px at 88% -8%, rgba(245, 165, 60, 0.07), transparent 62%), #000000;
+  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  --glass-edge: linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0.025) 62%, rgba(255, 255, 255, 0.18));
+  --glass-hi: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 14px 36px rgba(0, 0, 0, 0.6);
+  --glass-pill: rgba(255, 255, 255, 0.1);
   color-scheme: dark;
 }
 
@@ -67,7 +75,7 @@ body {
 
 body {
   margin: 0;
-  font-family: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -86,25 +94,25 @@ a {
 
 @layer components {
   .card {
-    @apply rounded-[14px] border border-line bg-card p-4 shadow-nav;
+    @apply rounded-[12px] border border-line bg-card p-4 shadow-nav;
   }
   .inner {
-    @apply rounded-[10px] bg-inner;
+    @apply rounded-[8px] bg-inner;
   }
   .btn {
-    @apply inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-[10px] bg-btn px-4 text-[13px] font-semibold text-btn-ink transition-opacity hover:opacity-90 active:opacity-80 disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-[9px] bg-btn px-3.5 text-[13px] font-medium text-btn-ink transition-opacity hover:opacity-90 active:opacity-80 disabled:cursor-not-allowed disabled:opacity-40;
   }
   .btn-ghost {
-    @apply inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-[10px] border border-line bg-card-solid px-4 text-[13px] font-medium text-ink transition-colors hover:bg-inner disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-[9px] border border-line bg-transparent px-3.5 text-[13px] font-normal text-ink transition-colors hover:bg-inner disabled:cursor-not-allowed disabled:opacity-40;
   }
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium;
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[11.5px] font-normal;
   }
   .label {
     @apply text-xs text-muted;
   }
   .h-title {
-    @apply text-[24px] font-semibold tracking-[-0.4px];
+    @apply text-[22px] font-medium tracking-[-0.5px];
   }
   .mono {
     font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -112,12 +120,134 @@ a {
   /* Figures line up in columns and don't jitter while live values tick */
   .num {
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
   }
   .hero {
     background: var(--hero);
   }
-  .wash {
-    background: var(--wash);
+  .ambient {
+    background: var(--ambient);
+    background-attachment: fixed;
   }
+  /* Liquid glass: blurred, saturated backdrop, a bright top lip and a sheen around the edge */
+  .glass {
+    position: relative;
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  }
+  .glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--glass-edge);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  .glass-pill {
+    background: var(--glass-pill);
+    box-shadow: inset 0 1px 0 var(--glass-hi), 0 1px 3px rgba(0, 0, 0, 0.18);
+  }
+}
+
+/* ---- Landing: the energy orb ---- */
+.orb-stage {
+  position: relative;
+  aspect-ratio: 1;
+}
+/* glow is its own layer (gradients only: no filter or box-shadow, so nothing gets cropped to a box) */
+.orb-glow {
+  position: absolute;
+  inset: -70%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(245, 165, 60, 0.5) 0%, rgba(242, 125, 31, 0.26) 20%, rgba(242, 110, 31, 0.1) 36%, transparent 58%);
+  animation: orb-glow 7s ease-in-out infinite;
+}
+.orb-swirl {
+  position: absolute;
+  inset: -12%;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(255, 196, 110, 0.32) 50deg,
+    transparent 120deg,
+    rgba(112, 151, 255, 0.2) 200deg,
+    transparent 270deg,
+    rgba(255, 150, 60, 0.26) 320deg,
+    transparent 360deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 52%, #000 60%, transparent 72%);
+  mask: radial-gradient(circle, transparent 52%, #000 60%, transparent 72%);
+  animation: orb-spin 18s linear infinite;
+}
+/* soft halo hugging the rim */
+.orb-bloom {
+  position: absolute;
+  inset: -16%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 200, 120, 0.34) 56%, rgba(245, 150, 50, 0.14) 64%, transparent 76%);
+  animation: orb-glow 7s ease-in-out infinite;
+}
+.orb {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 38% 30%, #fffaf0 0%, #ffe0a0 10%, #fbb24a 28%, #ec7d14 50%, #b84a0a 74%, #6a2205 100%);
+  box-shadow: inset -28px -36px 70px rgba(70, 18, 0, 0.55), inset 14px 16px 40px rgba(255, 245, 220, 0.35);
+  animation: orb-breathe 7s ease-in-out infinite;
+}
+.orb-ring {
+  position: absolute;
+  inset: -9%;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 200, 130, 0.14);
+}
+@keyframes orb-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+@keyframes orb-glow {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.horizon {
+  background: radial-gradient(60% 100% at 50% 0%, rgba(245, 165, 60, 0.35), rgba(245, 165, 60, 0.06) 45%, transparent 70%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .orb-glow,
+  .orb-bloom,
+  .orb-swirl {
+    animation: none;
+  }
+}
+
+/* The landing page is always dark, whatever the app theme */
+.landing {
+  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  --glass-edge: linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0.025) 62%, rgba(255, 255, 255, 0.18));
+  --glass-hi: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 14px 36px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
 }
