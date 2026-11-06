@@ -10,7 +10,8 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { apiUrl, getJSON, postJSON } from "./api.js";
 
-let state = { supported: null, job: null, history: [], error: null, at: 0 };
+// data = the whole status (pct, dust_pct, clean_pct, min_gain_pct, fee_usdc, last_check, dust_check, arc, error)
+let state = { supported: null, job: null, history: [], data: null, error: null, at: 0 };
 const subs = new Set();
 let enabled = 0;
 let timer = null;
@@ -23,7 +24,7 @@ const set = (patch) => {
 export async function refreshCleaning() {
   try {
     const d = await getJSON("/api/cleaning");
-    if (d && Array.isArray(d.history)) set({ supported: true, job: d.job || null, history: d.history, error: null, at: Date.now() });
+    if (d && Array.isArray(d.history)) set({ supported: true, job: d.job || null, history: d.history, data: d, error: null, at: Date.now() });
     else set({ supported: false, error: null });
   } catch (e) {
     set({ error: e.message, ...(/HTTP 404/.test(e.message) ? { supported: false } : {}) });

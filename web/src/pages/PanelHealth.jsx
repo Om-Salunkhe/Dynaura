@@ -133,7 +133,9 @@ export default function PanelHealth() {
 function ScanPanel({ hero }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
-  const canScan = !hero.live || hero.v3;
+  const installed = hero.dustCheck !== false;
+  const canScan = !hero.live || (hero.v3 && installed);
+  const lc = hero.lastCheck;
   const scan = async () => {
     setNote(null);
     if (!hero.live) {
@@ -150,7 +152,14 @@ function ScanPanel({ hero }) {
       else if (r?.dirty === false) setNote({ text: `0G says clean${r.og?.reason ? `: “${r.og.reason}”` : "."} Nothing flagged.`, ok: true });
       else setNote({ text: "Scanned." });
     } catch (e) {
-      setNote({ text: e.status === 503 ? "0G unreachable: nothing is flagged, nothing is guessed." : e.message, bad: true });
+      setNote({
+        text: /not installed/i.test(e.message)
+          ? "The Pi has no camera + 0G dust check yet, so it can't look at the panel."
+          : e.status === 503
+            ? "0G unreachable: nothing is flagged, nothing is guessed."
+            : e.message,
+        bad: true,
+      });
     } finally {
       setBusy(false);
     }
@@ -161,8 +170,20 @@ function ScanPanel({ hero }) {
         {busy ? "Looking at the panel…" : "Scan panel"}
       </button>
       <span className="text-[11.5px] text-muted">
-        {canScan ? "Takes a picture now and asks 0G if it's dust. A meter drop does this by itself." : "This Pi has no scan endpoint yet (needs the v3 cleaning API)."}
+        {canScan
+          ? "Takes a picture now and asks 0G if it's dust. A meter drop does this by itself."
+          : hero.v3 && !installed
+            ? "The Pi's camera + 0G dust check isn't installed yet."
+            : "This Pi has no scan endpoint yet (needs the v3 cleaning API)."}
       </span>
+      {hero.live && lc && (
+        <span className={`text-[12px] ${lc.result === "dirty" ? "text-bad" : lc.result === "clean" ? "text-good" : "text-muted"}`}>
+          Last look {new Date(lc.at * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          {lc.source ? ` (${lc.source})` : ""}:{" "}
+          {lc.result === "no_check" ? "0G unreachable, nothing flagged" : `0G says ${lc.result}`}
+          {lc.health_pct != null ? ` · meter ${Math.round(lc.health_pct)}%` : ""}
+        </span>
+      )}
       {note && <span className={`text-[12.5px] ${note.bad ? "text-bad" : note.ok ? "text-good" : "text-muted"}`}>{note.text}</span>}
     </div>
   );
