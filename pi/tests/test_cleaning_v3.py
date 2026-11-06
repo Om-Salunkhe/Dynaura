@@ -13,12 +13,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# Without the Pi's heavy packages installed (web3, openai), stub them: this test never calls them.
+# Without the Pi's packages installed (web3, openai, dotenv), stub them: this test never calls them.
 for name, attrs in {"web3": ["Web3"], "eth_account": ["Account"], "openai": ["OpenAI"], "httpx": ["Timeout"]}.items():
     try:
         __import__(name)
     except ImportError:
         sys.modules[name] = types.SimpleNamespace(**{a: type(a, (), {}) for a in attrs})
+try:
+    import dotenv  # noqa: F401
+except ImportError:
+    sys.modules["dotenv"] = types.SimpleNamespace(load_dotenv=lambda *a, **k: None)
 
 import config  # noqa: E402
 
@@ -204,6 +208,7 @@ def main():
     arc.chain[1] = "accepted"
     w.step()
     check("cleaner accepted on Arc -> accepted", w.job["state"] == "accepted" and w.job["cleaner"], w.job)
+    check("arc.cleaner is the accepting wallet", w.job["arc"]["cleaner"] == "0x" + "c1" * 20, w.job["arc"])
     w.mark_done()
     check("Mark done -> cleaned, window restarts", w.job["state"] == "cleaned" and not w.samples, w.job)
     minute(w, 60)

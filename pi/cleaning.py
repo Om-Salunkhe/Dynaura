@@ -199,7 +199,7 @@ class CleaningWatch:
             "id": og["decision_id"], "state": "flagged", "source": source,
             "fee_usdc": config.CLEAN_FEE_USDC, "deadline": None, "created_at": now, "updated_at": now,
             "dusty_pct": lvl, "after_pct": None, "done_at": None, "cleaner": None, "resolution": None,
-            "og": og, "arc": {"job_id": None, "open_tx": None, "release_tx": None, "refund_tx": None,
+            "og": og, "arc": {"job_id": None, "cleaner": None, "open_tx": None, "release_tx": None, "refund_tx": None,
                               "proof_hash": None, "proof_window": None, "link_tx": None},
             "arkiv_key": None,
         }
@@ -325,7 +325,7 @@ class CleaningWatch:
         chain = self.arc.job(job["arc"]["job_id"])
         cs, state = chain["status"], job["state"]
         if chain.get("cleaner") and int(chain["cleaner"], 16):
-            job["cleaner"] = chain["cleaner"]
+            job["cleaner"] = job["arc"]["cleaner"] = chain["cleaner"]  # web: "is this my job?"
         if cs == "accepted" and state == "open":
             self._set(job, "accepted", f"A cleaner accepted escrow #{job['arc']['job_id']}")
         elif cs == "disputed" and state != "disputed":
