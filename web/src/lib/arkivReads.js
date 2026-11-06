@@ -33,12 +33,31 @@ export function isRetryable(e) {
   return false;
 }
 
-/** Reads are safe to repeat: back off exponentially, with jitter so retries don't line up. */
+/** The keyless endpoint's answer when its free query budget is spent: 429 ANON_COST_LIMITED.
+ *  Retrying can't help until the budget refills, so reads fail fast instead (friction #9). */
+export class ArkivBudgetError extends Error {
+  limited = true;
+}
+export function isBudgetExhausted(e) {
+  for (let x = e; x; x = x.cause) if (/ANON_COST_LIMITED/.test(`${x.details ?? ""} ${x.message ?? ""}`)) return true;
+  return false;
+}
+const BUDGET_PAUSE_MS = 60_000;
+let budgetOutUntil = 0;
+
+/** Reads are safe to repeat: back off exponentially, with jitter so retries don't line up.
+ *  Once the free budget is spent, every read fails at once for a minute (the app shows its demo
+ *  data) instead of each one waiting through retries that can't succeed. */
 export async function withBackoff(fn, { tries = 4, base = 400 } = {}) {
+  if (Date.now() < budgetOutUntil) throw new ArkivBudgetError("Arkiv's public endpoint is out of free queries (ANON_COST_LIMITED); retrying in a minute");
   for (let i = 0; ; i++) {
     try {
       return await fn();
     } catch (e) {
+      if (isBudgetExhausted(e)) {
+        budgetOutUntil = Date.now() + BUDGET_PAUSE_MS;
+        throw new ArkivBudgetError("Arkiv's public endpoint is out of free queries (ANON_COST_LIMITED); retrying in a minute", { cause: e });
+      }
       if (i + 1 >= tries || !isRetryable(e)) throw e;
       await sleep(base * 2 ** i * (0.5 + Math.random()));
     }

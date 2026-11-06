@@ -186,8 +186,21 @@ latency is about 0.5 s per call from Mumbai. A write needs about 5 round trips (
 number, send, receipt polls), so it takes 3–5 s even though blocks are 2 s. We cache
 `eth_gasPrice`, skip viem's fee lookups by passing `gasPrice`, and back off with jitter on reads.
 
+**It also hit the judging rule.** Arkiv asks for "one query a judge can run" in the README. Our
+keyless README query, the obvious way to make it runnable by anyone, returned `ANON_COST_LIMITED`
+to our own docs teammate on 6 Nov evening. The README now shows the key as an optional last part
+of the URL (`…arkiv.network/${ARKIV_KEY}`), which works with or without one.
+
+**What the app does now.** The web app treats `ANON_COST_LIMITED` as "budget spent", not as a
+network blip:
+- it stops retrying, which used to take about 6 s per page;
+- every read fails at once for 60 s, so it stops spending a budget that's gone;
+- it shows its labelled demo data, with a "busy" flag the screens can use
+  ([`arkivReads.js`](../web/src/lib/arkivReads.js), with an offline test).
+
 **Suggestion.** Document the anonymous budget: its size, what it's counted per (IP?), and when
-it resets. Also a read-only browser key type, and an Asia-region RPC.
+it resets. Send a `Retry-After` header with the 429. Also a read-only browser key type, and an
+Asia-region RPC.
 
 ## 10. Every viem error prints the access key (High)
 

@@ -51,13 +51,18 @@ export const verifyJobPayout = (job, opts) => verifyPayout(arkiv(), job, opts);
 
 /** Run an Arkiv read; fall back to demo data when Arkiv isn't configured or reachable. */
 export function useArkiv(fn, fallback, deps = []) {
-  const [state, setState] = useState({ data: fallback, live: false, error: null });
+  // limited = Arkiv's free public endpoint is out of queries (429 ANON_COST_LIMITED): a busy
+  // network, not a broken building. Screens can say "Arkiv busy" rather than "not reachable".
+  const [state, setState] = useState({ data: fallback, live: false, error: null, limited: false });
   useEffect(() => {
     if (!ARKIV_READY) return;
     let alive = true;
     fn()
-      .then((data) => alive && setState({ data, live: true, error: null }))
-      .catch((error) => alive && setState({ data: fallback, live: false, error: reads.redact(error?.shortMessage || error) }));
+      .then((data) => alive && setState({ data, live: true, error: null, limited: false }))
+      .catch(
+        (error) =>
+          alive && setState({ data: fallback, live: false, error: reads.redact(error?.shortMessage || error?.message || error), limited: Boolean(error?.limited) }),
+      );
     return () => {
       alive = false;
     };
