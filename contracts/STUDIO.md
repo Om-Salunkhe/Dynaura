@@ -35,7 +35,7 @@ Checked against the live RPC and https://docs.arc.io:
 3. **`pull`:** Studio's contracts and tests come back to `studio/out/pulled` and are diffed against `src/`. We review them (SafeERC20, `nonReentrant`, the oracle = the Pi wallet, no `payable`, 6-decimal USDC). Any fix goes **back through Studio**, so the code Studio deploys is the code in `src/`.
 4. **`deploy`:** `02-deploy.md` deploys all three to Arc testnet with the constructor arguments and reads them back.
 5. **`console`:** `03-console.md` has Studio build a small escrow console as the app's own frontend, connected to the deployed contract. Our main app (`web/`) uses the same addresses.
-6. `scripts/e2e.py` then runs the escrow and a split bill on Arc testnet against those addresses and saves the transaction links.
+6. `scripts/committee.mjs` hands ownership to the committee wallet. Then `scripts/e2e.mjs` runs the escrow, a dispute the committee resolves and a split bill on Arc testnet, and saves the transaction links.
 
 ```bash
 contracts/studio/run.sh whoami
