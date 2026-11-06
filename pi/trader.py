@@ -14,8 +14,9 @@ can buy (at most what they used over it), the shop gets at most its order, and t
 stays inside the band. Whatever 0G does not route goes to the grid. The decision is recorded as kind
 "trade" with its episode on 0G Storage and EpisodeRegistry, like every other decision.
 
-No 0G (down, TEE check failed, no usable answer): no AI trade. The whole spare goes to the grid at
-the feed-in rate, the physical default, recorded as mode "no-ai". A routing is never made up.
+No 0G (down, TEE check failed, no usable answer): no AI trade. A fixed rule, recorded as mode "no-ai"
+and never shown as a 0G decision: neighbours' drawn energy is settled at the default midpoint price,
+nothing goes to the shop (that is an AI decision; ShopTrade refunds the prepay), the rest to the grid.
 
 Wh are model Wh (1 Wh on the model = BILL_SCALE/1000 kWh in the real building); prices are USDC per
 real kWh.
@@ -93,6 +94,26 @@ def _buyer(to) -> str | None:
     return s if s in FLATS else None
 
 
+NO_AI_REASON = "fixed rule: drawn energy settled at the midpoint; no AI pricing"
+
+
+def neighbours_first(spare_wh: float, needs: dict, price: float) -> tuple[list, float, list]:
+    """Flats that used more than their share already drew that sun from the pool: they are served
+    first, pro rata if together they need more than the spare. -> (routes, Wh left, notes)."""
+    notes = []
+    over = {f: max(0.0, _num(needs.get(f)) or 0.0) for f in FLATS}
+    need = sum(over.values())
+    scale = 1.0 if need <= spare_wh else spare_wh / need
+    if scale < 1:
+        notes.append(f"neighbours need {need:g} Wh, spare is {spare_wh:g} Wh: shared pro rata")
+    routes = [{"to": f, "wh": round(over[f] * scale, 3), "price": price} for f in FLATS if over[f] > 0]
+    left = round(spare_wh - sum(r["wh"] for r in routes), 3)
+    if left < 0:  # rounding
+        routes[-1]["wh"] = round(routes[-1]["wh"] + left, 3)
+        left = 0.0
+    return routes, left, notes
+
+
 def validate(answer: dict, spare_wh: float, needs: dict, shop_order_wh: float, px: dict) -> tuple[list, float, list]:
     """0G's answer -> (routes, neighbour price, notes). Routes always add up to spare_wh exactly.
 
@@ -115,16 +136,8 @@ def validate(answer: dict, spare_wh: float, needs: dict, shop_order_wh: float, p
     price = round(price, 6)
 
     # 1. neighbours first: their over-use was physically drawn from the pool
-    over = {f: max(0.0, _num(needs.get(f)) or 0.0) for f in FLATS}
-    need = sum(over.values())
-    scale = 1.0 if need <= spare_wh else spare_wh / need
-    if scale < 1:
-        notes.append(f"neighbours need {need:g} Wh, spare is {spare_wh:g} Wh: shared pro rata")
-    routes = [{"to": f, "wh": round(over[f] * scale, 3), "price": price} for f in FLATS if over[f] > 0]
-    left = round(spare_wh - sum(r["wh"] for r in routes), 3)
-    if left < 0:  # rounding
-        routes[-1]["wh"] = round(routes[-1]["wh"] + left, 3)
-        left = 0.0
+    routes, left, more = neighbours_first(spare_wh, needs, price)
+    notes += more
 
     # 2. the shop, as 0G decides (older answers may give it as a route)
     shop = _num(answer.get("shop_wh"))
@@ -195,12 +208,12 @@ def build_prompt(spare_wh: float, needs: dict, shop_order_wh: float, px: dict, w
 def _summary(routes: list, mode: str) -> str:
     parts = ", ".join(f"{'Flat ' + r['to'] if r['to'] in FLATS else r['to']} {r['wh']:g} Wh @ {r['price']:g}" for r in routes)
     return (f"0G sold the spare: {parts}" if mode == "ai"
-            else f"0G unreachable: spare to the grid at feed-in ({parts})")[:200]
+            else f"No 0G, fixed rule (no AI pricing): {parts}")[:200]
 
 
 def decide_routes(spare_wh: float, needs: dict, shop_order_wh: float = 0.0, prices: dict | None = None, *,
                   store=None, uploader=None, notify=None, window=None) -> dict:
-    """Ask 0G who gets the spare. Never raises: without 0G the spare goes to the grid (mode no-ai).
+    """Ask 0G who gets the spare. Never raises: without 0G a fixed rule applies (mode no-ai, see above).
     With store= the decision is recorded (kind "trade") and its episode uploaded; without it, nothing is."""
     px = {**current_prices(), **(prices or {})}
     spare_wh = round(max(0.0, _num(spare_wh) or 0.0), 3)
@@ -219,17 +232,23 @@ def decide_routes(spare_wh: float, needs: dict, shop_order_wh: float = 0.0, pric
         answer = zg.extract_json(reply.text)
         routes, price, notes = validate(answer, spare_wh, needs, shop_order_wh, px)
     except zg.ZGUnavailable as e:
-        routes = [{"to": "grid", "wh": spare_wh, "price": px["export"]}]
-        reason = f"0G unreachable, spare to the grid at the feed-in rate: {str(e)[:200]}"
-        out = {**base, "routes": routes, "reason": reason, "neighbor_price": px["neighbor"], "state": "no_ai",
+        # No 0G: a fixed rule, never shown as a 0G decision. Neighbours' drawn energy is settled at the
+        # default (midpoint) price, nothing is sold to the shop (that is an AI decision; ShopTrade refunds
+        # the prepay as usual), and the rest goes to the grid at the feed-in rate.
+        routes, left, notes = neighbours_first(spare_wh, needs, px["neighbor"])
+        if left > 0:
+            routes.append({"to": "grid", "wh": left, "price": px["export"]})
+        out = {**base, "routes": routes, "reason": NO_AI_REASON, "neighbor_price": px["neighbor"], "state": "no_ai",
+               "rule": "neighbours_first_midpoint", "notes": notes, "zg_error": str(e)[:300],
                "zg_request_id": reply.request_id if reply else None}
         did = None
         if store is not None:
             did = store.add_decision("trade", "no-ai", _summary(routes, "no-ai"), out, input=prompt)
             _publish(did, uploader, notify, {"raw_answer": reply.text} if reply else None)
-        log.warning("trade: no 0G, %g Wh to the grid (decision #%s): %s", spare_wh, did, e)
-        return {"routes": routes, "reason": reason, "request_id": None, "mode": "no-ai", "decision_id": did,
-                "neighbor_price": px["neighbor"], "model": None, "tee": None, "window": window}
+        log.warning("trade: no 0G, fixed rule (decision #%s): %s", did, e)
+        return {"routes": routes, "reason": NO_AI_REASON, "request_id": None, "mode": "no-ai", "decision_id": did,
+                "neighbor_price": px["neighbor"], "model": None, "tee": None, "window": window,
+                "rule": "neighbours_first_midpoint", "notes": notes, "zg_error": str(e)[:300]}
 
     reason = str(answer.get("reason") or "")[:240]
     out = {**base, "routes": routes, "reason": reason, "neighbor_price": price, "notes": notes}

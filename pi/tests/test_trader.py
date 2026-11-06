@@ -155,20 +155,31 @@ def test_trader(tmp):
     ROUTER["answer"] = json.dumps({"reason": "no idea"})
     assert trader.decide_routes(40, {"B": 5}, 20, **kw)["mode"] == "no-ai"
 
-    # 4. No routes in the answer: no AI trade, the spare goes to the grid, the 0G call is kept on record.
+    # 4. No usable answer: no AI trade. The fixed rule: B's drawn 10 Wh settled at the midpoint, NOTHING to
+    #    the shop (an AI decision; the shop is refunded), the rest to the grid. Labelled, never shown as 0G's.
     ROUTER["answer"] = "I would sell it to the neighbours, probably."
     n = len(store.decisions("trade", 100))
     r = trader.decide_routes(40, {"B": 10}, 20, **kw)
-    assert r["mode"] == "no-ai" and r["routes"] == [{"to": "grid", "wh": 40, "price": 0.006}], r
+    assert r["mode"] == "no-ai" and r["routes"] == [{"to": "B", "wh": 10, "price": 0.013},
+                                                    {"to": "grid", "wh": 30, "price": 0.006}], r
+    assert r["reason"] == "fixed rule: drawn energy settled at the midpoint; no AI pricing" and r["request_id"] is None
     d = store.decision(r["decision_id"])
     assert (d["kind"], d["mode"]) == ("trade", "no-ai") and d["output"]["zg_request_id"], d
+    assert d["output"]["reason"] == trader.NO_AI_REASON and d["output"]["rule"] == "neighbours_first_midpoint"
+    assert d["summary"].startswith("No 0G, fixed rule") and "0G sold" not in d["summary"], d["summary"]
+    assert "no valid JSON" in d["output"]["zg_error"]
     assert len(store.decisions("trade", 100)) == n + 1
+
+    # 4b. The fixed rule when neighbours need more than the spare: pro rata, no shop, no grid.
+    r = trader.decide_routes(9, {"B": 10, "C": 5}, 20, **kw)
+    assert r["mode"] == "no-ai" and by(r["routes"]) == {"B": (6, 0.013), "C": (3, 0.013)}, r
 
     # 5. TEE signature did not verify: refused like 0G being down.
     answer([{"to": "B", "wh": 10}])
     ROUTER["tee"] = False
     r = trader.decide_routes(40, {"B": 10}, 20, **kw)
-    assert r["mode"] == "no-ai" and by(r["routes"]) == {"grid": (40, 0.006)}, r
+    assert r["mode"] == "no-ai" and by(r["routes"]) == {"B": (10, 0.013), "grid": (30, 0.006)}, r
+    assert "TEE" in r["zg_error"]
     ROUTER["tee"] = True
 
     # 6. Nothing to sell: no 0G call, nothing recorded.
@@ -212,12 +223,14 @@ def test_trader(tmp):
     assert "Window " in ROUTER["seen"][-1]["messages"][-1]["content"] and ":" in ROUTER["seen"][-1]["messages"][-1]["content"]
     assert trader.TradeLoop(lambda: None).run_now()["skipped"]
 
-    # 10. 0G unreachable: the whole spare to the grid at feed-in, recorded as no-ai, nothing invented.
+    # 10. 0G unreachable: the fixed rule, recorded as no-ai, nothing invented, no shop sale.
     point_router(f"http://127.0.0.1:{closed_port()}/v1")
     r = trader.decide_routes(40, {"B": 10}, 20, **kw)
-    assert r["mode"] == "no-ai" and r["request_id"] is None and r["routes"] == [{"to": "grid", "wh": 40, "price": 0.006}]
+    assert r["mode"] == "no-ai" and r["request_id"] is None and "shop" not in by(r["routes"]), r
+    assert by(r["routes"]) == {"B": (10, 0.013), "grid": (30, 0.006)}, r
     d = store.decision(r["decision_id"])
-    assert d["mode"] == "no-ai" and d["request_id"] is None and "unreachable" in d["output"]["reason"], d
+    assert d["mode"] == "no-ai" and d["request_id"] is None and d["output"]["reason"] == trader.NO_AI_REASON, d
+    assert "Connection error" in d["output"]["zg_error"] and d["output"]["zg_request_id"] is None
     assert up.episodes[-1][0] == d["id"]  # anchored like any other decision
     srv.shutdown()
 
