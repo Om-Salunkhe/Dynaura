@@ -27,7 +27,7 @@ export const fetchHeartbeat = () => reads.heartbeat(arkiv());
 export const fetchDecisionByOgRequest = (ogRequestId) => reads.decisionByOgRequest(arkiv(), ogRequestId);
 /** Live offers of spare solar. Expired ones (solar window closed) are simply not returned. */
 export const fetchOffers = (limit = 20) => reads.offers(arkiv(), limit);
-/** Cleaner job board: fetchCleaningJobs({ status: "open" }) */
+/** Cleaning requests (v3): fetchCleaningJobs({ status: "flagged" }) or ({ statuses: ["open", "accepted", "cleaned"] }) */
 export const fetchCleaningJobs = (opts) => reads.cleaningJobs(arkiv(), opts);
 /** Resident bills: fetchBills({ flat: "A" }) or fetchBills({ month: "2026-11" }) */
 export const fetchBills = (opts) => reads.bills(arkiv(), opts);

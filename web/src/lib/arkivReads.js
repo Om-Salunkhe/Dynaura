@@ -6,7 +6,7 @@
 // and still OWNS. Nothing else counts, whatever its tags say.
 import { createPublicClient } from "@arkiv-network/sdk";
 import { rabdi } from "@arkiv-network/sdk/chains";
-import { and, asc, desc, eq, gte } from "@arkiv-network/sdk/query";
+import { and, asc, desc, eq, gte, lte, or } from "@arkiv-network/sdk/query";
 import { addr, u64 } from "@arkiv-network/sdk/schema";
 import { hexToString, http } from "viem";
 import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale } from "./arkivSchemas.js";
@@ -184,32 +184,56 @@ export function offers(ctx, limit = 20) {
   });
 }
 
-/** Cleaner job board. Pass a status ("open", "accepted", "paid", "refunded") to filter on it. */
-export function cleaningJobs(ctx, { status, limit = 20 } = {}) {
+/** Cleaning requests (flow v3), newest first. Filter with `status: "flagged"` or
+ *  `statuses: ["open", "accepted", "cleaned"]`. v2 jobs come back too, with their old fields mapped. */
+export function cleaningJobs(ctx, { status, statuses, limit = 20 } = {}) {
   return withBackoff(async () => {
-    const where = status ? and(eq("building", ctx.building), eq("status", status)) : eq("building", ctx.building);
+    const list = statuses?.length ? statuses : status ? [status] : [];
+    const byStatus = list.length === 1 ? eq("status", list[0]) : list.length > 1 ? or(list.map((x) => eq("status", x))) : null;
     const page = await scoped(
       ctx,
       ctx.client
-        .select({ $key: true, job_id: true, status: true, fee_usdc: true, deadline: true, output_before: true, output_after: true, arc_tx: true, og_request_id: true, og_storage_root: true, $expiresAt: true })
+        .select({
+          $key: true, case_id: true, status: true, job_id: true, created_at: true, fee_usdc: true, deadline: true,
+          dusty_pct: true, after_pct: true, output_before: true, output_after: true, coverage_pct: true, og_input: true, og_tee: true,
+          og_request_id: true, og_storage_root: true, proof_hash: true, proof_from: true, proof_to: true,
+          open_tx: true, release_tx: true, refund_tx: true, arc_tx: true, $expiresAt: true,
+        })
         .from(CleaningJob)
-        .where(where),
+        .where(byStatus ? and(eq("building", ctx.building), byStatus) : eq("building", ctx.building)),
     )
-      .orderBy(desc("job_id"))
+      .orderBy(desc("created_at"))
       .limit(limit)
       .fetch();
-    return page.entities.map((e) => ({
-      key: e.$key,
-      jobId: Number(e.job_id.value),
-      status: e.status.value,
-      feeUsdc: Number(e.fee_usdc.value),
-      deadline: Number(e.deadline.value),
-      outputBefore: Number(e.output_before.value),
-      outputAfter: e.output_after ? Number(e.output_after.value) : null,
-      arcTx: e.arc_tx?.value,
-      ogRequestId: e.og_request_id?.value,
-      ogStorageRoot: e.og_storage_root?.value,
-    }));
+    const n = (v) => (v ? Number(v.value) : null);
+    return page.entities.map((e) => {
+      const dusty = n(e.dusty_pct) ?? n(e.output_before);
+      const after = n(e.after_pct) ?? n(e.output_after);
+      return {
+        key: e.$key,
+        caseId: e.case_id?.value ?? null,
+        status: e.status.value,
+        jobId: n(e.job_id), // Arc escrow id: null until approved
+        createdAt: n(e.created_at),
+        feeUsdc: n(e.fee_usdc) ?? 0, // 0 until the admin approves a fee (the board calls toFixed on it)
+        deadline: n(e.deadline),
+        dustyPct: dusty,
+        afterPct: after,
+        outputBefore: dusty, // v2 names, still used by the job board
+        outputAfter: after,
+        coveragePct: n(e.coverage_pct),
+        ogInput: e.og_input?.value ?? null,
+        ogTee: e.og_tee ? Boolean(e.og_tee.value) : null,
+        ogRequestId: e.og_request_id?.value,
+        ogStorageRoot: e.og_storage_root?.value,
+        proofHash: e.proof_hash?.value ?? null,
+        proofWindow: e.proof_from && e.proof_to ? [n(e.proof_from), n(e.proof_to)] : null,
+        openTx: e.open_tx?.value ?? null,
+        releaseTx: e.release_tx?.value ?? null,
+        refundTx: e.refund_tx?.value ?? null,
+        arcTx: e.arc_tx?.value ?? e.release_tx?.value ?? e.refund_tx?.value ?? e.open_tx?.value,
+      };
+    });
   });
 }
 
