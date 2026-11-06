@@ -41,7 +41,8 @@ const verdictOf = (og) =>
   };
 
 function fromV3(api, live) {
-  const sse = live.cleaning || {};
+  // the Pi's /api/cleaning status (pct, lines, last scan…), the stream as a fallback
+  const sse = { ...(live.cleaning || {}), ...(api.data || {}) };
   const cur = api.job || null;
   const last = (api.history || []).find((h) => ["paid", "refunded", "resolved"].includes(h.state));
   let j = cur;
@@ -50,7 +51,7 @@ function fromV3(api, live) {
   else if (last && Date.now() / 1000 - (last.updated_at || 0) < 6 * 3600) {
     j = last; // the latest finished job stays on screen for a while
     stage = V3_STAGE[last.state];
-  } else stage = sse.pct != null && sse.dust_pct != null && sse.pct < sse.dust_pct ? "dusty" : "clean";
+  } else stage = sse.state === "dusty" || (sse.pct != null && sse.dust_pct != null && sse.pct < sse.dust_pct) ? "dusty" : "clean";
   return {
     live: true,
     v3: true,
@@ -59,7 +60,9 @@ function fromV3(api, live) {
     pct: sse.pct ?? j?.after_pct ?? j?.dusty_pct ?? null,
     dustPct: sse.dust_pct ?? 70,
     cleanPct: sse.clean_pct ?? 90,
-    minGain: 15,
+    minGain: sse.min_gain_pct ?? 15,
+    lastCheck: sse.last_check || null, // {at, source, result: dirty|clean|no_check, health_pct, og|error}
+    dustCheck: sse.dust_check, // false until the Pi has its camera + 0G dust check
     fee: j?.fee_usdc ?? sse.fee_usdc ?? 2,
     flagged: !["clean", "dusty"].includes(stage),
     arc: sse.arc ?? true,
@@ -77,6 +80,7 @@ function fromV3(api, live) {
       outputAfter: j.after_pct,
       deadline: j.deadline ? j.deadline * 1000 : null,
       cleaner: j.cleaner || j.arc?.cleaner,
+      resolution: j.resolution === "paid_cleaner" ? "paid" : j.resolution || null,
       openTx: j.arc?.open_tx,
       releaseTx: j.arc?.release_tx,
       refundTx: j.arc?.refund_tx,
