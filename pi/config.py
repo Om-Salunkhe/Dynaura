@@ -34,8 +34,8 @@ TIMEZONE = os.getenv("TIMEZONE", "Asia/Kolkata")
 # Real rooftop size the demo stands for, used to show building-scale kWh in the app
 BUILDING_KWP = float(os.getenv("BUILDING_KWP", "2.0") or 2.0)
 
-# 0G Compute Router (OpenAI-compatible). Testnet: https://router-api-testnet.integratenetwork.work/v1
-ZG_ROUTER_URL = os.getenv("ZG_ROUTER_URL", "").strip()
+# 0G Compute Router (OpenAI-compatible), key from pc.0g.ai
+ZG_ROUTER_URL = os.getenv("ZG_ROUTER_URL", "https://router-api.0g.ai/v1").strip()
 ZG_API_KEY = os.getenv("ZG_API_KEY", "").strip()
 ZG_MODEL = os.getenv("ZG_MODEL", "0gm-1.0-35b-a3b").strip()
 # 0G vision model that looks at the panel photo (dust check). Empty or not on the Router = meter-only check.
