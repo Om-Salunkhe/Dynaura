@@ -36,6 +36,10 @@ export const fetchOffers = (limit = 20) => reads.offers(arkiv(), limit);
 export const fetchCleaningJobs = (opts) => reads.cleaningJobs(arkiv(), opts);
 /** A cleaner's work history, owned by the cleaner's wallet: fetchWorkReceipts({ cleaner: "0x..." }) */
 export const fetchWorkReceipts = (opts) => reads.workReceipts(arkiv(), opts);
+/** Fair-share credit periods on Arkiv, newest day first: fetchCreditPeriods({ limit: 7 }) */
+export const fetchCreditPeriods = (opts) => reads.creditPeriods(arkiv(), opts);
+/** 0G trade decisions on Arkiv (where the spare sun went): fetchTrades({ mode: "ai" }) */
+export const fetchTrades = (opts) => reads.trades(arkiv(), opts);
 /** Resident bills: fetchBills({ flat: "A" }) or fetchBills({ month: "2026-11" }) */
 export const fetchBills = (opts) => reads.bills(arkiv(), opts);
 /** Shop sales settled on Arc: fetchSales({ buyer: "0x..." }) */

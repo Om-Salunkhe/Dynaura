@@ -15,7 +15,7 @@ export const ogStorageRoot = (b) => b.og_storage_root ?? b.storage_root
 export const JOB_STATES = ["flagged", "approved", "open", "accepted", "cleaned", "paid", "rejected", "refunded", "disputed", "resolved", "no_check"]
 const LIVE_UNTIL_DEADLINE = new Set(["approved", "open", "accepted", "cleaned"])
 
-const isNum = (v) => v !== undefined && v !== null && v !== "" && Number.isFinite(Number(v))
+export const isNum = (v) => v !== undefined && v !== null && v !== "" && Number.isFinite(Number(v))
 const txt = (v, n = 120) => (v === undefined || v === null || v === "" ? undefined : String(v).slice(0, n))
 const unix = (v) => (isNum(v) ? u64(BigInt(Math.floor(Number(v)))) : undefined)
 const teeOf = (t) => (typeof t === "boolean" ? t : t && typeof t === "object" ? Boolean(t.verified ?? t.ok ?? t.valid) : undefined)

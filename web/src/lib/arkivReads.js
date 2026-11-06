@@ -9,7 +9,7 @@ import { rabdi } from "@arkiv-network/sdk/chains";
 import { and, asc, desc, eq, gte, lte, or } from "@arkiv-network/sdk/query";
 import { addr, u64 } from "@arkiv-network/sdk/schema";
 import { hexToString, http } from "viem";
-import { Bill, CleaningJob, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale, WorkReceipt } from "./arkivSchemas.js";
+import { Bill, CleaningJob, CreditPeriod, DailyOutput, Decision, Heartbeat, Maintenance, Offer, Reading, Sale, Trade, WorkReceipt } from "./arkivSchemas.js";
 
 /** A read-only Rabdi client. Rabdi makes a block every 2 s; viem assumes 12 s unless told. */
 export function arkivClient(accessKey = "") {
@@ -300,6 +300,78 @@ export function workReceipts(ctx, { cleaner, limit = 20 } = {}) {
       releaseTx: e.release_tx?.value ?? null,
       ogRequestId: e.og_request_id?.value ?? null,
       proofHash: e.proof_hash?.value ?? null,
+    }));
+  });
+}
+
+const parseJson = (v, fallback) => {
+  try {
+    return JSON.parse(text(v));
+  } catch {
+    return fallback;
+  }
+};
+
+/** Fair-share credit periods (one per day), newest first: each flat's share, use, unused sun and
+ *  earnings next to an equal split. */
+export function creditPeriods(ctx, { limit = 7 } = {}) {
+  return withBackoff(async () => {
+    const page = await scoped(
+      ctx,
+      ctx.client
+        .select({
+          $key: true, day: true, available_wh: true, common_wh: true, spare_wh: true, neighbor_wh: true, shop_wh: true,
+          grid_wh: true, revenue_usdc: true, prices: true, flats: true, trade_ids: true, readings_hash: true,
+          period_id: true, post_tx: true, updated: true,
+        })
+        .from(CreditPeriod)
+        .where(eq("building", ctx.building)),
+    )
+      .orderBy(desc("day"))
+      .limit(limit)
+      .fetch();
+    const n = (v) => (v ? Number(v.value) : null);
+    return page.entities.map((e) => ({
+      key: e.$key,
+      day: e.day.value,
+      availableWh: n(e.available_wh),
+      commonWh: n(e.common_wh),
+      spareWh: n(e.spare_wh),
+      pool: { neighborWh: n(e.neighbor_wh), shopWh: n(e.shop_wh), gridWh: n(e.grid_wh), revenueUsdc: n(e.revenue_usdc) },
+      prices: parseJson(e.prices?.value, {}),
+      flats: parseJson(e.flats?.value, {}),
+      tradeIds: parseJson(e.trade_ids?.value, []),
+      readingsHash: e.readings_hash?.value ?? null,
+      periodId: e.period_id?.value ?? null,
+      postTx: e.post_tx?.value ?? null,
+      updated: n(e.updated),
+    }));
+  });
+}
+
+/** 0G trade decisions: where the spare sun went and why. mode "ai" or "no-ai" (all to the grid). */
+export function trades(ctx, { mode, limit = 20 } = {}) {
+  return withBackoff(async () => {
+    const page = await scoped(
+      ctx,
+      ctx.client
+        .select({ $key: true, decision_id: true, at: true, mode: true, og_request_id: true, spare_wh: true, neighbor_price: true, routes: true, reason: true })
+        .from(Trade)
+        .where(mode ? and(eq("building", ctx.building), eq("mode", mode)) : eq("building", ctx.building)),
+    )
+      .orderBy(desc("at"))
+      .limit(limit)
+      .fetch();
+    return page.entities.map((e) => ({
+      key: e.$key,
+      id: Number(e.decision_id.value),
+      at: Number(e.at.value),
+      mode: e.mode.value,
+      requestId: e.og_request_id?.value ?? null,
+      spareWh: e.spare_wh ? Number(e.spare_wh.value) : null,
+      neighborPrice: e.neighbor_price ? Number(e.neighbor_price.value) : null,
+      routes: parseJson(e.routes?.value, []),
+      reason: text(e.reason.value),
     }));
   });
 }

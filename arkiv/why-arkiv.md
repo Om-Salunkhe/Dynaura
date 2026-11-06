@@ -70,6 +70,19 @@ the last three **signed panel readings, which are themselves on Arkiv**. One que
 hero moment, from "panel dirty" to "cleaner paid", with a link to each proof. A normal DB would
 hold copies of those links; here the record book is as public as the things it points to.
 
+### 5. A fair split needs numbers nobody can quietly change
+
+Dynaura pays each flat for the sun it left for others, not an equal cut. The panel makes 100
+units; A uses 20 and B uses 40 of their 50-unit shares; the 40 spare units are sold. An equal split
+pays 50/50. Dynaura pays 75/25, because A left 30 units and B left 10. A split like that only works
+if every flat can check the inputs:
+- each day's shares, use and earnings are a `dynaura.credit_period` on Arkiv, with the hash of the
+  signed readings behind them;
+- each 0G decision about where the spare went is a sealed `dynaura.trade`, with its request id;
+- the payout itself runs on Arc (SolarCredits).
+
+With a normal database, the flat that gets 25% has to take the committee's word for it.
+
 ## Why not just put it all on Arc or 0G?
 
 - **Arc contract storage** is the wrong shape. It is expensive per byte, permanent (no expiry),

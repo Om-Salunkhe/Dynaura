@@ -38,6 +38,11 @@ the scope; humans decided what to build and reviewed the output.
   wallet in one atomic batch.
 - **Measured the public endpoint** under load. When the evening numbers contradicted the morning
   ones, it changed its recommendation: the web app now uses a separate public read key.
+- **Fair share + solar credits** (spec: the team's DECISIONS row, Sat 00:09, and
+  `prompts/tasks-credits.md`): it wrote `pi/credits.py` (the per-minute fair-share model, the
+  ledger, settle via `arc.py` helpers), its offline tests with Pawan's numbers (100 / A 20 / B 40 ->
+  75/25), the sim's available sun and light/heavy flat moments, the `/api/credits` endpoints, and
+  the Arkiv records `dynaura.credit_period` and `dynaura.trade`.
 - **Mistakes it made and fixed:**
   - It once printed the shared access key into a local log through a viem error. The log was
     deleted, and every printed error is now redacted.

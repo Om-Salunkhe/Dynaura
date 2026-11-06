@@ -9,7 +9,7 @@ restart too.
 - Order is kept: the oldest record goes first, so a cleaning job's transitions arrive in order.
 - Heartbeats are the exception: a late heartbeat means nothing, so only the newest one is sent,
   live, and it is never stored.
-- Daily totals coalesce: only the newest totals of a day wait in the outbox.
+- Daily totals and credit periods coalesce: only the newest of a day waits in the outbox.
 - What the bridge says decides a retry:
   - unreachable, a timeout, 429, 500 or 503 (busy, or Arkiv down): retry with backoff, keep the
     record;
@@ -76,7 +76,7 @@ class ArkivQueue:
             self._heartbeat = body
             self._wake.set()
             return
-        key = f"daily:{body.get('day')}" if path == "/daily" else None
+        key = f"{path.strip('/')}:{body.get('day')}" if path in ("/daily", "/credit_period") else None
         body = dict(body)
         on_reply = body.pop("_on_reply", None)  # kept in memory: only the record itself is stored
         with self._lock:
