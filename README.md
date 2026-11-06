@@ -38,7 +38,7 @@ The hero flow, as shown in the demo:
 
 1. **Plan (0G).** Every evening the Pi sends Dyna tomorrow's sun forecast, the last 7 days of use (read back from Arkiv) and who is away. Dyna answers on **0G Compute** with a plan: the solar window, when each shared job runs, and tips per flat. The Pi keeps the 0G request ID and uploads the full episode log to **0G Storage**.
 2. **Run.** Relays move each flat between solar (yellow LED) and grid (blue LED), and the pump runs on the sun in its planned slot. The Pi meters everything once a second and signs every 1-minute summary with its device key.
-3. **Share (0G).** Each flat has a fair share of the sun. What flats leave unused is sold: first to neighbours who used more than their share, then, as Dyna on 0G decides, to the shop next door, and the rest to the grid. The money is paid back in proportion to what each flat left unused, not split equally ([Fair share](#fair-share-pay-the-flat-that-saved)).
+3. **Share and sell (0G + Arc).** Each flat has a fair share of the sun. A measured 0G trade first routes unclaimed spare to the grid and publishes that capacity as a live offer. A shop can prepay the offer in USDC on Arc; only then may later 0G windows route spare to that shop order. At the deadline the Pi settles the actual routed Wh, and Arc refunds every undelivered Wh. Revenue goes back in proportion to what each flat left unused, not as an equal split ([Fair share](#fair-share-pay-the-flat-that-saved), [Live marketplace](#live-marketplace-real-flow)).
 4. **Look (0G).** Tracing paper on the panel plays the dust. When output falls below 70% of what the panel should give, or the committee presses *Scan panel*, the Pi takes a frame of the panel and asks 0G: is it dirty, how much is covered, and why? The verdict comes back with its 0G request ID. A meter alone can't tell dust from a cloud.
 5. **Approve.** A dirty verdict becomes a cleaning request. The committee sees the frame and 0G's verdict in the app and approves it. Only then does the Pi lock a **2 USDC fee in an escrow on Arc**, tagged with that 0G request ID. A rejected request moves no money.
 6. **Clean.** A cleaner accepts the job from their own wallet, cleans the panel and taps *Mark done* (that moves no money).
@@ -52,8 +52,8 @@ The hero flow, as shown in the demo:
 ```mermaid
 flowchart LR
   subgraph B["Cardboard building (real hardware)"]
-    P["6 V / 5 W panel<br/>INA219 0x40"]
-    F["Flats A · B · C<br/>INA219 0x41 · 0x44 · 0x45<br/>relays GPIO 17 · 27 · 22"]
+    P["6 V / 5 W panel<br/>INA219 0x45"]
+    F["Flats A · B · C<br/>INA219 0x41 · 0x44 · 0x40<br/>relays GPIO 17 · 27 · 22"]
     W["Tank pump<br/>relay GPIO 23"]
   end
   Pi["Raspberry Pi 4 · pi/<br/>1 s meter loop · signed 1-min summaries<br/>plan runner · safe stop · FastAPI + SSE"]
@@ -79,8 +79,8 @@ A three-flat cardboard building under a desk lamp:
 
 | Part | Detail |
 |---|---|
-| Panel | 6 V / 5 W, metered by an INA219 at `0x40` |
-| Flats A, B, C | One INA219 each (`0x41`, `0x44`, `0x45`) and one relay each (GPIO 17, 27, 22): solar or grid |
+| Panel | 6 V / 5 W, metered by the replacement INA219 at `0x45` (the original `0x40` panel board failed) |
+| Flats A, B, C | INA219 at `0x41`, `0x44`, `0x40`; one relay each (GPIO 17, 27, 22): solar or grid |
 | Water pump | Relay on GPIO 23 |
 | Panel camera | One frame of the panel per dust check, which 0G looks at. SIM mode uses sample frames of a clean and a dusty panel |
 | Relay board | Active-low, 4 channels. If the software dies, every flat falls back to grid (the safe default) |
@@ -105,6 +105,18 @@ Say the panel makes 100 units and the two flats sharing it have 50 each. Flat A 
 - **On chain:** the Pi posts each period's measured `unused` and `over` per flat to [`SolarCredits`](https://explorer.testnet.arc.io/address/0x12b06e364ecc08aead9ce2142382682b9d46859c) on Arc, with the hash of the signed meter readings they came from. Buyers pay in, shop and grid revenue is funded in, and each flat **claims `pool × unused / Σ unused`, computed by the contract**. Pawan's day ran on Arc testnet: a pool of 0.40 USDC paid A 0.30 and B 0.10, where an equal split would have paid 0.20 each ([transactions](contracts/README.md#on-chain-proof-arc-testnet-fri-6-and-sat-7-nov)). Every routing and period is also kept on Arkiv (`dynaura.trade`, `dynaura.credit_period`).
 
 The ledger is in `pi/credits.py`, the trading decision in `pi/trader.py`, and the feature sits behind `CREDITS_ENABLED`.
+
+### Live marketplace: real flow
+
+The buyer view is `/shop`; the committee sees the same live state at `/admin/trading`. Neither page invents an offer or falls back to sample sales.
+
+1. A successful 0G trade sends spare solar to the grid. The Pi turns that measured grid route into one short-lived offer and writes it to Arkiv.
+2. The shop connects its own wallet, approves exactly the displayed USDC cost, and calls `ShopTrade.placeOrder` on Arc. The Pi hides the consumed offer as soon as it observes the open order.
+3. `pi/credits.py` exposes only open Arc orders as shop demand. `pi/trader.py` may route later measured spare to the shop; without an order, shop demand is zero (`SHOP_DEMAND_WH=0`).
+4. At the order deadline, `pi/sales.py` totals only AI shop routes recorded after that order was detected. The Pi oracle settles those delivered Wh on Arc; the contract pays the society and refunds the shortfall in the same transaction.
+5. The settled sale is written to Arkiv. `GET /api/marketplace` returns the current offer, Arc orders, settled sales and 0G trader state used by both screens.
+
+The purchase is always a user-signed wallet transaction. A 0G request ID is a Router trace identifier; the corresponding episode is separately anchored by its 0G Storage root and EpisodeRegistry transaction.
 
 ## 0G: the brain
 
@@ -214,7 +226,9 @@ Without a key, the query uses Arkiv's public endpoint, which has a small free bu
 
 ## Run it
 
-**SIM mode, no board needed** (Python 3.11+ and Node 22.10+):
+### Local development: SIM mode
+
+No board is needed (Python 3.11+ and Node 22.10+):
 
 ```bash
 git clone https://github.com/Om-Salunkhe/Dynaura.git && cd Dynaura
@@ -225,8 +239,38 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 DYNAURA_HW=sim .venv/bin/python api.py          # → http://localhost:8000/api/state
 
 # second terminal
-cd web && npm install && cp .env.example .env && npm run dev   # → http://localhost:5173
+cd web
+npm install
+VITE_API_URL=http://localhost:8000 npm run dev -- --port 5181
+# app → http://localhost:5181
+# marketplace → http://localhost:5181/shop
 ```
+
+If port 5181 is occupied, Vite prints the next port it chose. Add `--strictPort` if you prefer it to fail instead. The web app uses hot reload; backend Python changes require restarting `api.py`.
+
+### Laptop web dev server against the real Pi
+
+Keep the API and Arkiv bridge running on the Pi. From the laptop, forward the Pi API to local port 8000, then start Vite in another terminal:
+
+```bash
+# terminal 1 — replace the host/user if your Pi differs
+ssh -N -L 8000:localhost:8000 dynaura@dynaura.local
+
+# terminal 2
+cd Dynaura/web
+npm install
+VITE_API_URL=http://localhost:8000 npm run dev -- --port 5181
+```
+
+Verify the connection before trusting the UI:
+
+```bash
+curl -s http://localhost:8000/api/health   # real board must say: "hw":"real"
+curl -s http://localhost:8000/api/state    # live panel/flat V, mA and W
+curl -s http://localhost:8000/api/marketplace
+```
+
+The real buyer flow is at `http://localhost:5181/shop`; committee trading is at `/admin/trading`. Wallet actions use Arc testnet and require explicit confirmation in the user's wallet.
 
 Without a 0G key, the first plan fails and the building goes into the no-AI safe stop. That's the fallback working. Add `ZG_API_KEY` in `.env` to get real plans. Arc and Arkiv switch on when their keys and addresses are set; every variable is explained in [`.env.example`](.env.example).
 
@@ -252,8 +296,8 @@ The web app on Vercel is served over https, so it can't call the Pi's plain-http
 
 | Who | Did | Telegram | X |
 |---|---|---|---|
-| Om Salunkhe | Pi software, contracts, web app | TBD | TBD |
-| Devang Gandhi | Hardware: the building, wiring, meters, relays | TBD | TBD |
+| Om Salunkhe | Pi software and real-hardware driver, contracts, web app | TBD | TBD |
+| Devang Gandhi | Physical building, wiring, meters and relays | TBD | TBD |
 | Pawan | Product, sponsor integrations, demo and docs | TBD | TBD |
 
 ## AI usage

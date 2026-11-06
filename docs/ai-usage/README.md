@@ -8,8 +8,8 @@ ETHGlobal allows AI tools as long as we say where and how, and as long as the te
 
 | Part | Who drove it | AI tool | What the AI did | What the humans did |
 |---|---|---|---|---|
-| Pi software (`pi/`) | Om | TBD (Om) | TBD (Om) | TBD (Om) |
-| Hardware (`pi/hw/real.py`, the building, wiring) | Devang | TBD (Devang) | TBD (Devang) | TBD (Devang) |
+| Pi software and real-hardware driver (`pi/`) | Om | TBD (Om) | TBD (Om) | Om owns the software; Devang built and validated the physical wiring |
+| Physical building and wiring | Devang | — | — | Built the model and connected the meters, relays, panel and loads |
 | Contracts (`contracts/`) | Om, then the `dy-arc` session | TBD (Om), Claude Code, Arc Studio's built-in AI | `dy-arc`: see [`dy-arc.md`](dy-arc.md). Arc Studio generates, tests and deploys contracts from prompts | Contract design (escrow rules, oracle role, settlement) |
 | Arkiv bridge and judging files (`bridge/`, `arkiv/`) | Om, then the `dy-arkiv` session | TBD (Om), Claude Code | `dy-arkiv`: see [`dy-arkiv.md`](dy-arkiv.md) | Which records live on Arkiv, who owns them, when they expire |
 | Web app (`web/`) | Om, then the `dy-web` session | TBD (Om), Claude Code | `dy-web`: see [`dy-web.md`](dy-web.md) | Screens and flows, from our own app plan |

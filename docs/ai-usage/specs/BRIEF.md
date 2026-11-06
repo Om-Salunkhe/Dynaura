@@ -4,7 +4,7 @@
 
 The hardware is a cardboard 3-flat building (flats A, B, C) under a desk lamp:
 - a 6 V / 5 W panel
-- a Raspberry Pi 4 with 4× INA219 meters (panel 0x40, A 0x41, B 0x44, C 0x45)
+- a Raspberry Pi 4 with 4× INA219 meters (final bench wiring: panel 0x45, A 0x41, B 0x44, C 0x40; the original 0x40 panel board failed)
 - an active-low 4-channel relay board (GPIO 17/27/22 for the flats, solar vs grid; GPIO 23 for the pump)
 - a pump with a float switch, and LEDs (yellow = solar, blue = grid)
 
@@ -23,8 +23,8 @@ Tagline: *0G decides, Arc pays, Arkiv remembers.*
 5. Every step is on Arkiv, with the 0G proof.
 
 **Team and ownership.** Treat these as hard boundaries.
-- **Om Salunkhe:** owns the Pi core in `pi/`, plus the original `bridge/`, `contracts/` and `web/`. He actively pushes to `main`.
-- **Devang Gandhi:** builds the physical hardware and owns `pi/hw/real.py`. **Never touch `pi/hw/`.**
+- **Om Salunkhe:** owns the Pi core, including the final `pi/hw/real.py` driver, plus the original `bridge/`, `contracts/` and `web/`.
+- **Devang Gandhi:** builds and wires the physical hardware and validates the meters and relays on the bench.
 - **Pawan** (human) and the **manager session** decide scope for the AI sessions. Pawan's sessions are `dy-arkiv`, `dy-arc`, `dy-web` and `dy-demo`.
 
 **Read first:**
