@@ -43,7 +43,7 @@ TRADE_MIN_WH = config.TRADE_MIN_WH
 TRADE_MIN_GAP_S = 60.0  # never more than one 0G trade call a minute (SIM_SPEED makes windows short)
 # 0gm-1.0 is Qwen3-based and "thinks" first: ~80 s per trade with thinking, ~6 s without (measured
 # Sat 01:00 on router-api.0g.ai). A trade is a short, rule-bound choice, so thinking is off by default.
-NO_THINKING = {"chat_template_kwargs": {"enable_thinking": False}}
+NO_THINKING = zg.NO_THINKING
 
 SYSTEM = """You are Dyna, the market maker for the shared rooftop solar panel of a small apartment building with flats A, B and C.
 Each flat has an equal fair share of the sun. What a flat leaves unused goes into a spare pool. The pool is sold,
@@ -53,8 +53,9 @@ You decide two things:
 1. The neighbour price, between the feed-in (export) rate and the grid import rate. When the spare is scarce
    (neighbours need most of it), price toward the import rate. When it is plentiful, price toward the export rate.
    A fair guide: export + (import - export) x the share of the pool the neighbours take.
-2. How the rest of the pool (after the neighbours) is split: the shop takes up to its order at the shop price,
-   and the grid takes anything left at the feed-in rate.
+2. How the rest of the pool (after the neighbours) is split: the shop buys ANY amount up to its order at the
+   shop price. A partial sale is fine: if the rest of the pool is smaller than the order, the shop still takes
+   what there is. The grid takes anything left at the feed-in rate.
 Answer with ONE JSON object only, no other text:
 {"neighbor_price": <USDC per kWh>, "shop_wh": <number>, "reason": "one short sentence"}"""
 
@@ -191,7 +192,8 @@ def build_prompt(spare_wh: float, needs: dict, shop_order_wh: float, px: dict, w
         f"(1 Wh here = {config.BILL_SCALE / 1000:g} kWh in the real building).\n"
         f"Neighbours served first: {who or 'none'}; {to_neighbours:g} Wh of the pool "
         f"({100 * to_neighbours / spare_wh:.0f}%) goes to them.\n"
-        f"Left after the neighbours: {spare_wh - to_neighbours:g} Wh. Shop order: {shop_order_wh:g} Wh at {px['shop']} USDC/kWh.\n"
+        f"Left after the neighbours: {spare_wh - to_neighbours:g} Wh. Shop order: {shop_order_wh:g} Wh at {px['shop']} USDC/kWh"
+        f" (the shop takes any amount up to its order, so a partial sale is fine).\n"
         f"Grid import {px['import']} USDC/kWh, feed-in {px['export']} USDC/kWh. "
         f"Neighbour price band [{lo}, {hi}], midpoint {px['neighbor']}.\n"
         "Set the neighbour price and the shop amount."
@@ -258,12 +260,7 @@ def decide_routes(spare_wh: float, needs: dict, shop_order_wh: float = 0.0, pric
 
 def _ask(prompt: str) -> zg.ZGReply:
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]
-    if not config.TRADE_THINKING:
-        try:
-            return zg.chat(messages, max_tokens=4000, temperature=0.2, extra_body=NO_THINKING)
-        except zg.ZGModelUnavailable as e:  # the Router answered but refused the option: ask with thinking
-            log.warning("0G refused enable_thinking=false, asking with thinking: %s", e)
-    return zg.chat(messages, max_tokens=4000, temperature=0.2)
+    return zg.chat_maybe_thinking(messages, config.TRADE_THINKING, max_tokens=4000, temperature=0.2)
 
 
 def _publish(did: int, uploader, notify, extra: dict | None) -> None:

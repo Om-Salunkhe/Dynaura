@@ -104,5 +104,6 @@ NEIGHBOR_RATE_USDC = float(os.getenv("NEIGHBOR_RATE_USDC") or 0) or None     # e
 TRADE_EVERY_MIN = float(os.getenv("TRADE_EVERY_MIN", "15") or 15)
 TRADE_MIN_WH = float(os.getenv("TRADE_MIN_WH", "0.01") or 0.01)  # least spare (model Wh) worth a 0G trade
 TRADE_THINKING = os.getenv("TRADE_THINKING", "false").lower() == "true"  # 0gm-1.0 thinking: ~80 s vs ~5 s
+PLAN_THINKING = os.getenv("PLAN_THINKING", "false").lower() == "true"    # the daily plan: ~130 s with thinking
 # Optional: only this wallet may pay a flat's bill. "A=0x..,B=0x..". Empty = anyone may pay for the flat.
 FLAT_WALLETS = dict(x.split("=", 1) for x in os.getenv("FLAT_WALLETS", "").replace(" ", "").split(",") if "=" in x)

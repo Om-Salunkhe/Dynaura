@@ -21,7 +21,7 @@ import dyna
 import zg
 from arc import Arc, ArcUnavailable
 from arkiv import ArkivQueue
-from brain import Brain
+from brain import Brain, PlanBusy
 from cleaning import CleaningWatch, DustCheckMissing
 from hw import FLATS, load_hardware
 from jobs import JobRunner, PlanScheduler
@@ -220,7 +220,10 @@ def get_plan():
 @app.post("/api/plan/run")
 def run_plan(which: str = "today", x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
-    return App.brain.run_plan("tomorrow" if which == "tomorrow" else "today")
+    try:
+        return App.brain.run_plan("tomorrow" if which == "tomorrow" else "today", wait=False)
+    except PlanBusy:  # e.g. the start-up plan is still waiting for 0G
+        raise HTTPException(status_code=409, detail="a plan is already being made; try again when it is done")
 
 
 @app.post("/api/admin/jobs")

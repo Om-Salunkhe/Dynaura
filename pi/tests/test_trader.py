@@ -142,6 +142,11 @@ def test_trader(tmp):
     assert by(r["routes"]) == {"B": (10, 0.019), "shop": (2, 0.08)} and total(r["routes"]) == 12, r["routes"]
     assert "Neighbours served first: Flat B used 10 Wh over its share; 10 Wh of the pool (83%)" in \
         ROUTER["seen"][-1]["messages"][-1]["content"]
+    # The shop takes ANY amount up to its order: 0G is told so, in the rules and in this window's numbers
+    # (live, without it, 0G refused the shop when its order was bigger than the pool).
+    assert "ANY amount up to its order" in trader.SYSTEM and "partial sale is fine" in trader.SYSTEM
+    assert "the shop takes any amount up to its order, so a partial sale is fine" in \
+        ROUTER["seen"][-1]["messages"][-1]["content"]
 
     # 3b. Two neighbours need more than the spare: shared pro rata, nothing for the shop or the grid.
     ROUTER["answer"] = json.dumps({"neighbor_price": 0.02, "shop_wh": 5, "reason": "All to neighbours."})
