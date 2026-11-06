@@ -348,6 +348,8 @@ class Ledger:
         themselves (payIn); flats claim their share themselves."""
         if not all(hasattr(arc, f) for f in ("post_credits", "fund_credits")):
             raise RuntimeError("SolarCredits helpers are not in this build (arc.post_credits / fund_credits)")
+        if not getattr(arc, "enabled", False) or getattr(arc, "credits", None) is None:
+            raise RuntimeError("SolarCredits is not set up on this Pi (ARC_PRIVATE_KEY and ARC_CREDITS)")
         p = self.period(period)
         if len(p["period"]) != 10:
             raise ValueError("settle one day at a time (period=today or YYYY-MM-DD)")

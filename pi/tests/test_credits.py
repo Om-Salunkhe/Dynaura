@@ -131,6 +131,9 @@ class FakeHw:
 
 
 class FakeArc:
+    enabled = True
+    credits = object()
+
     def __init__(self):
         self.calls = []
 
@@ -181,6 +184,14 @@ def test_ledger_end_to_end_with_store_settle_and_arkiv():
     assert fund[1] == int(round((0.03 * 0.08 + 0.01 * 0.006) * 1e6)), fund
     assert chain["post_tx"] == "0xpost" and led.period("2026-11-07", now=m)["chain"]["fund_tx"] == "0xfund"
     assert led.settle(arc, "2026-11-07")["post_tx"] == "0xpost" and len(arc.calls) == 2, "settled once"
+
+    class NotSetUp(FakeArc):  # arc.py without a key or ARC_CREDITS: a clear error, not a crash
+        enabled, credits = False, None
+    try:
+        led.settle(NotSetUp(), "2026-11-08")
+        raise AssertionError("settle without SolarCredits must refuse")
+    except RuntimeError as e:
+        assert "not set up" in str(e)
     assert arkiv.posts[-1][0] == "/credit_period" and arkiv.posts[-1][1]["post_tx"] == "0xpost"
     assert led.post_new_trades() == 1 and led.post_new_trades() == 0, "each trade goes to Arkiv once"
     w = led.window(15, now=m + 120)
