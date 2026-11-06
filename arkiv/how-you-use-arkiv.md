@@ -36,7 +36,9 @@ wallet **created and still owns** (`.createdBy(w).ownedBy(w)`; see [Trust](#trus
 | **Admin trading** | `dynaura.sale` | `building = …` (and `buyer = <shop wallet>`) | `order_id` desc, 20 | A shop can find its own receipts by wallet | Yes |
 | **Verify payout** (a paid job's proof) | `dynaura.reading` | `building`, **`meter = panel`**, **`minute` between the job's `proof_from` and `proof_to`** | `minute` desc | Re-fetch the exact signed readings the escrow paid on and recompute its hash | Yes: Verify payout (`verifyJobPayout`) checks every signature in the window and the hash against the one on Arc |
 | **Bridge internals** | `daily_output`, `cleaning_job`, `heartbeat` | `day = …` / `case_id = …` (or `job_id`) | 1 | Find today's totals or a request's entity to patch it; recover the live heartbeat after a restart | Yes (bridge) |
-| **Keeper** (every 6 h) | maintenance, bill, sale, daily_output | **`$expiresAt <= head + 30 days`** | 20 | Extend records worth keeping before they lapse | Yes (bridge) |
+| **Bill: "your share of the sun"**, **Building** | `dynaura.credit_period` | `building = …` (and `day = …`) | `day` desc, 7 | One entity per day: each flat's share, use, unused sun and earnings next to an equal split | Read ready (`fetchCreditPeriods`); the Pi's `/api/credits` is the live view |
+| **Building: "where the sun went"** | `dynaura.trade` | `building = …` (and `mode = ai`) | `at` desc, 20 | Every 0G routing of the spare (neighbour, shop, grid) with its request id and reason; `no-ai` rows show when 0G was down and the spare went to the grid | Read ready (`fetchTrades`) |
+| **Keeper** (every 6 h) | maintenance, bill, sale, daily_output, credit_period | **`$expiresAt <= head + 30 days`** | 20 | Extend records worth keeping before they lapse | Yes (bridge) |
 
 The same queries run in our live smoke test
 ([`bridge/smoke.mjs`](../bridge/smoke.mjs), 36/36 checks), so what we test is what the screens show.
@@ -87,7 +89,8 @@ a few IPs, so the demo uses the public-app key.
 | Cleaning request | `fromHours(48)` when 0G flags it; extended to `atDate(deadline + 7 days)` on approval; +7 days on a dispute | A flag nobody approves disappears; a finished job leaves the board after the dispute window |
 | Reading | `fromDays(7)` | Minute-level household data is gone after a week |
 | Decision | `fromDays(30)` | The full episode stays on 0G Storage |
-| Maintenance, bill, sale, daily totals | `fromDays(180)`, then the keeper extends them to `max()` | They live while the building runs, and lapse if it stops paying |
+| 0G trade decision | `fromDays(30)`, sealed | The routing stays checkable for a month; the full prompt is in the 0G episode log |
+| Maintenance, bill, sale, daily totals, credit periods | `fromDays(180)`, then the keeper extends them to `max()` | They live while the building runs, and lapse if it stops paying |
 
 **Checked live:** a patch does **not** move the expiry. A `daily_output` and a `cleaning_job`,
 patched twice, kept their exact `$expiresAt` block. That's why the heartbeat's renewal is a patch
