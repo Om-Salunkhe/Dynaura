@@ -57,11 +57,11 @@ def _ask(jpeg: bytes | None, ctx_text: str) -> tuple[zg.ZGReply, str]:
                     {"role": "user", "content": [{"type": "text", "text": PHOTO.format(ctx=ctx_text)},
                                                  {"type": "image_url", "image_url": {"url": url}}]}]
         try:
-            return zg.chat(messages, max_tokens=800, temperature=0.1, model=config.ZG_VISION_MODEL), "vision"
+            return zg.chat(messages, max_tokens=2500, temperature=0.1, model=config.ZG_VISION_MODEL), "vision"
         except zg.ZGModelUnavailable as e:
             log.warning("0G vision model unavailable, checking from the meter only: %s", e)
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": METER_ONLY.format(ctx=ctx_text)}]
-    return zg.chat(messages, max_tokens=800, temperature=0.1), "meter-only"
+    return zg.chat(messages, max_tokens=2500, temperature=0.1), "meter-only"
 
 
 def check_dust(jpeg: bytes | None, ctx: dict, *, store=None, uploader=None, notify=None) -> dict:
