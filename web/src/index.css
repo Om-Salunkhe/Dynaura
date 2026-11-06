@@ -159,10 +159,10 @@ a {
 .glow {
   position: absolute;
   left: 50%;
-  top: -60px;
+  top: 50%;
   width: 1040px;
   height: 760px;
-  transform: translateX(-50%);
+  transform: translate(-50%, -54%);
   filter: blur(90px) saturate(130%);
   pointer-events: none;
   z-index: 0;
@@ -232,7 +232,6 @@ a {
   .glow {
     width: 640px;
     height: 520px;
-    top: -40px;
     filter: blur(64px) saturate(130%);
   }
   .glow > span {

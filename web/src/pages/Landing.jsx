@@ -40,7 +40,7 @@ export default function Landing() {
 
 function LandingNav() {
   return (
-    <div className="fixed inset-x-0 top-3 z-30 px-3 sm:px-6">
+    <div className="fixed inset-x-0 top-4 z-30 px-4 sm:top-6 sm:px-8">
       <header className="glass mx-auto flex h-[50px] max-w-[1120px] items-center gap-3 rounded-[16px] pl-4 pr-1.5">
         <span className="flex items-center gap-2.5">
           <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-gradient-to-br from-[#f7b955] to-[#e9860f] text-[#1a1206] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
@@ -72,14 +72,14 @@ function LandingNav() {
 
 function Hero() {
   return (
-    <section className="relative pb-6 pt-36 sm:pt-44">
+    <section className="relative flex min-h-[100svh] items-center justify-center px-0 pb-16 pt-28">
       <div className="glow" aria-hidden="true">
         <span className="g2" />
         <span className="g1" />
         <span className="g4" />
         <span className="g3" />
       </div>
-      <div className="relative z-10 mx-auto flex max-w-[860px] flex-col items-center px-6 text-center">
+      <div className="relative z-10 mx-auto flex w-full max-w-[860px] flex-col items-center px-6 text-center">
         <h1 className="m-0 text-[46px] font-light leading-[1.02] tracking-[-0.045em] sm:text-[80px]">
           One roof. Every flat.
           <br />
@@ -120,7 +120,7 @@ function LiveStrip() {
     { k: "Source", v: live.demo ? "Demo" : "Live", u: live.demo ? "Pi offline" : "from the Pi" },
   ];
   return (
-    <section id="live" className="mx-auto mt-20 max-w-[1120px] px-6 sm:mt-24">
+    <section id="live" className="mx-auto mt-4 max-w-[1120px] px-6">
       <div className="mb-4 flex items-center gap-2 text-[12px] text-white/45">
         <span className={`h-1.5 w-1.5 rounded-full ${live.demo ? "bg-white/30" : "animate-pulse bg-[#3ccf91]"}`} />
         {live.demo ? "Sample readings" : "Live from the roof"} · Sunrise Apartments
