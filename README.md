@@ -15,7 +15,7 @@ Built from scratch at ETHGlobal Mumbai (5–7 Nov 2026) by Om Salunkhe, Devang G
 | Arc Studio project | [studio.arc.io/app/63db67fa…](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852) |
 | Arc contracts | [CleaningEscrow](https://explorer.testnet.arc.io/address/0xf215116c72784e7490ddf3166dcb53b84855b8b9) · [SolarBilling](https://explorer.testnet.arc.io/address/0x5bd5aecc43968994e90f33df7177fb384401902b) · [ShopTrade](https://explorer.testnet.arc.io/address/0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47) (Arc testnet, chain 5042002; [`deployments.json`](contracts/deployments.json)) |
 | Arkiv building wallet | **TBD** (Rabdi testnet, chain 7794095) |
-| Prize tracks | 0G: Physical AI · Arc: Best Smart Contracts with Advanced Stablecoin Logic, In Arc Studio · Arkiv: Build on Arkiv (from scratch) |
+| Prize tracks | 0G: Build with 0G PC · Arc: Best Smart Contracts with Advanced Stablecoin Logic, In Arc Studio · Arkiv: Build on Arkiv (from scratch) |
 
 ---
 
@@ -84,12 +84,13 @@ The same code runs without the board in **SIM mode** (`DYNAURA_HW=sim`), with a 
 
 ## 0G: the brain
 
-*Track: Physical AI: Agents with a Body (and the real-hardware prize).*
+*Track: Build with 0G PC. The AI planner on 0G is the product: without it the building has no plan.*
 
 - **A 0G call in the decision loop.** [`pi/planner.py`](pi/planner.py) asks the 0G Compute Router (OpenAI-compatible, `verify_tee: true`) for the daily plan. The Pi validates the JSON, and the relays and pump act on it ([`pi/jobs.py`](pi/jobs.py)). Ask Dyna ([`pi/dyna.py`](pi/dyna.py)) answers residents on 0G too.
 - **An episode log on 0G Storage with a request ID per decision.** [`pi/og_storage.py`](pi/og_storage.py) uploads each decision's full log (input, raw answer, request ID, model, TEE fields) and keeps its root. The root is also written to the decision's Arkiv entity.
 - **A safe stop with no faked decision.** [`pi/brain.py`](pi/brain.py): if 0G or the forecast fails, the plan is cleared, every flat goes to grid, the pump stops, and a `no-ai` decision is logged and uploaded like any other.
-- **Real hardware**, demoed live at the 0G booth.
+- **A reason to come back tomorrow.** Every evening Dyna plans the next day from the forecast and the last 7 days on Arkiv, and every resident sees their own tips on Home.
+- **Real hardware**: a metered cardboard building with relays, shown live.
 
 **What breaks if 0G is removed:** the building has no plan. Every flat stays on grid, no shared job moves into the sun, and no money is locked for a cleaner, because the Pi refuses to act on a decision it can't prove.
 
