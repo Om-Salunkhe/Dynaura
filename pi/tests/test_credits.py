@@ -218,6 +218,48 @@ def test_window_for_the_trader_carries_shop_demand():
     assert led.window(5, now=m + 3600)["spare_wh"] == 0, "an hour later: no readings, no spare"
 
 
+def test_settle_through_dy_arcs_credits_settle_and_status():
+    day0 = int(time.mktime(time.strptime("2026-11-07", "%Y-%m-%d")))
+    m = day0 + 12 * 3600
+    rows = [{"minute": m, "meter": "panel", "wh": 0.09, "solar_wh": 0.09, "sig": "s"},
+            {"minute": m, "meter": "A", "wh": 0.01, "solar_wh": 0.01, "sig": "s"},
+            {"minute": m, "meter": "B", "wh": 0.05, "solar_wh": 0.05, "sig": "s"},
+            {"minute": m, "meter": "C", "wh": 0.03, "solar_wh": 0.03, "sig": "s"}]
+
+    class Arc2:
+        enabled, credits = True, object()
+
+        def __init__(self):
+            self.settles, self.status_calls = [], 0
+
+        def credits_settle(self, key, flats, rate, fund, rhash):
+            self.settles.append((key, flats, rate, fund, rhash))
+            return {"period_id": "0xpid", "key": key, "posted": True, "post_tx": "0xpost", "fund_tx": "0xfund", "claims": {"A": None}}
+
+        def credits_status(self, key):
+            self.status_calls += 1
+            return {"period_id": "0xpid", "posted": True, "claims": {"A": "0xclaimA"}, "post_tx": None}
+
+    arc = Arc2()
+    led = credits.Ledger(FakeStore(rows), FakeHw(5.4), path=str(Path(tempfile.mkdtemp()) / "c.db"), arc=arc)
+    for i in range(13):  # 5.4 W for a minute = 0.09 Wh: shares 0.03 each
+        led.sample(5, now=m + i * 5)
+    assert led.period("2026-11-07", now=m)["chain"] is None, "not settled: no chain"
+    chain = led.settle(arc, "2026-11-07")
+    key, flats, rate, fund, rhash = arc.settles[0]
+    assert key == "2026-11-07" and set(flats) == {"A", "B", "C"} and rate == 0.013 and rhash.startswith("0x")
+    close(flats["A"]["unused_wh"], 0.02)
+    close(flats["B"]["over_wh"], 0.02)
+    p = led.period("2026-11-07", now=m)
+    close(fund, p["pool"]["revenue_usdc"] - 0.02 * 0.013)  # shop + grid only: B pays its part with payIn
+    assert chain["post_tx"] == "0xpost" and p["chain"]["claims"]["A"] == "0xclaimA", "claims refresh from the chain"
+    assert p["chain"]["post_tx"] == "0xpost", "a None from status doesn't hide what settle saved"
+    led.period("2026-11-07", now=m)
+    assert arc.status_calls == 1, "status is cached for 20 s"
+    led.settle(arc, "2026-11")  # a month works too (dy-arc's keys)
+    assert arc.settles[1][0] == "2026-11"
+
+
 def test_real_board_available_sun_never_hammers_a_dead_forecast():
     import config
     calls = []

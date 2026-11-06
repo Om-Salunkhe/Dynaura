@@ -92,7 +92,7 @@ async def lifespan(_: FastAPI):
     App.scheduler = PlanScheduler(App.brain)
     App.scheduler.start()
     if credits.ENABLED:  # fair share + solar credits (dy-arkiv); off = no change
-        App.credits = credits.Ledger(App.store, App.hw, App.arkiv, sales=App.sales)
+        App.credits = credits.Ledger(App.store, App.hw, App.arkiv, sales=App.sales, arc=App.arc)
         App.credits.start()
         try:  # the 0G trader (dy-0g) routes each window's spare; without trader.py, no trades
             import trader
@@ -439,7 +439,8 @@ def trade_credits(body: dict | None = None, x_admin_key: str | None = Header(def
 
 @app.post("/api/admin/credits/settle")
 def settle_credits(body: dict | None = None, x_admin_key: str | None = Header(default=None)):
-    """Post a day to SolarCredits on Arc and fund it with the shop + grid revenue."""
+    """Post a period (body {period}: today, YYYY-MM-DD or YYYY-MM) to SolarCredits on Arc and fund it
+    with the shop + grid revenue. Safe to call twice."""
     require_admin(x_admin_key)
     if not App.credits:
         raise HTTPException(status_code=404, detail="credits are off (CREDITS_ENABLED=false)")
