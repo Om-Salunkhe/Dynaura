@@ -30,12 +30,16 @@ below filters by building id, so the two never mix.
 
 ## Try it: no SDK needed
 
+```bash
+ARKIV_KEY=""   # optional: a free key from https://hub.arkiv.network/access-keys (see below)
+```
+
 **The building's latest AI decisions.** Each comes with its 0G request ID and 0G Storage root. This
 is the same query the app's History screen runs, scoped to records the building wallet **created
 and still owns**:
 
 ```bash
-curl -s https://rpc.rabdi.db-chain.testnet.arkiv.network \
+curl -s "https://rpc.rabdi.db-chain.testnet.arkiv.network/${ARKIV_KEY}" \
   -H 'Content-Type: application/json' --data @- <<'EOF'
 {"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":[
   "arkiv.schema = str('dynaura.decision') AND building = str('sunrise-apartments') AND $creator = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) AND $owner = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) ORDER BY decision_id:u64 DESC",
@@ -47,7 +51,7 @@ EOF
 key. These are what a cleaning payout's proof hash is computed from:
 
 ```bash
-curl -s https://rpc.rabdi.db-chain.testnet.arkiv.network \
+curl -s "https://rpc.rabdi.db-chain.testnet.arkiv.network/${ARKIV_KEY}" \
   -H 'Content-Type: application/json' --data @- <<'EOF'
 {"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":[
   "arkiv.schema = str('dynaura.reading') AND building = str('sunrise-apartments') AND meter = str('panel') AND $creator = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) AND $owner = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) ORDER BY minute:u64 DESC",
@@ -59,7 +63,7 @@ EOF
 stopped renewing the heartbeat, so Arkiv let it expire.
 
 ```bash
-curl -s https://rpc.rabdi.db-chain.testnet.arkiv.network \
+curl -s "https://rpc.rabdi.db-chain.testnet.arkiv.network/${ARKIV_KEY}" \
   -H 'Content-Type: application/json' --data @- <<'EOF'
 {"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":[
   "arkiv.schema = str('dynaura.heartbeat') AND building = str('sunrise-apartments') AND $creator = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) AND $owner = addr(0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) ORDER BY updated:u64 DESC",
@@ -73,10 +77,10 @@ EOF
 and a decision. That decision is the no-AI safe stop the Pi logged while the 0G Router was down.
 The heartbeat query was empty because the Pi was switched off for the night.
 
-**If you get `ANON_COST_LIMITED` (429):** the public endpoint's anonymous budget is used up (see
-[friction #9](friction.md)). Add a free key from
-[hub.arkiv.network/access-keys](https://hub.arkiv.network/access-keys) as the last part of the URL:
-`https://rpc.rabdi.db-chain.testnet.arkiv.network/<your-key>`.
+**If you get `{"error":"ANON_COST_LIMITED",…}` (429):** without a key, the queries use the public
+endpoint's small free budget, and it's spent (see [friction #9](friction.md)). Create a free key at
+[hub.arkiv.network/access-keys](https://hub.arkiv.network/access-keys) and set `ARKIV_KEY` to it.
+The key is just the last part of the URL, `https://rpc.rabdi.db-chain.testnet.arkiv.network/<your-key>`.
 
 ## Run it yourself
 
