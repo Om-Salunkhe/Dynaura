@@ -60,6 +60,7 @@ class ArkivQueue:
     # ---- worker ----------------------------------------------------------
     def _send(self, path: str, body: dict) -> dict:
         decision_id = body.pop("_decision_id", None)
+        on_reply = body.pop("_on_reply", None)  # e.g. keep the Arkiv key of a cleaning job
         if path == "/decision" and decision_id:
             # Read at send time: the 0G Storage root may have come in while this waited in the queue,
             # and a decision already on Arkiv gets the root patched in instead of a second entity.
@@ -72,6 +73,11 @@ class ArkivQueue:
         out = r.json()
         if decision_id and out.get("key"):
             self.store.set_decision(decision_id, arkiv_key=out["key"])
+        if on_reply:
+            try:
+                on_reply(out)
+            except Exception:
+                log.exception("Arkiv reply callback failed")
         return out
 
     def _worker(self) -> None:

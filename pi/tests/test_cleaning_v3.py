@@ -212,13 +212,20 @@ def main():
     w._last_poll = 0
     w.step()
     check("0G Storage root linked into the escrow once", [c for c in arc.calls if c[0] == "link"] == [("link", 1, "0x" + "ab" * 32)])
+    for m in (1_800_000_000, 1_800_000_060, 1_800_000_120):  # the signed 1-minute readings the proof covers
+        w.store.add_summary({"minute": m, "meter": "panel", "avg_w": 4.6, "wh": 0.08, "solar_wh": 0.08,
+                             "samples": 60, "sig": "0xsig"})
     minute(w, 96)
     check("panel back at 96%: paid", w.job is None and w.history[0]["state"] == "paid", w.status)
     rel = [c for c in arc.calls if c[0] == "release"][0]
     paid = w.history[0]
     check("release carries the meter proof", rel[2] == 96 and len(rel[3]) == 32
           and paid["arc"]["proof_hash"] == "0x" + rel[3].hex(), (rel, paid["arc"]))
+    check("proof window = the minutes the hash covers", paid["arc"]["proof_window"] == [1_800_000_000, 1_800_000_120],
+          paid["arc"])
     check("paid sent to Arkiv with the proof", w.arkiv[-1]["state"] == "paid" and w.arkiv[-1]["arc"]["release_tx"])
+    w.set_arkiv_key(paid["id"], "0xkey")
+    check("the bridge's key is kept as arkiv_key", w.history[0]["arkiv_key"] == "0xkey")
 
     print("Pawan's rule: clean enough AND clearly better")
     w, arc, _ = make(Dust())

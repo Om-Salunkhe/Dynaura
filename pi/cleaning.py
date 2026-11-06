@@ -200,7 +200,7 @@ class CleaningWatch:
             "fee_usdc": config.CLEAN_FEE_USDC, "deadline": None, "created_at": now, "updated_at": now,
             "dusty_pct": lvl, "after_pct": None, "done_at": None, "cleaner": None, "resolution": None,
             "og": og, "arc": {"job_id": None, "open_tx": None, "release_tx": None, "refund_tx": None,
-                              "proof_hash": None, "link_tx": None},
+                              "proof_hash": None, "proof_window": None, "link_tx": None},
             "arkiv_key": None,
         }
         cov = og.get("coverage_pct")
@@ -308,9 +308,9 @@ class CleaningWatch:
 
     # ---- 5. money moves only from what the meter measured ---------------------
     def _release(self, job: dict, after: float) -> None:
-        proof = self._proof()
+        proof, window = self._proof()
         tx = self.arc.release_cleaning(job["arc"]["job_id"], after, proof)
-        job["arc"].update(release_tx=tx, proof_hash="0x" + proof.hex())
+        job["arc"].update(release_tx=tx, proof_hash="0x" + proof.hex(), proof_window=window)
         job["after_pct"] = after
         self._finish(job, "paid", f"Panel back at {after:.0f}% (was {job.get('dusty_pct') or 0:.0f}%): "
                                   f"paid {job['fee_usdc']:.2f} USDC to the cleaner")
@@ -340,11 +340,13 @@ class CleaningWatch:
             else:
                 self._finish(job, "refunded", f"Escrow #{job['arc']['job_id']} was {cs} on Arc")
 
-    def _proof(self) -> bytes:
-        """sha256 of the last 3 signed 1-minute panel summaries: anyone can re-check them on Arkiv."""
+    def _proof(self) -> tuple[bytes, list[int] | None]:
+        """sha256 of the last 3 signed 1-minute panel summaries, and the minutes they cover
+        ([from_minute, to_minute]): anyone can fetch those readings from Arkiv and re-check the hash."""
         rows = self.store.summaries(meter="panel", limit=3)
         blob = json.dumps([(r["minute"], r["avg_w"], r.get("sig")) for r in rows], sort_keys=True)
-        return hashlib.sha256(blob.encode()).digest()
+        window = [min(r["minute"] for r in rows), max(r["minute"] for r in rows)] if rows else None
+        return hashlib.sha256(blob.encode()).digest(), window
 
     # ---- 0G Storage root of the dust check -------------------------------------
     def _refresh_root(self, job: dict) -> str | None:
@@ -370,6 +372,14 @@ class CleaningWatch:
         except Exception as e:
             job["link_tries"] = job.get("link_tries", 0) + 1
             log.warning("linkEpisode failed: %s", str(e)[:200])
+
+    def set_arkiv_key(self, job_id: int, key: str | None) -> None:
+        """The bridge's reply: keep the Arkiv entity key on the request (and in history)."""
+        if not key:
+            return
+        for j in ([self.job] if self.job else []) + self.history:
+            if j.get("id") == job_id:
+                j["arkiv_key"] = key
 
     # ---- bookkeeping ------------------------------------------------------------
     def _need(self, state: str) -> dict:

@@ -115,20 +115,12 @@ def dust_camera():
 
 
 def on_cleaning_job(job: dict) -> None:
-    """Every step of a cleaning request goes to Arkiv (one entity per request, patched as it moves).
-    A paid job also becomes a maintenance record."""
+    """Every step of a cleaning request goes to Arkiv as the job dict itself (one entity per request,
+    patched as it moves; the bridge replies with its key). A paid job also becomes a maintenance record."""
     og, arc = job.get("og") or {}, job.get("arc") or {}
-    deadline = job.get("deadline") or int((job.get("created_at") or 0) + 24 * 3600)
-    App.arkiv.post("/cleaning_job", {
-        "job_id": job["id"], "arc_job_id": arc.get("job_id"), "status": job["state"],
-        "fee_usdc": job.get("fee_usdc") or 0, "deadline": deadline,
-        "output_before": job.get("dusty_pct") or 0, "dusty_pct": job.get("dusty_pct"),
-        "after_pct": job.get("after_pct"), "output_after": job.get("after_pct"),
-        "og_request_id": og.get("request_id"), "og_storage_root": og.get("storage_root"),
-        "proof_hash": arc.get("proof_hash"), "open_tx": arc.get("open_tx"),
-        "release_tx": arc.get("release_tx"), "refund_tx": arc.get("refund_tx"),
-        "arc_tx": arc.get("release_tx") or arc.get("refund_tx") or arc.get("open_tx"),
-    })
+    body = {k: v for k, v in job.items() if k not in ("status", "job_id")}  # drop the aliases for older screens
+    body["_on_reply"] = lambda out: App.cleaning.set_arkiv_key(job["id"], out.get("key"))
+    App.arkiv.post("/cleaning_job", body)
     if job["state"] == "paid":
         App.arkiv.post("/maintenance", {
             "title": "Panel cleaned",
