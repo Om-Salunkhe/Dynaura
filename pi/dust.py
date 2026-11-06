@@ -64,8 +64,9 @@ def _ask(jpeg: bytes | None, ctx_text: str) -> tuple[zg.ZGReply, str]:
     return zg.chat(messages, max_tokens=800, temperature=0.1), "meter-only"
 
 
-def check_dust(jpeg: bytes | None, ctx: dict, *, store, uploader=None, notify=None) -> dict:
-    """Ask 0G about the dust, record the decision and its episode. Raises zg.ZGUnavailable (no verdict)."""
+def check_dust(jpeg: bytes | None, ctx: dict, *, store=None, uploader=None, notify=None) -> dict:
+    """Ask 0G about the dust, record the decision and its episode. Raises zg.ZGUnavailable (no verdict).
+    Without store= it only returns 0G's verdict (decision_id None): the caller records it."""
     ctx_text = json.dumps(ctx, default=str)
     frame_sha = hashlib.sha256(jpeg).hexdigest() if jpeg else None
     reply = None
@@ -85,6 +86,10 @@ def check_dust(jpeg: bytes | None, ctx: dict, *, store, uploader=None, notify=No
     summary = (f"0G: panel dirty{f' (~{pct:.0f}% covered)' if pct is not None else ''}: {verdict['reason']}"
                if verdict["dirty"] else f"0G: panel clean: {verdict['reason']}")
     output = {**verdict, "input": kind, "frame_sha256": frame_sha, "ctx": ctx}
+    if store is None:
+        log.warning("dust check without store=: verdict returned unrecorded (0G %s)", reply.request_id)
+        return {**verdict, "request_id": reply.request_id, "tee": reply.tee_verified, "decision_id": None,
+                "input": kind, "model": reply.model, "frame_sha256": frame_sha}
     did = store.add_decision("dust", "ai", summary[:200], output, request_id=reply.request_id,
                              model=reply.model, tee=reply.tee, input=ctx_text)
     extra = {"raw_answer": reply.text, "input": kind}

@@ -143,6 +143,12 @@ def main():
     assert did == r["decision_id"] and extra["frame_jpeg_b64"] and extra["input"] == "vision"
     assert notified == [r["decision_id"]]
 
+    # 1b. Called without store=: still 0G's verdict, nothing recorded, no decision_id
+    n = len(store.decisions(limit=100))
+    r = zg.check_dust(jpeg, ctx)
+    assert r["dirty"] is True and r["decision_id"] is None and r["request_id"], r
+    assert len(store.decisions(limit=100)) == n
+
     # 2. Vision model not on the Router: falls back to the text model with the meter readings
     config.ZG_VISION_MODEL = "vision-missing"
     r = dust.check_dust(jpeg, ctx, store=store, uploader=up)
