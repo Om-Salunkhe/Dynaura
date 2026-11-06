@@ -52,19 +52,17 @@ TRADE_THINKING = os.getenv("TRADE_THINKING", "false").lower() == "true"
 NO_THINKING = {"chat_template_kwargs": {"enable_thinking": False}}
 
 SYSTEM = """You are Dyna, the market maker for the shared rooftop solar panel of a small apartment building with flats A, B and C.
-Each flat has an equal fair share of the sun. What a flat leaves unused goes into a spare pool. You sell the pool,
+Each flat has an equal fair share of the sun. What a flat leaves unused goes into a spare pool. The pool is sold,
 and the money goes back to the flats that saved, in proportion to how much each left unused.
-Decide who buys the spare in this window, and the neighbour price.
-Buyers:
-- a neighbour flat that used more than its share. It already drew that sun: a fair price is better for it than the grid import rate.
-- the nearby shop, up to its order, at the shop price.
-- the grid, at the feed-in (export) rate, for anything left.
-Rules:
-- Never route more than the spare in total. A neighbour gets at most what it used over its share. The shop gets at most its order.
-- The neighbour price must be between the export rate and the import rate. Savers should earn more than feed-in, and the neighbour should pay less than the grid.
-- Earn the savers as much as you can while staying fair to the neighbours.
+Neighbours who used more than their share already drew that sun, so they are served first from the pool, by rule.
+You decide two things:
+1. The neighbour price, between the feed-in (export) rate and the grid import rate. When the spare is scarce
+   (neighbours need most of it), price toward the import rate. When it is plentiful, price toward the export rate.
+   A fair guide: export + (import - export) x the share of the pool the neighbours take.
+2. How the rest of the pool (after the neighbours) is split: the shop takes up to its order at the shop price,
+   and the grid takes anything left at the feed-in rate.
 Answer with ONE JSON object only, no other text:
-{"routes": [{"to": "A|B|C|shop|grid", "wh": <number>}], "neighbor_price": <USDC per kWh>, "reason": "one short sentence"}"""
+{"neighbor_price": <USDC per kWh>, "shop_wh": <number>, "reason": "one short sentence"}"""
 
 
 def current_prices() -> dict:
@@ -97,10 +95,13 @@ def _buyer(to) -> str | None:
 
 def validate(answer: dict, spare_wh: float, needs: dict, shop_order_wh: float, px: dict) -> tuple[list, float, list]:
     """0G's answer -> (routes, neighbour price, notes). Routes always add up to spare_wh exactly.
-    Raises zg.ZGUnavailable if there is no routing to check at all."""
-    routes_in = answer.get("routes") if isinstance(answer, dict) else None
-    if not isinstance(routes_in, list):
-        raise zg.ZGUnavailable(f"0G trade answer has no routes list: {str(answer)[:120]}")
+
+    Neighbours who used more than their share are served first, by rule (pro rata if they need more than
+    the spare). 0G sets the neighbour price (kept inside [export, import]) and how much of the rest the
+    shop takes (at most its order); the grid gets what is left. Raises zg.ZGUnavailable if the answer
+    has neither a price nor a shop amount nor routes."""
+    if not isinstance(answer, dict) or not any(k in answer for k in ("neighbor_price", "shop_wh", "routes")):
+        raise zg.ZGUnavailable(f"0G trade answer has no price, shop amount or routes: {str(answer)[:120]}")
     notes = []
     lo, hi = min(px["export"], px["import"]), max(px["export"], px["import"])
     price = _num(answer.get("neighbor_price"))
@@ -113,32 +114,34 @@ def validate(answer: dict, spare_wh: float, needs: dict, shop_order_wh: float, p
         price = clamped
     price = round(price, 6)
 
-    caps = {f: max(0.0, _num(needs.get(f)) or 0.0) for f in FLATS}
-    caps["shop"] = max(0.0, _num(shop_order_wh) or 0.0)
-    got = {k: 0.0 for k in caps}
-    left = spare_wh
-    for r in routes_in:
-        if not isinstance(r, dict):
-            continue
-        to, wh = _buyer(r.get("to")), _num(r.get("wh"))
-        if to == "grid" or wh is None or wh <= 0:
-            continue  # the grid takes whatever is left, below
-        if to is None:
-            notes.append(f"dropped route to unknown buyer {str(r.get('to'))[:20]!r}")
-            continue
-        if caps[to] <= 0:
-            notes.append(f"dropped {wh:g} Wh to {to}: " + ("no shop order" if to == "shop" else "it did not use more than its share"))
-            continue
-        give = min(wh, caps[to] - got[to], left)
-        if give < wh - 1e-9:
-            notes.append(f"{to}: {wh:g} Wh asked, {give:g} Wh allowed")
-        if give > 0:
-            got[to] += give
-            left -= give
+    # 1. neighbours first: their over-use was physically drawn from the pool
+    over = {f: max(0.0, _num(needs.get(f)) or 0.0) for f in FLATS}
+    need = sum(over.values())
+    scale = 1.0 if need <= spare_wh else spare_wh / need
+    if scale < 1:
+        notes.append(f"neighbours need {need:g} Wh, spare is {spare_wh:g} Wh: shared pro rata")
+    routes = [{"to": f, "wh": round(over[f] * scale, 3), "price": price} for f in FLATS if over[f] > 0]
+    left = round(spare_wh - sum(r["wh"] for r in routes), 3)
+    if left < 0:  # rounding
+        routes[-1]["wh"] = round(routes[-1]["wh"] + left, 3)
+        left = 0.0
 
-    routes = [{"to": f, "wh": round(got[f], 3), "price": price} for f in FLATS if got[f] > 0]
-    if got["shop"] > 0:
-        routes.append({"to": "shop", "wh": round(got["shop"], 3), "price": px["shop"]})
+    # 2. the shop, as 0G decides (older answers may give it as a route)
+    shop = _num(answer.get("shop_wh"))
+    if shop is None and isinstance(answer.get("routes"), list):
+        shop = sum(_num(r.get("wh")) or 0.0 for r in answer["routes"]
+                   if isinstance(r, dict) and _buyer(r.get("to")) == "shop") or None
+    if shop is None:
+        shop = 0.0
+        notes.append("no shop amount from 0G: the rest goes to the grid")
+    cap = min(max(0.0, _num(shop_order_wh) or 0.0), left)
+    give = round(min(max(0.0, shop), cap), 3)
+    if give < shop - 1e-9:
+        notes.append(f"shop: {shop:g} Wh asked, {give:g} Wh allowed")
+    if give > 0:
+        routes.append({"to": "shop", "wh": give, "price": px["shop"]})
+
+    # 3. the grid takes the rest
     grid = round(spare_wh - sum(r["wh"] for r in routes), 3)
     if grid > 0:
         routes.append({"to": "grid", "wh": grid, "price": px["export"]})
@@ -172,16 +175,20 @@ def from_ledger(snap: dict) -> dict:
 
 
 def build_prompt(spare_wh: float, needs: dict, shop_order_wh: float, px: dict, window) -> str:
-    over = ", ".join(f"Flat {f} used {w:g} Wh over its share" for f, w in needs.items() if (_num(w) or 0) > 0)
+    over = {f: _num(w) or 0.0 for f, w in needs.items() if (_num(w) or 0) > 0}
+    need = sum(over.values())
+    to_neighbours = min(need, spare_wh)
     lo, hi = min(px["export"], px["import"]), max(px["export"], px["import"])
+    who = ", ".join(f"Flat {f} used {w:g} Wh over its share" for f, w in over.items())
     return (
-        f"Window {_window_text(window)}. Spare sun to sell: {spare_wh:g} Wh "
+        f"Window {_window_text(window)}. Spare sun in the pool: {spare_wh:g} Wh "
         f"(1 Wh here = {config.BILL_SCALE / 1000:g} kWh in the real building).\n"
-        f"Neighbours who need more: {over or 'none'}.\n"
-        f"Shop order: {shop_order_wh:g} Wh at {px['shop']} USDC/kWh.\n"
+        f"Neighbours served first: {who or 'none'}; {to_neighbours:g} Wh of the pool "
+        f"({100 * to_neighbours / spare_wh:.0f}%) goes to them.\n"
+        f"Left after the neighbours: {spare_wh - to_neighbours:g} Wh. Shop order: {shop_order_wh:g} Wh at {px['shop']} USDC/kWh.\n"
         f"Grid import {px['import']} USDC/kWh, feed-in {px['export']} USDC/kWh. "
         f"Neighbour price band [{lo}, {hi}], midpoint {px['neighbor']}.\n"
-        "Route the spare."
+        "Set the neighbour price and the shop amount."
     )
 
 

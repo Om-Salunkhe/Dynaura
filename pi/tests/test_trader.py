@@ -124,20 +124,36 @@ def test_trader(tmp):
     assert "chat_template_kwargs" not in ROUTER["seen"][-1]
     ROUTER["reject_no_think"] = False
 
-    # 2. 0G over-routes: the Pi caps every buyer, drops flats that don't need more, clamps the price,
-    #    and whatever is left goes to the grid. Routes always add up to the spare exactly.
+    # 2. Neighbours first, by rule: 0G's own flat routes don't change that. 0G's shop amount is capped
+    #    at the order and the rest of the pool; its price is clamped into the band; the grid gets the rest.
     answer([{"to": "Flat B", "wh": 25}, {"to": "C", "wh": 5}, {"to": "shop", "wh": 50},
             {"to": "moon", "wh": 3}], price=0.5)
     r = trader.decide_routes(40, {"B": 10}, 20, **kw)
     assert by(r["routes"]) == {"B": (10, 0.02), "shop": (20, 0.08), "grid": (10, 0.006)}, r["routes"]
     assert total(r["routes"]) == 40 and r["neighbor_price"] == 0.02
     notes = " | ".join(r["notes"])
-    assert "outside" in notes and "C" in notes and "moon" in notes and "B: 25 Wh asked, 10 Wh allowed" in notes, notes
+    assert "outside" in notes and "shop: 50 Wh asked, 20 Wh allowed" in notes, notes
 
-    # 3. More demand than spare: 0G's order of preference is kept, never more than the spare.
-    answer([{"to": "shop", "wh": 20}, {"to": "B", "wh": 10}])
+    # 3. Demand > spare (12 spare, B 10 over, shop wants 20): B 10 first, the shop gets the 2 left.
+    #    0G's preference for the shop can't take B's sun: B already drew it.
+    ROUTER["answer"] = json.dumps({"neighbor_price": 0.019, "shop_wh": 12, "reason": "Spare is scarce."})
     r = trader.decide_routes(12, {"B": 10}, 20, **kw)
-    assert by(r["routes"]) == {"shop": (12, 0.08)} and total(r["routes"]) == 12, r["routes"]
+    assert by(r["routes"]) == {"B": (10, 0.019), "shop": (2, 0.08)} and total(r["routes"]) == 12, r["routes"]
+    assert "Neighbours served first: Flat B used 10 Wh over its share; 10 Wh of the pool (83%)" in \
+        ROUTER["seen"][-1]["messages"][-1]["content"]
+
+    # 3b. Two neighbours need more than the spare: shared pro rata, nothing for the shop or the grid.
+    ROUTER["answer"] = json.dumps({"neighbor_price": 0.02, "shop_wh": 5, "reason": "All to neighbours."})
+    r = trader.decide_routes(9, {"B": 10, "C": 5}, 20, **kw)
+    assert by(r["routes"]) == {"B": (6, 0.02), "C": (3, 0.02)}, r["routes"]
+    assert "pro rata" in " | ".join(r["notes"])
+
+    # 3c. The answer format the prompt asks for; no shop amount -> the rest to the grid (nothing invented)
+    ROUTER["answer"] = json.dumps({"neighbor_price": 0.009, "reason": "Plenty of spare."})
+    r = trader.decide_routes(40, {"B": 5}, 20, **kw)
+    assert by(r["routes"]) == {"B": (5, 0.009), "grid": (35, 0.006)}, r["routes"]
+    ROUTER["answer"] = json.dumps({"reason": "no idea"})
+    assert trader.decide_routes(40, {"B": 5}, 20, **kw)["mode"] == "no-ai"
 
     # 4. No routes in the answer: no AI trade, the spare goes to the grid, the 0G call is kept on record.
     ROUTER["answer"] = "I would sell it to the neighbours, probably."

@@ -47,3 +47,5 @@ Found by reading the Router's public `/models` list rather than assuming: 0G's o
 | `pi/planner.py` | With credits on, a "spare sun forecast" line in the prompt and a `spare_plan` key in the plan; with credits off the plan is unchanged | Same test file |
 
 Measured live on `router-api.0g.ai` (Sat ~01:00): a trade took 82.6 s with the model's thinking on (1,949 reasoning tokens). With `chat_template_kwargs: {enable_thinking: false}` it took 5.6-11.3 s with 0 reasoning tokens and the same routes on the test cases. The `/no_think` prompt suffix did not turn thinking off (44-53 s). Trades use thinking off; the plan and the dust check keep it.
+
+Policy (manager, Sat ~01:20): neighbours who drew more than their share are served first by the Pi's rule (pro rata if they need more than the spare). 0G sets the neighbour price by scarcity and how the rest splits between the shop and the grid. Live check with thinking off (4.2-4.4 s): 12 Wh spare with B 10 over and a 20 Wh shop order gave B 10 at 0.019 and the shop 2; 60 Wh spare with B 2 over gave 0.0066 (near feed-in); Pawan's example kept the 0.013 midpoint.
