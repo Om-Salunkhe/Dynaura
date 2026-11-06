@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { ConnectionDialog, ConnectionPill, MixedContentBanner } from "../components/Connection.jsx";
 import HeroSteps from "../components/HeroSteps.jsx";
 import Icon from "../components/Icon.jsx";
+import Logo from "../components/Logo.jsx";
 import OfflineBanner, { SafeStopBanner, isOffline } from "../components/OfflineBanner.jsx";
 import Proof from "../components/Proof.jsx";
 import { admin as demoAdmin, plan as demoPlan } from "../data/demo.js";
@@ -97,9 +98,7 @@ export default function Demo() {
     <div className="flex min-h-screen flex-col gap-4 px-[3vw] py-[2vw] 2xl:gap-6">
       <header className="flex items-center justify-between gap-6">
         <Link to="/home" className="flex items-center gap-4" title="Back to the app">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#111418] text-sun">
-            <Icon name="sun" size={30} />
-          </span>
+          <Logo size={52} />
           <span className="flex flex-col">
             <span className="text-3xl font-medium tracking-[-0.5px]">Dynaura</span>
             <span className="hidden text-lg text-muted 2xl:block">Sunrise Apartments · 0G decides, Arc pays, Arkiv remembers</span>

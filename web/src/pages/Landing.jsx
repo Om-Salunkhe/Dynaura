@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
+import Logo from "../components/Logo.jsx";
 import { useLive } from "../lib/api.js";
 
 const PILLARS = [
@@ -43,9 +44,7 @@ function LandingNav() {
     <div className="fixed inset-x-0 top-4 z-30 px-4 sm:top-6 sm:px-8">
       <header className="glass mx-auto flex h-[50px] max-w-[1120px] items-center gap-3 rounded-[16px] pl-4 pr-1.5">
         <span className="flex items-center gap-2.5">
-          <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-gradient-to-br from-[#f7b955] to-[#e9860f] text-[#1a1206] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
-            <Icon name="sun" size={16} stroke={2.2} />
-          </span>
+          <Logo size={26} />
           <span className="text-[15.5px] font-medium tracking-[-0.2px]">Dynaura</span>
         </span>
         <nav className="ml-auto hidden items-center gap-1 text-[13px] text-white/60 md:flex">

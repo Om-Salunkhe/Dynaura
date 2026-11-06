@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useRole } from "../lib/role.jsx";
 import AccountButton from "./AccountButton.jsx";
 import Icon from "./Icon.jsx";
+import Logo from "./Logo.jsx";
 
 /** Desktop navigation (1024px and wider): a floating glass bar. Phones use BottomNav. */
 export default function TopNav({ items }) {
@@ -15,9 +16,7 @@ export default function TopNav({ items }) {
     <div className="sticky top-3 z-30 hidden px-8 lg:block">
       <header className="glass mx-auto flex h-[50px] max-w-[1280px] items-center gap-4 rounded-[16px] pl-4 pr-1.5">
         <div className="flex flex-none items-center gap-2.5 pr-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-gradient-to-br from-[#f7b955] to-[#e9860f] text-[#1a1206] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
-            <Icon name="sun" size={16} stroke={2.2} />
-          </span>
+          <Logo size={26} />
           <span className="text-[15.5px] font-medium tracking-[-0.2px]">Dynaura</span>
         </div>
         <nav aria-label="Main" className="flex flex-1 items-center justify-center gap-1">
