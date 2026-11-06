@@ -39,7 +39,17 @@ export async function postJSON(path, body, { admin = false } = {}) {
     openConnection("The Pi refused the admin key. Check it and try again.");
     throw new Error("Admin key refused");
   }
-  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
+  if (!res.ok) {
+    // say what the Pi said ("0G unreachable", "no flagged job"…), not just the status code
+    let why = "";
+    try {
+      const body = await res.json();
+      why = body?.error || body?.detail || "";
+    } catch {}
+    const err = new Error(why ? `${why} (HTTP ${res.status})` : `${path}: HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 

@@ -10,7 +10,9 @@ export default function HeroSteps({ hero, size = "md" }) {
   const i = stageIndex(hero.stage);
   const j = hero.job;
   const pct = hero.pct != null ? Math.round(hero.pct) : null;
-  const refunded = hero.stage === "refunded";
+  const refunded = hero.stage === "refunded" || j?.resolution === "refunded";
+  const disputed = hero.stage === "disputed";
+  const resolved = hero.stage === "resolved";
 
   const steps = [
     {
@@ -20,8 +22,15 @@ export default function HeroSteps({ hero, size = "md" }) {
     },
     {
       at: 2,
-      title: "panel_dirty → escrow opens",
-      text: j ? `${j.fee.toFixed(2)} USDC locked on Arc` : i === 1 && !hero.flagged ? "Checking for a minute first…" : "Dyna flags it, the Pi locks the fee",
+      title: "0G looks → committee approves",
+      text:
+        hero.stage === "flagged"
+          ? `0G says dirty${hero.verdict?.coverage != null ? ` (~${Math.round(hero.verdict.coverage)}% covered)` : ""} · waiting for approval`
+          : j?.openTx
+            ? `Approved · ${j.fee.toFixed(2)} USDC locked on Arc`
+            : i === 1
+              ? "The meter dropped, so the Pi asks 0G to look"
+              : "No money moves before the committee approves",
       proofs: j && [
         ["arc", j.openTx, "Arc tx"],
         ["og", hero.og?.open, "0G proof"],
@@ -40,16 +49,28 @@ export default function HeroSteps({ hero, size = "md" }) {
       text:
         i >= 5 && !refunded
           ? `Held above ${hero.cleanPct}%, checked on the signed meter readings`
-          : i === 4 && pct != null
-            ? `Now ${pct}% · checking`
+          : disputed || resolved
+            ? "Not reached: the cleaner disputed"
+            : i === 4 && pct != null
+            ? `Now ${pct}% · checking (needs +${hero.minGain ?? 15} over the dusty level too)`
             : i === 3
               ? "The cleaner taps done; the meter decides"
               : "The paper comes off",
     },
     {
       at: 5,
-      title: refunded ? "Refunded to the society" : "USDC released, automatically",
-      text: refunded
+      title: disputed
+        ? "Disputed: the committee decides"
+        : resolved
+          ? `Resolved: ${j?.resolution === "refunded" ? "refunded to the society" : j?.resolution === "paid" ? "paid to the cleaner" : "decided by the committee"}`
+          : refunded
+            ? "Refunded to the society"
+            : "USDC released, automatically",
+      text: disputed
+        ? "The committee wallet pays the cleaner or refunds; the Pi can't"
+        : resolved
+          ? "Decided by the committee wallet, not the Pi"
+          : refunded
         ? "Nobody cleaned before the deadline"
         : j?.outputAfter != null
           ? `Back at ${Math.round(j.outputAfter)}% · paid on meter proof, not anyone's word`
@@ -62,13 +83,14 @@ export default function HeroSteps({ hero, size = "md" }) {
     },
   ];
 
-  const firstOpen = [1, 2, 3, 4, 5].find((k) => i < (k === 4 ? 5 : k));
+  // a dispute skips the meter step: the committee decides step 5
+  const firstOpen = disputed ? 5 : [1, 2, 3, 4, 5].find((k) => i < (k === 4 ? 5 : k));
   const xl = size === "xl";
   return (
     <ol className={`flex flex-col ${xl ? "gap-3 2xl:gap-5 [@media(max-height:820px)]:gap-2" : "gap-3"}`}>
       {steps.map((s) => {
         // step 4 (meter at 90%+) is only done once the release went through
-        const done = i >= (s.at === 4 ? 5 : s.at);
+        const done = s.at === 4 && (disputed || resolved) ? false : i >= (s.at === 4 ? 5 : s.at);
         const active = !done && i >= 1 && s.at === firstOpen;
         return (
           <li key={s.at} className={`flex items-start ${xl ? "gap-4 2xl:gap-5" : "gap-3"} ${!done && !active ? "opacity-40" : ""}`}>

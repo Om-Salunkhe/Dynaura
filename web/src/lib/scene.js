@@ -79,47 +79,72 @@ const lerp = (a, b, t) => a + (b - a) * ease(t);
 // Fixed, obviously-fake ids so demo data can't be mistaken for a real tx
 const fake = (tag) => `0xdemo${tag}`.padEnd(66, "0");
 
+// Cleaning flow v3 (demo): dust -> output falls -> the Pi looks, 0G says dirty -> flagged, waiting
+// for the committee -> approve opens the escrow (or dismiss) -> cleaner accepts -> Mark done ->
+// meter climbs past 90% (and +15 points over the dusty level) -> held -> USDC released.
+// A cleaner can dispute an accepted job; the committee resolves it.
+const DEMO_VERDICT = {
+  dirty: true,
+  coverage: 41,
+  reason: "Even grey film over most cells; output 52% of expected under a clear sky.",
+  requestId: "0xdemo-0g-vision",
+  tee: true,
+  input: "vision",
+};
+
 export function demoHero(s, now = Date.now()) {
-  const base = { live: false, dustPct: 70, cleanPct: 90, fee: 2, cleaner: "Ravi" };
-  if (!s.dustAt) return { ...base, stage: "clean", pct: CLEAN, flagged: false };
+  const base = { live: false, v3: true, dustPct: 70, cleanPct: 90, minGain: 15, fee: 2, cleaner: "Ravi" };
+  if (!s.dustAt) return { ...base, stage: "clean", state: null, pct: CLEAN, flagged: false };
   const sinceDust = now - s.dustAt;
   let pct = lerp(CLEAN, DUSTY, sinceDust / DEMO_T.fall);
-  const flagged = sinceDust >= DEMO_T.flag;
-  const job = {
-    id: 4,
-    fee: 2,
-    outputBefore: DUSTY,
-    deadline: s.dustAt + 60 * 60 * 1000,
-    openTx: fake("0pen"),
-    requestId: "0xdemo-0g-request",
-  };
-  if (sinceDust < DEMO_T.open) return { ...base, stage: "dusty", pct, flagged };
+  const job = { id: null, fee: 2, outputBefore: DUSTY, deadline: s.dustAt + 60 * 60 * 1000, requestId: DEMO_VERDICT.requestId };
+  const at = { ...base, pct, dustyPct: DUSTY, job };
+  if (sinceDust < DEMO_T.flag) return { ...at, stage: "dusty", state: null, flagged: false, job: null };
+  if (s.rejectAt) return { ...at, stage: "dusty", state: "rejected", flagged: false, job: null, verdict: DEMO_VERDICT };
+  if (!s.approveAt) return { ...at, stage: "flagged", state: "flagged", flagged: true, verdict: DEMO_VERDICT };
 
+  job.id = 4;
+  job.openTx = fake("0pen");
   let stage = "open";
+  let state = "open";
   if (s.acceptAt) {
-    stage = "accepted";
+    stage = state = "accepted";
     job.acceptTx = fake("acc");
     job.cleaner = "Ravi";
   }
-  if (s.acceptAt && s.doneAt) {
+  if (s.acceptAt && s.disputeAt && !s.doneAt) {
+    stage = state = "disputed";
+    if (s.resolveAt) {
+      stage = state = "resolved";
+      job.resolution = s.resolvePay ? "paid" : "refunded";
+      if (s.resolvePay) job.releaseTx = fake("res");
+      else job.refundTx = fake("ref");
+    }
+  } else if (s.acceptAt && s.doneAt) {
     const sinceDone = now - s.doneAt;
     pct = lerp(DUSTY, 96, sinceDone / DEMO_T.rise);
     stage = "cleaning";
+    state = "cleaned";
     if (sinceDone >= DEMO_T.rise + DEMO_T.hold) {
-      stage = "paid";
+      stage = state = "paid";
       job.outputAfter = 96;
       job.releaseTx = fake("pay");
       job.proof = fake("og");
     }
   }
-  return { ...base, stage, pct, flagged: true, job };
+  return { ...base, stage, state, pct, flagged: true, job, verdict: DEMO_VERDICT, dustyPct: DUSTY, afterPct: job.outputAfter ?? null };
 }
 
+const CLEAR = { acceptAt: null, doneAt: null, approveAt: null, rejectAt: null, disputeAt: null, resolveAt: null, resolvePay: null };
 export const heroActions = {
-  dust: () => setScene({ dustAt: Date.now(), acceptAt: null, doneAt: null, moment: "dust" }),
-  accept: () => setScene((s) => (s.dustAt && !s.acceptAt ? { acceptAt: Date.now() } : {})),
-  done: () => setScene((s) => (s.acceptAt && !s.doneAt ? { doneAt: Date.now() } : {})),
-  reset: () => setScene({ dustAt: null, acceptAt: null, doneAt: null }),
+  dust: () => setScene({ dustAt: Date.now(), ...CLEAR, moment: "dust" }),
+  approve: () => setScene((s) => (s.dustAt && !s.approveAt && !s.rejectAt ? { approveAt: Date.now() } : {})),
+  reject: () => setScene((s) => (s.dustAt && !s.approveAt ? { rejectAt: Date.now() } : {})),
+  accept: () => setScene((s) => (s.approveAt && !s.acceptAt ? { acceptAt: Date.now() } : {})),
+  done: () => setScene((s) => (s.acceptAt && !s.doneAt && !s.disputeAt ? { doneAt: Date.now() } : {})),
+  dispute: () => setScene((s) => (s.acceptAt && !s.disputeAt ? { disputeAt: Date.now(), doneAt: null } : {})),
+  resolve: (pay) => setScene((s) => (s.disputeAt && !s.resolveAt ? { resolveAt: Date.now(), resolvePay: !!pay } : {})),
+  reset: () => setScene({ dustAt: null, ...CLEAR }),
 };
 
 export const isFakeId = (id) => typeof id === "string" && id.startsWith("0xdemo");
