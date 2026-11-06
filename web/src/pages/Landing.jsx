@@ -24,7 +24,7 @@ const FLOW = ["Dust on the panel", "0G confirms it", "USDC escrow opens", "Panel
 
 export default function Landing() {
   return (
-    <div className="landing min-h-screen overflow-x-hidden bg-black text-white">
+    <div className="landing grain relative isolate min-h-screen overflow-x-hidden bg-black text-white">
       <LandingNav />
       <Hero />
       <LiveStrip />
@@ -72,40 +72,28 @@ function LandingNav() {
 
 function Hero() {
   return (
-    <section className="relative pt-24 sm:pt-28">
-      {/* the sun, rising: clipped at the horizon only, so its glow still spills up and sideways */}
-      <div className="relative h-[250px] sm:h-[330px]" style={{ clipPath: "inset(-100vh -100vw 0 -100vw)" }}>
-        <div className="absolute inset-x-0 top-[34px] flex justify-center sm:top-[40px]">
-          <div className="orb-stage w-[300px] sm:w-[440px]">
-            <div className="orb-glow" />
-            <div className="orb-swirl" />
-            <div className="orb-bloom" />
-            <div className="orb-ring" />
-            <div className="orb" />
-          </div>
-        </div>
+    <section className="relative pb-6 pt-36 sm:pt-44">
+      <div className="glow" aria-hidden="true">
+        <span className="g2" />
+        <span className="g1" />
+        <span className="g4" />
+        <span className="g3" />
       </div>
-      {/* horizon line and the light it throws on the ground */}
-      <div className="relative">
-        <div className="mx-auto h-px w-[min(1120px,94vw)] bg-gradient-to-r from-transparent via-[rgba(255,196,120,0.75)] to-transparent" />
-        <div className="horizon pointer-events-none absolute inset-x-0 top-0 mx-auto h-[220px] w-[min(1000px,100vw)]" />
-      </div>
-
-      <div className="relative mx-auto flex max-w-[860px] flex-col items-center px-6 pt-12 text-center sm:pt-16">
-        <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[12px] text-white/60">
+      <div className="relative z-10 mx-auto flex max-w-[860px] flex-col items-center px-6 text-center">
+        <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[12px] text-white/70 backdrop-blur-md">
           <span className="h-1.5 w-1.5 rounded-full bg-[#f5a53c] shadow-[0_0_8px_#f5a53c]" />
           Shared rooftop solar for apartment buildings
         </span>
-        <h1 className="m-0 text-[44px] font-light leading-[1.02] tracking-[-0.045em] sm:text-[76px]">
+        <h1 className="m-0 text-[46px] font-light leading-[1.02] tracking-[-0.045em] sm:text-[80px]">
           One roof. Every flat.
           <br />
-          <span className="bg-gradient-to-r from-[#ffe2b0] via-[#f5a53c] to-[#e9760f] bg-clip-text text-transparent">Run by the sun.</span>
+          <span className="text-white/55">Run by the sun.</span>
         </h1>
-        <p className="mt-6 max-w-[580px] text-[15.5px] font-light leading-relaxed text-white/60 sm:text-[17px]">
+        <p className="mt-7 max-w-[580px] text-[15.5px] font-light leading-relaxed text-white/65 sm:text-[17px]">
           Dynaura is an AI that runs a building's shared solar: it plans the day on 0G, settles every unit in USDC on Arc,
           and keeps an open record on Arkiv.
         </p>
-        <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row">
+        <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
           <Link
             to="/home"
             className="flex h-11 items-center gap-2 rounded-[12px] bg-white px-5 text-[14px] font-medium text-black transition-opacity hover:opacity-90"
@@ -136,7 +124,7 @@ function LiveStrip() {
     { k: "Source", v: live.demo ? "Demo" : "Live", u: live.demo ? "Pi offline" : "from the Pi" },
   ];
   return (
-    <section id="live" className="mx-auto mt-24 max-w-[1120px] px-6 sm:mt-28">
+    <section id="live" className="mx-auto mt-20 max-w-[1120px] px-6 sm:mt-24">
       <div className="mb-4 flex items-center gap-2 text-[12px] text-white/45">
         <span className={`h-1.5 w-1.5 rounded-full ${live.demo ? "bg-white/30" : "animate-pulse bg-[#3ccf91]"}`} />
         {live.demo ? "Sample readings" : "Live from the roof"} · Sunrise Apartments
