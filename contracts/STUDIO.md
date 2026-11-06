@@ -62,3 +62,22 @@ Each turn's result document goes to `studio/out/<step>.json`, which is ignored b
    4. Optionally, do the same for the test cleaner, `0x390E8E1242a0f87C09549BE7829B8D6D0a839f4F`. If you skip it, `dy-arc` sends the cleaner a little USDC from the oracle wallet.
 4. **Your MetaMask** (for clicking as resident, cleaner or shop in the live demo): fund your own address from the same faucet. The web app adds Arc testnet to MetaMask by itself.
 5. **Demo video.** Open the Studio project URL (`dy-arc` sends it) and record the chat where the contracts were generated, the `forge test` run, and the deployed addresses.
+
+## What happened in Studio (Fri 6 Nov)
+
+Project: https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852 (you need to be signed in to view it).
+
+1. **`build`:**
+   - Studio wrote all three contracts from `01-build-and-test.md`, using our first drafts as read-only context.
+   - It ran three rounds of security and functional review, plus static analysis. No High or Medium findings were left except one (see below).
+   - It wrote 161 Foundry tests, including fuzz tests and an escrow invariant test, and all passed.
+   - It added things we hadn't asked for: two-step ownership with renounce disabled, and a claim fallback so a frozen payee wallet can't block a job.
+2. **`accept`:**
+   - Our 50 tests went in under `contracts/test/acceptance/`.
+   - Studio renamed errors and events to match them (our app calls those names). It also tightened behaviour: the oracle **and** the committee can no longer accept a cleaning job, an output above 100 is rejected, and an empty `day` is refused.
+   - It didn't touch our tests. Result: **211/211 green**, re-checked locally with `forge test`.
+3. **Open findings Studio reported, and our answer:**
+   - **The shop price can be front-run by the owner or oracle.** Our web app approves only the exact quoted USDC, so a price jump makes the order revert.
+   - **The oracle can still release a disputed job when the meter reads clean.** This is intended: the sun settles it.
+   - **A cleaner can accept a job and never clean it.** The payer is refunded at the deadline, so no funds are lost.
+4. **Pulled back:** `src/*.sol` is byte-identical to Studio's `contracts/*.sol`, and `test/` holds Studio's tests plus `test/acceptance/`. Only the import paths differ, because our sources live in `src/`.

@@ -42,6 +42,11 @@
  },
  {
   "inputs": [],
+  "name": "BadAmount",
+  "type": "error"
+ },
+ {
+  "inputs": [],
   "name": "BadLabel",
   "type": "error"
  },
@@ -90,6 +95,22 @@
  {
   "inputs": [
    {
+    "internalType": "uint8",
+    "name": "bits",
+    "type": "uint8"
+   },
+   {
+    "internalType": "uint256",
+    "name": "value",
+    "type": "uint256"
+   }
+  ],
+  "name": "SafeCastOverflowedUintDowncast",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
     "internalType": "address",
     "name": "token",
     "type": "address"
@@ -126,15 +147,15 @@
    },
    {
     "indexed": false,
-    "internalType": "uint256",
+    "internalType": "uint96",
     "name": "solarAmount",
-    "type": "uint256"
+    "type": "uint96"
    },
    {
     "indexed": false,
-    "internalType": "uint256",
+    "internalType": "uint96",
     "name": "gridAmount",
-    "type": "uint256"
+    "type": "uint96"
    }
   ],
   "name": "BillPaid",
@@ -199,7 +220,7 @@
   "anonymous": false,
   "inputs": [
    {
-    "indexed": true,
+    "indexed": false,
     "internalType": "address",
     "name": "gridPayee",
     "type": "address"
@@ -212,13 +233,32 @@
   "anonymous": false,
   "inputs": [
    {
-    "indexed": true,
+    "indexed": false,
     "internalType": "address",
     "name": "oracle",
     "type": "address"
    }
   ],
   "name": "OracleChanged",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferStarted",
   "type": "event"
  },
  {
@@ -244,7 +284,7 @@
   "anonymous": false,
   "inputs": [
    {
-    "indexed": true,
+    "indexed": false,
     "internalType": "address",
     "name": "treasury",
     "type": "address"
@@ -264,6 +304,13 @@
    }
   ],
   "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "acceptOwnership",
+  "outputs": [],
+  "stateMutability": "nonpayable",
   "type": "function"
  },
  {
@@ -441,6 +488,19 @@
   "name": "pay",
   "outputs": [],
   "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "pendingOwner",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
   "type": "function"
  },
  {

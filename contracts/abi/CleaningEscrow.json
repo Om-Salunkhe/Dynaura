@@ -78,6 +78,16 @@
   "type": "error"
  },
  {
+  "inputs": [],
+  "name": "NotRecipient",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NothingPending",
+  "type": "error"
+ },
+ {
   "inputs": [
    {
     "internalType": "address",
@@ -97,6 +107,11 @@
    }
   ],
   "name": "OwnableUnauthorizedAccount",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "ReasonTooLong",
   "type": "error"
  },
  {
@@ -153,13 +168,13 @@
    {
     "indexed": true,
     "internalType": "address",
-    "name": "to",
+    "name": "recipient",
     "type": "address"
    },
    {
     "indexed": false,
     "internalType": "uint256",
-    "name": "fee",
+    "name": "amount",
     "type": "uint256"
    }
   ],
@@ -363,7 +378,7 @@
   "anonymous": false,
   "inputs": [
    {
-    "indexed": true,
+    "indexed": false,
     "internalType": "address",
     "name": "oracle",
     "type": "address"
@@ -388,7 +403,76 @@
     "type": "address"
    }
   ],
+  "name": "OwnershipTransferStarted",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
   "name": "OwnershipTransferred",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "recipient",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "amount",
+    "type": "uint256"
+   }
+  ],
+  "name": "PayoutClaimed",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "recipient",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "amount",
+    "type": "uint256"
+   }
+  ],
+  "name": "PayoutDeferred",
   "type": "event"
  },
  {
@@ -396,9 +480,22 @@
   "name": "DISPUTE_WINDOW",
   "outputs": [
    {
-    "internalType": "uint64",
+    "internalType": "uint256",
     "name": "",
-    "type": "uint64"
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "MAX_REASON_BYTES",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
    }
   ],
   "stateMutability": "view",
@@ -444,6 +541,13 @@
   "type": "function"
  },
  {
+  "inputs": [],
+  "name": "acceptOwnership",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
   "inputs": [
    {
     "internalType": "uint256",
@@ -452,6 +556,19 @@
    }
   ],
   "name": "cancel",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "jobId",
+    "type": "uint256"
+   }
+  ],
+  "name": "claimPayout",
   "outputs": [],
   "stateMutability": "nonpayable",
   "type": "function"
@@ -624,6 +741,38 @@
     "internalType": "address",
     "name": "",
     "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "pendingOwner",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "name": "pendingPayout",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
    }
   ],
   "stateMutability": "view",

@@ -1,436 +1,376 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Test} from "forge-std/Test.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {CleaningEscrowBase} from "./CleaningEscrow.Base.t.sol";
 import {CleaningEscrow} from "../src/CleaningEscrow.sol";
-import {MockUSDC} from "./MockUSDC.sol";
 
-contract CleaningEscrowTest is Test {
-    CleaningEscrow esc;
-    MockUSDC usdc;
-
-    address committee = makeAddr("committee");
-    address oracle = makeAddr("oracle");      // the Pi
-    address society = makeAddr("society");    // payer
-    address cleaner = makeAddr("cleaner");
-    address stranger = makeAddr("stranger");
-
-    uint96 constant FEE = 2_000_000; // 2 USDC
-    bytes32 constant PROOF = keccak256("signed meter readings");
-    bytes32 constant ROOT = keccak256("0g episode");
-    string constant REQ = "0g-req-7f3a";
-
-    function setUp() public {
-        usdc = new MockUSDC();
-        esc = new CleaningEscrow(address(usdc), oracle, committee);
-        usdc.mint(society, 100e6);
-        usdc.mint(oracle, 100e6);
-        vm.prank(society);
-        usdc.approve(address(esc), type(uint256).max);
-        vm.prank(oracle);
-        usdc.approve(address(esc), type(uint256).max);
+/// @dev Deployment, openJob, accept, release, cancel.
+contract CleaningEscrowTest is CleaningEscrowBase {
+    // ---------------------------------------------------------------- deploy
+    function test_Constructor_SetsState() public {
+        vm.expectEmit(false, false, false, true);
+        emit CleaningEscrow.OracleChanged(oracle);
+        CleaningEscrow e = new CleaningEscrow(address(usdc), oracle, owner);
+        assertEq(address(e.usdc()), address(usdc));
+        assertEq(e.oracle(), oracle);
+        assertEq(e.owner(), owner);
+        assertEq(e.nextJobId(), 1);
+        assertEq(e.totalLocked(), 0);
+        assertEq(e.RELEASE_PCT(), 90);
+        assertEq(e.DISPUTE_WINDOW(), 3 days);
     }
 
-    function _open() internal returns (uint256 id) {
-        vm.prank(society);
-        id = esc.openJob(FEE, uint64(block.timestamp + 1 hours), 52, REQ);
-    }
-
-    function _openAccepted() internal returns (uint256 id) {
-        id = _open();
-        vm.prank(cleaner);
-        esc.accept(id);
-    }
-
-    function _status(uint256 id) internal view returns (CleaningEscrow.Status s) {
-        (,,,,,, s,,,) = esc.jobs(id);
-    }
-
-    // ---- constructor / admin -----------------------------------------------------------------
-
-    function test_constructorRejectsZero() public {
+    function test_RevertWhen_Constructor_ZeroUsdc() public {
         vm.expectRevert(CleaningEscrow.ZeroAddress.selector);
-        new CleaningEscrow(address(0), oracle, committee);
+        new CleaningEscrow(address(0), oracle, owner);
+    }
+
+    function test_RevertWhen_Constructor_ZeroOracle() public {
         vm.expectRevert(CleaningEscrow.ZeroAddress.selector);
-        new CleaningEscrow(address(usdc), address(0), committee);
+        new CleaningEscrow(address(usdc), address(0), owner);
+    }
+
+    function test_RevertWhen_Constructor_ZeroOwner() public {
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
         new CleaningEscrow(address(usdc), oracle, address(0));
     }
 
-    function test_setOracleOnlyOwner() public {
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, stranger));
-        vm.prank(stranger);
-        esc.setOracle(stranger);
-        vm.expectRevert(CleaningEscrow.ZeroAddress.selector);
-        vm.prank(committee);
-        esc.setOracle(address(0));
-        vm.prank(committee);
-        esc.setOracle(stranger);
-        assertEq(esc.oracle(), stranger);
-    }
+    // --------------------------------------------------------------- openJob
+    function test_OpenJob_HappyPath() public {
+        uint64 dl = uint64(block.timestamp + DURATION);
+        vm.expectEmit(true, true, false, true, address(escrow));
+        emit CleaningEscrow.JobOpened(1, payer, FEE, dl, 40, "req-1");
+        vm.prank(payer);
+        uint256 id = escrow.openJob(FEE, dl, 40, "req-1");
 
-    // ---- the hero path -------------------------------------------------------------------------
-
-    function test_openAcceptRelease() public {
-        vm.expectEmit(true, true, false, true);
-        emit CleaningEscrow.JobOpened(1, society, FEE, uint64(block.timestamp + 1 hours), 52, REQ);
-        uint256 id = _open();
         assertEq(id, 1);
-        assertEq(usdc.balanceOf(address(esc)), FEE);
-        assertEq(esc.totalLocked(), FEE);
-
-        vm.prank(cleaner);
-        esc.accept(id);
-
-        vm.prank(oracle);
-        esc.linkEpisode(id, ROOT);
-
-        vm.expectEmit(true, true, false, true);
-        emit CleaningEscrow.JobPaid(id, cleaner, FEE, 96, PROOF);
-        vm.prank(oracle);
-        esc.release(id, 96, PROOF);
-
-        assertEq(usdc.balanceOf(cleaner), FEE);
-        assertEq(usdc.balanceOf(address(esc)), 0);
-        assertEq(esc.totalLocked(), 0);
-        (address payer, address cl, uint96 fee,, uint16 before, uint16 afterPct, CleaningEscrow.Status s, bytes32 proof, bytes32 root, string memory req) =
-            esc.jobs(id);
-        assertEq(payer, society);
-        assertEq(cl, cleaner);
-        assertEq(fee, FEE);
-        assertEq(before, 52);
-        assertEq(afterPct, 96);
-        assertEq(uint8(s), uint8(CleaningEscrow.Status.Paid));
-        assertEq(proof, PROOF);
-        assertEq(root, ROOT);
-        assertEq(req, REQ);
+        assertEq(escrow.nextJobId(), 2);
+        CleaningEscrow.Job memory j = _job(1);
+        assertEq(j.payer, payer);
+        assertEq(j.cleaner, address(0));
+        assertEq(j.fee, FEE);
+        assertEq(j.deadline, dl);
+        assertEq(j.outputBefore, 40);
+        assertEq(j.outputAfter, 0);
+        assertEq(uint8(j.status), uint8(CleaningEscrow.Status.Open));
+        assertEq(j.proof, bytes32(0));
+        assertEq(j.ogStorageRoot, bytes32(0));
+        assertEq(j.ogRequestId, "req-1");
+        assertEq(usdc.balanceOf(address(escrow)), FEE);
+        assertEq(usdc.balanceOf(payer), 1_000_000e6 - FEE);
+        assertEq(escrow.totalLocked(), FEE);
     }
 
-    function test_releaseThreshold() public {
-        uint256 id = _openAccepted();
-        vm.startPrank(oracle);
-        vm.expectRevert(abi.encodeWithSelector(CleaningEscrow.NotClean.selector, uint16(89)));
-        esc.release(id, 89, PROOF);
-        vm.expectRevert(abi.encodeWithSelector(CleaningEscrow.BadOutput.selector, uint16(101)));
-        esc.release(id, 101, PROOF);
-        esc.release(id, 90, PROOF);
-        vm.stopPrank();
-        assertEq(usdc.balanceOf(cleaner), FEE);
-    }
-
-    function test_releaseAt100() public {
-        uint256 id = _openAccepted();
-        vm.prank(oracle);
-        esc.release(id, 100, PROOF);
-        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Paid));
-    }
-
-    function test_releaseOnlyOracle() public {
-        uint256 id = _openAccepted();
-        vm.expectRevert(CleaningEscrow.NotOracle.selector);
-        vm.prank(stranger);
-        esc.release(id, 95, PROOF);
-        vm.expectRevert(CleaningEscrow.NotOracle.selector);
-        vm.prank(committee);
-        esc.release(id, 95, PROOF);
-    }
-
-    function test_releaseNeedsAccepted() public {
-        uint256 id = _open();
-        vm.expectRevert(CleaningEscrow.BadStatus.selector);
-        vm.prank(oracle);
-        esc.release(id, 95, PROOF);
-    }
-
-    function test_releaseAfterDeadlineFails() public {
-        uint256 id = _openAccepted();
-        vm.warp(block.timestamp + 1 hours + 1);
-        vm.expectRevert(CleaningEscrow.TooLate.selector);
-        vm.prank(oracle);
-        esc.release(id, 95, PROOF);
-    }
-
-    function test_noDoubleRelease() public {
-        uint256 id = _openAccepted();
-        vm.startPrank(oracle);
-        esc.release(id, 95, PROOF);
-        vm.expectRevert(CleaningEscrow.BadStatus.selector);
-        esc.release(id, 95, PROOF);
-        vm.stopPrank();
-        vm.warp(block.timestamp + 2 hours);
-        vm.expectRevert(CleaningEscrow.BadStatus.selector);
-        esc.refund(id);
-    }
-
-    // ---- opening -------------------------------------------------------------------------------
-
-    function test_openValidation() public {
-        vm.startPrank(society);
-        vm.expectRevert(CleaningEscrow.BadAmount.selector);
-        esc.openJob(0, uint64(block.timestamp + 1), 50, "");
-        vm.expectRevert(CleaningEscrow.TooLate.selector);
-        esc.openJob(FEE, uint64(block.timestamp), 50, "");
-        vm.expectRevert(abi.encodeWithSelector(CleaningEscrow.BadOutput.selector, uint16(101)));
-        esc.openJob(FEE, uint64(block.timestamp + 1), 101, "");
-        vm.expectRevert(CleaningEscrow.RequestIdTooLong.selector);
-        esc.openJob(FEE, uint64(block.timestamp + 1), 50, string(new bytes(129)));
-        esc.openJob(FEE, uint64(block.timestamp + 1), 50, string(new bytes(128)));
-        vm.stopPrank();
-    }
-
-    function test_openWithoutAllowanceFails() public {
-        vm.expectRevert();
-        vm.prank(stranger);
-        esc.openJob(FEE, uint64(block.timestamp + 1 hours), 50, "");
-    }
-
-    function test_jobIdsIncrease() public {
+    function test_OpenJob_IdsIncrement() public {
         assertEq(_open(), 1);
         assertEq(_open(), 2);
-        assertEq(esc.nextJobId(), 3);
-        assertEq(esc.totalLocked(), 2 * uint256(FEE));
+        assertEq(_open(), 3);
+        assertEq(escrow.totalLocked(), 3 * uint256(FEE));
     }
 
-    // ---- accepting -----------------------------------------------------------------------------
-
-    function test_acceptRules() public {
-        uint256 id = _open();
-        vm.expectRevert(CleaningEscrow.NotAllowed.selector);
-        vm.prank(society);
-        esc.accept(id);
-        vm.expectRevert(CleaningEscrow.NotAllowed.selector);
-        vm.prank(oracle);
-        esc.accept(id);
-        vm.prank(cleaner);
-        esc.accept(id);
-        vm.expectRevert(CleaningEscrow.BadStatus.selector);
-        vm.prank(stranger);
-        esc.accept(id);
+    function test_OpenJob_OutputBefore100AndEmptyRequestIdOk() public {
+        vm.prank(payer);
+        uint256 id = escrow.openJob(1, uint64(block.timestamp + 1), 100, "");
+        assertEq(_job(id).outputBefore, 100);
+        assertEq(_job(id).ogRequestId, "");
     }
 
-    function test_acceptAfterDeadlineFails() public {
-        uint256 id = _open();
-        vm.warp(block.timestamp + 1 hours + 1);
-        vm.expectRevert(CleaningEscrow.TooLate.selector);
-        vm.prank(cleaner);
-        esc.accept(id);
+    function test_OpenJob_RequestId128BytesOk() public {
+        string memory s = _str(128);
+        vm.prank(payer);
+        uint256 id = escrow.openJob(FEE, uint64(block.timestamp + 1), 0, s);
+        assertEq(_job(id).ogRequestId, s);
     }
 
-    function test_acceptMissingJobFails() public {
-        vm.expectRevert(CleaningEscrow.BadStatus.selector);
-        vm.prank(cleaner);
-        esc.accept(42);
+    function test_RevertWhen_OpenJob_RequestId129Bytes() public {
+        vm.prank(payer);
+        vm.expectRevert(CleaningEscrow.RequestIdTooLong.selector);
+        escrow.openJob(FEE, uint64(block.timestamp + 1), 0, _str(129));
     }
 
-    // ---- cancel / refund ------------------------------------------------------------------------
-
-    function test_cancelByPayerOrOracle() public {
-        uint256 a = _open();
-        uint256 b = _open();
-        uint256 before = usdc.balanceOf(society);
-        vm.expectRevert(CleaningEscrow.NotAllowed.selector);
-        vm.prank(stranger);
-        esc.cancel(a);
-        vm.prank(society);
-        esc.cancel(a);
-        vm.prank(oracle);
-        esc.cancel(b);
-        assertEq(usdc.balanceOf(society), before + 2 * uint256(FEE));
-        assertEq(uint8(_status(a)), uint8(CleaningEscrow.Status.Cancelled));
-        assertEq(esc.totalLocked(), 0);
-    }
-
-    function test_cancelAfterAcceptFails() public {
-        uint256 id = _openAccepted();
-        vm.expectRevert(CleaningEscrow.BadStatus.selector);
-        vm.prank(society);
-        esc.cancel(id);
-    }
-
-    function test_refundAfterDeadline() public {
-        uint256 id = _openAccepted();
-        vm.expectRevert(CleaningEscrow.TooEarly.selector);
-        esc.refund(id);
-        vm.warp(block.timestamp + 1 hours); // exactly at the deadline: still too early
-        vm.expectRevert(CleaningEscrow.TooEarly.selector);
-        esc.refund(id);
-        vm.warp(block.timestamp + 1);
-        uint256 before = usdc.balanceOf(society);
-        vm.prank(stranger); // anyone may trigger it; the money goes to the payer
-        esc.refund(id);
-        assertEq(usdc.balanceOf(society), before + FEE);
-        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Refunded));
-        vm.expectRevert(CleaningEscrow.BadStatus.selector);
-        esc.refund(id);
-    }
-
-    function test_refundOpenJobAfterDeadline() public {
-        uint256 id = _open();
-        vm.warp(block.timestamp + 1 hours + 1);
-        esc.refund(id);
-        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Refunded));
-    }
-
-    function test_refundMissingJobFails() public {
-        vm.expectRevert(CleaningEscrow.BadStatus.selector);
-        esc.refund(7);
-    }
-
-    // ---- disputes -----------------------------------------------------------------------------
-
-    function test_disputeRules() public {
-        uint256 id = _open();
-        vm.expectRevert(CleaningEscrow.BadStatus.selector); // not accepted yet
-        vm.prank(cleaner);
-        esc.dispute(id, "cloudy");
-        vm.prank(cleaner);
-        esc.accept(id);
-        vm.expectRevert(CleaningEscrow.NotCleaner.selector);
-        vm.prank(stranger);
-        esc.dispute(id, "cloudy");
-        vm.expectEmit(true, true, false, true);
-        emit CleaningEscrow.JobDisputed(id, cleaner, "cloudy");
-        vm.prank(cleaner);
-        esc.dispute(id, "cloudy");
-        vm.expectRevert(CleaningEscrow.BadStatus.selector); // only once
-        vm.prank(cleaner);
-        esc.dispute(id, "again");
-    }
-
-    function test_disputeAfterDeadlineFails() public {
-        uint256 id = _openAccepted();
-        vm.warp(block.timestamp + 1 hours + 1);
-        vm.expectRevert(CleaningEscrow.TooLate.selector);
-        vm.prank(cleaner);
-        esc.dispute(id, "late");
-    }
-
-    function test_disputedJobBlocksRefundUntilWindow() public {
-        uint256 id = _openAccepted();
-        (,,, uint64 deadline,,,,,,) = esc.jobs(id);
-        vm.prank(cleaner);
-        esc.dispute(id, "cloudy");
-        vm.warp(uint256(deadline) + 1);
-        vm.expectRevert(CleaningEscrow.TooEarly.selector);
-        esc.refund(id);
-        vm.warp(uint256(deadline) + 3 days);
-        vm.expectRevert(CleaningEscrow.TooEarly.selector); // exactly deadline + window
-        esc.refund(id);
-        vm.warp(uint256(deadline) + 3 days + 1);
-        esc.refund(id);
-        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Refunded));
-    }
-
-    function test_meterCanStillReleaseDisputedJob() public {
-        uint256 id = _openAccepted();
-        vm.prank(cleaner);
-        esc.dispute(id, "cloudy");
-        vm.prank(oracle);
-        esc.release(id, 93, PROOF);
-        assertEq(usdc.balanceOf(cleaner), FEE);
-    }
-
-    function test_resolvePaysCleaner() public {
-        uint256 id = _openAccepted();
-        vm.prank(cleaner);
-        esc.dispute(id, "cloudy");
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, oracle));
-        vm.prank(oracle);
-        esc.resolve(id, true);
-        vm.expectEmit(true, true, false, true);
-        emit CleaningEscrow.DisputeResolved(id, true, cleaner, FEE);
-        vm.prank(committee);
-        esc.resolve(id, true);
-        assertEq(usdc.balanceOf(cleaner), FEE);
-        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Paid));
-        vm.expectRevert(CleaningEscrow.BadStatus.selector);
-        vm.prank(committee);
-        esc.resolve(id, false);
-    }
-
-    function test_resolveRefundsPayer() public {
-        uint256 id = _openAccepted();
-        vm.prank(cleaner);
-        esc.dispute(id, "cloudy");
-        uint256 before = usdc.balanceOf(society);
-        vm.prank(committee);
-        esc.resolve(id, false);
-        assertEq(usdc.balanceOf(society), before + FEE);
-        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Refunded));
-    }
-
-    function test_resolveNeedsDispute() public {
-        uint256 id = _openAccepted();
-        vm.expectRevert(CleaningEscrow.BadStatus.selector);
-        vm.prank(committee);
-        esc.resolve(id, true);
-    }
-
-    // ---- 0G episode link ------------------------------------------------------------------------
-
-    function test_linkEpisodeOnceByOracle() public {
-        uint256 id = _open();
-        vm.expectRevert(CleaningEscrow.NotOracle.selector);
-        vm.prank(stranger);
-        esc.linkEpisode(id, ROOT);
-        vm.expectRevert(CleaningEscrow.NoJob.selector);
-        vm.prank(oracle);
-        esc.linkEpisode(99, ROOT);
+    function test_RevertWhen_OpenJob_ZeroFee() public {
+        vm.prank(payer);
         vm.expectRevert(CleaningEscrow.BadAmount.selector);
-        vm.prank(oracle);
-        esc.linkEpisode(id, bytes32(0));
-        vm.expectEmit(true, false, false, true);
-        emit CleaningEscrow.EpisodeLinked(id, ROOT);
-        vm.prank(oracle);
-        esc.linkEpisode(id, ROOT);
-        vm.expectRevert(CleaningEscrow.AlreadyLinked.selector);
-        vm.prank(oracle);
-        esc.linkEpisode(id, keccak256("other"));
+        escrow.openJob(0, uint64(block.timestamp + 1), 0, "x");
     }
 
-    // ---- the Pi is payer and oracle at once (the automatic flow) --------------------------------
+    function test_RevertWhen_OpenJob_DeadlineIsNow() public {
+        vm.prank(payer);
+        vm.expectRevert(CleaningEscrow.TooLate.selector);
+        escrow.openJob(FEE, uint64(block.timestamp), 0, "x");
+    }
 
-    function test_piOpensAndReleases() public {
-        vm.prank(oracle);
-        uint256 id = esc.openJob(FEE, uint64(block.timestamp + 1 hours), 48, REQ);
+    function test_RevertWhen_OpenJob_DeadlinePast() public {
+        vm.prank(payer);
+        vm.expectRevert(CleaningEscrow.TooLate.selector);
+        escrow.openJob(FEE, uint64(block.timestamp - 1), 0, "x");
+    }
+
+    function test_RevertWhen_OpenJob_OutputBefore101() public {
+        vm.prank(payer);
+        vm.expectRevert(abi.encodeWithSelector(CleaningEscrow.BadOutput.selector, uint16(101)));
+        escrow.openJob(FEE, uint64(block.timestamp + 1), 101, "x");
+    }
+
+    function test_RevertWhen_OpenJob_NoAllowance() public {
+        vm.prank(stranger);
+        vm.expectRevert();
+        escrow.openJob(FEE, uint64(block.timestamp + 1), 0, "x");
+        assertEq(escrow.nextJobId(), 1);
+        assertEq(escrow.totalLocked(), 0);
+    }
+
+    function test_RevertWhen_OpenJob_PayerBlocked() public {
+        usdc.setBlocked(payer, true);
+        vm.prank(payer);
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("Blocked(address)")), payer));
+        escrow.openJob(FEE, uint64(block.timestamp + 1), 0, "x");
+    }
+
+    // ---------------------------------------------------------------- accept
+    function test_Accept_HappyPath() public {
+        uint256 id = _open();
+        vm.expectEmit(true, true, false, false, address(escrow));
+        emit CleaningEscrow.JobAccepted(id, cleaner);
         vm.prank(cleaner);
-        esc.accept(id);
+        escrow.accept(id);
+        CleaningEscrow.Job memory j = _job(id);
+        assertEq(j.cleaner, cleaner);
+        assertEq(uint8(j.status), uint8(CleaningEscrow.Status.Accepted));
+        assertEq(escrow.totalLocked(), FEE);
+    }
+
+    function test_Accept_AtDeadlineOk() public {
+        uint256 id = _open();
+        vm.warp(_deadline(id));
+        vm.prank(cleaner);
+        escrow.accept(id);
+        assertEq(_job(id).cleaner, cleaner);
+    }
+
+    function test_RevertWhen_Accept_PayerAcceptsOwnJob() public {
+        uint256 id = _open();
+        vm.prank(payer);
+        vm.expectRevert(CleaningEscrow.NotAllowed.selector);
+        escrow.accept(id);
+    }
+
+    function test_RevertWhen_Accept_OracleOrOwner() public {
+        uint256 id = _open();
         vm.prank(oracle);
-        esc.release(id, 94, PROOF);
+        vm.expectRevert(CleaningEscrow.NotAllowed.selector);
+        escrow.accept(id);
+        vm.prank(owner);
+        vm.expectRevert(CleaningEscrow.NotAllowed.selector);
+        escrow.accept(id);
+    }
+
+    function test_RevertWhen_Accept_SecondAccepter() public {
+        uint256 id = _openAccepted();
+        vm.prank(cleaner2);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.accept(id);
+        assertEq(_job(id).cleaner, cleaner);
+    }
+
+    function test_RevertWhen_Accept_AfterDeadline() public {
+        uint256 id = _open();
+        vm.warp(_deadline(id) + 1);
+        vm.prank(cleaner);
+        vm.expectRevert(CleaningEscrow.TooLate.selector);
+        escrow.accept(id);
+    }
+
+    function test_RevertWhen_Accept_NonOpen() public {
+        uint256 id = _open();
+        vm.prank(payer);
+        escrow.cancel(id);
+        vm.prank(cleaner);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.accept(id);
+    }
+
+    function test_RevertWhen_Accept_NoneJob() public {
+        vm.prank(cleaner);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.accept(1);
+        vm.prank(cleaner);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.accept(0);
+    }
+
+    // --------------------------------------------------------------- release
+    function test_Release_HappyPath() public {
+        uint256 id = _openAccepted();
+        vm.expectEmit(true, true, false, true, address(escrow));
+        emit CleaningEscrow.JobPaid(id, cleaner, FEE, 95, PROOF);
+        vm.prank(oracle);
+        escrow.release(id, 95, PROOF);
+
+        CleaningEscrow.Job memory j = _job(id);
+        assertEq(uint8(j.status), uint8(CleaningEscrow.Status.Paid));
+        assertEq(j.outputAfter, 95);
+        assertEq(j.proof, PROOF);
+        assertEq(usdc.balanceOf(cleaner), FEE);
+        assertEq(usdc.balanceOf(address(escrow)), 0);
+        assertEq(escrow.totalLocked(), 0);
+        assertEq(escrow.pendingPayout(id), 0);
+    }
+
+    function test_RevertWhen_Release_Output89() public {
+        uint256 id = _openAccepted();
+        vm.prank(oracle);
+        vm.expectRevert(abi.encodeWithSelector(CleaningEscrow.NotClean.selector, uint16(89)));
+        escrow.release(id, 89, PROOF);
+        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Accepted));
+    }
+
+    function test_Release_Output90Pays() public {
+        uint256 id = _openAccepted();
+        _release(id, 90);
+        assertEq(usdc.balanceOf(cleaner), FEE);
+        assertEq(_job(id).outputAfter, 90);
+    }
+
+    function test_Release_Output100Pays() public {
+        uint256 id = _openAccepted();
+        _release(id, 100);
+        assertEq(usdc.balanceOf(cleaner), FEE);
+        assertEq(_job(id).outputAfter, 100);
+    }
+
+    function test_RevertWhen_Release_Output101() public {
+        uint256 id = _openAccepted();
+        vm.prank(oracle);
+        vm.expectRevert(abi.encodeWithSelector(CleaningEscrow.BadOutput.selector, uint16(101)));
+        escrow.release(id, 101, PROOF);
+    }
+
+    function testFuzz_Release_PaysIffOutputIn90To100(uint16 pct) public {
+        uint256 id = _openAccepted();
+        vm.prank(oracle);
+        if (pct < 90 || pct > 100) {
+            vm.expectRevert(abi.encodeWithSelector(pct > 100 ? CleaningEscrow.BadOutput.selector : CleaningEscrow.NotClean.selector, pct));
+            escrow.release(id, pct, PROOF);
+            assertEq(usdc.balanceOf(cleaner), 0);
+        } else {
+            escrow.release(id, pct, PROOF);
+            assertEq(usdc.balanceOf(cleaner), FEE);
+        }
+    }
+
+    function test_RevertWhen_Release_NotOracle() public {
+        uint256 id = _openAccepted();
+        address[4] memory callers = [owner, cleaner, payer, stranger];
+        for (uint256 i; i < callers.length; ++i) {
+            vm.prank(callers[i]);
+            vm.expectRevert(CleaningEscrow.NotOracle.selector);
+            escrow.release(id, 95, PROOF);
+        }
+    }
+
+    function test_RevertWhen_Release_AfterDeadline() public {
+        uint256 id = _openAccepted();
+        vm.warp(_deadline(id) + 1);
+        vm.prank(oracle);
+        vm.expectRevert(CleaningEscrow.TooLate.selector);
+        escrow.release(id, 95, PROOF);
+    }
+
+    function test_Release_AtDeadlineOk() public {
+        uint256 id = _openAccepted();
+        vm.warp(_deadline(id));
+        _release(id, 95);
+        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Paid));
+    }
+
+    function test_RevertWhen_Release_StatusOpen() public {
+        uint256 id = _open();
+        vm.prank(oracle);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.release(id, 95, PROOF);
+    }
+
+    function test_RevertWhen_Release_NoneJob() public {
+        vm.prank(oracle);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.release(7, 95, PROOF);
+    }
+
+    function test_RevertWhen_Release_Twice() public {
+        uint256 id = _openAccepted();
+        _release(id, 95);
+        vm.prank(oracle);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.release(id, 95, PROOF);
         assertEq(usdc.balanceOf(cleaner), FEE);
     }
 
-    // ---- fuzz: the escrow always holds exactly the unfinished fees -------------------------------
+    function test_Release_FromDisputedWorks() public {
+        uint256 id = _openDisputed();
+        _release(id, 92);
+        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Paid));
+        assertEq(usdc.balanceOf(cleaner), FEE);
+        assertEq(escrow.totalLocked(), 0);
+    }
 
-    function testFuzz_balanceMatchesLocked(uint8[12] calldata actions, uint96[12] calldata fees) public {
-        uint256 opened;
-        for (uint256 i = 0; i < actions.length; i++) {
-            uint256 op = actions[i] % 6;
-            uint256 id = opened == 0 ? 0 : (uint256(fees[i]) % opened) + 1;
-            if (op == 0 || opened == 0) {
-                uint96 fee = uint96(bound(fees[i], 1, 5e6));
-                vm.prank(society);
-                esc.openJob(fee, uint64(block.timestamp + 1 hours), 50, "");
-                opened++;
-            } else if (op == 1) {
-                vm.prank(cleaner);
-                try esc.accept(id) {} catch {}
-            } else if (op == 2) {
-                vm.prank(oracle);
-                try esc.release(id, 95, PROOF) {} catch {}
-            } else if (op == 3) {
-                vm.prank(society);
-                try esc.cancel(id) {} catch {}
-            } else if (op == 4) {
-                vm.prank(cleaner);
-                try esc.dispute(id, "x") {} catch {}
-            } else {
-                vm.warp(block.timestamp + 20 minutes);
-                try esc.refund(id) {} catch {}
-            }
-            assertEq(usdc.balanceOf(address(esc)), esc.totalLocked());
+    // ---------------------------------------------------------------- cancel
+    function test_Cancel_ByPayer() public {
+        uint256 id = _open();
+        uint256 before = usdc.balanceOf(payer);
+        vm.expectEmit(true, true, false, true, address(escrow));
+        emit CleaningEscrow.JobCancelled(id, payer, FEE);
+        vm.prank(payer);
+        escrow.cancel(id);
+        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Cancelled));
+        assertEq(usdc.balanceOf(payer), before + FEE);
+        assertEq(usdc.balanceOf(address(escrow)), 0);
+        assertEq(escrow.totalLocked(), 0);
+    }
+
+    function test_Cancel_ByOracleRefundsPayer() public {
+        uint256 id = _open();
+        uint256 before = usdc.balanceOf(payer);
+        vm.prank(oracle);
+        escrow.cancel(id);
+        assertEq(usdc.balanceOf(payer), before + FEE);
+        assertEq(usdc.balanceOf(oracle), 0);
+        assertEq(uint8(_status(id)), uint8(CleaningEscrow.Status.Cancelled));
+    }
+
+    function test_RevertWhen_Cancel_Stranger() public {
+        uint256 id = _open();
+        address[3] memory callers = [stranger, owner, cleaner];
+        for (uint256 i; i < callers.length; ++i) {
+            vm.prank(callers[i]);
+            vm.expectRevert(CleaningEscrow.NotAllowed.selector);
+            escrow.cancel(id);
         }
-        assertEq(usdc.balanceOf(society) + usdc.balanceOf(cleaner) + usdc.balanceOf(address(esc)), 100e6);
+    }
+
+    function test_RevertWhen_Cancel_AcceptedJob() public {
+        uint256 id = _openAccepted();
+        vm.prank(payer);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.cancel(id);
+        vm.prank(oracle);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.cancel(id);
+    }
+
+    function test_RevertWhen_Cancel_Twice() public {
+        uint256 id = _open();
+        vm.prank(payer);
+        escrow.cancel(id);
+        vm.prank(payer);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.cancel(id);
+    }
+
+    function test_RevertWhen_Cancel_NoneJob() public {
+        vm.prank(payer);
+        vm.expectRevert(CleaningEscrow.BadStatus.selector);
+        escrow.cancel(42);
     }
 }

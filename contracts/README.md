@@ -1,6 +1,6 @@
 # contracts
 
-Dynaura's USDC contracts on Arc. They are **generated, tested and deployed in Arc Studio** (see [STUDIO.md](STUDIO.md) for how, and for the Studio prompts in `studio/`). `src/` is the code Studio deployed, and `deployments.json` has the addresses.
+Dynaura's USDC contracts on Arc. They are **generated, tested and deployed in Arc Studio** (see [STUDIO.md](STUDIO.md) for how, and for the Studio prompts in `studio/`). `src/` is byte-for-byte the code in our Studio project, and `deployments.json` has the addresses.
 
 | Contract | What it does |
 |---|---|
@@ -12,7 +12,9 @@ Dynaura's USDC contracts on Arc. They are **generated, tested and deployed in Ar
 
 - **USDC** is the ERC-20 at `0x3600000000000000000000000000000000000000`, with 6 decimals: `2000000` = 2 USDC. Nothing is `payable`, and there are no native transfers.
 - **The oracle** is the Pi's wallet. It is the only address that can release a fee, settle a sale or post a bill, and it only does so from what its own meters measured. The **owner** (the society committee) can change the oracle and treasury and resolve disputes. Both are set in the constructor, because Studio deploys from its own wallet.
-- **Safety:** OpenZeppelin `SafeERC20`, `ReentrancyGuard` and `Ownable`. Contracts use checks-effects-interactions and custom errors, and emit an event for every state change. `totalLocked` always equals the USDC the escrow holds; a fuzz test checks this.
+- **Safety:** OpenZeppelin `SafeERC20`, `ReentrancyGuard` and `Ownable2Step` (ownership can't be renounced). Contracts use checks-effects-interactions and custom errors, and emit an event for every state change. Neither the oracle nor the committee can accept a cleaning job, so neither can pay itself.
+- **Frozen wallets can't block a job:** if a payout can't be delivered (for example, the USDC issuer froze the recipient's address), the job still settles and the amount waits in `pendingPayout` / `pendingRefund` for that recipient to `claimPayout` / `claimRefund`.
+- **Balance invariant:** the escrow always holds at least `totalLocked`, checked by an invariant test.
 
 ## The escrow, step by step
 
@@ -29,15 +31,19 @@ refund(jobId)                                         anyone, after the deadline
 
 ## Tests
 
+**211 Foundry tests:**
+- `test/*.t.sol`: 161 tests written by Arc Studio, including fuzz and invariant tests.
+- `test/acceptance/`: our 50 tests, written independently from the same spec. They ran inside Studio too, and Studio didn't change them.
+
 ```bash
 cd contracts
 npm install                                   # OpenZeppelin + solc for the ABIs
 forge install foundry-rs/forge-std --no-git   # once
-forge test                                    # 50 tests, including fuzzing
+forge test                                    # 211 tests
 npm run build                                 # writes abi/*.json (read by pi/ and web/)
 ```
 
-`test/MockUSDC.sol` exists only for these tests. Never deploy it.
+Mock tokens (`test/MockUSDC.sol`, `test/acceptance/AcceptanceUSDC.sol`) exist only for these tests. Never deploy them.
 
 ## After a deploy
 

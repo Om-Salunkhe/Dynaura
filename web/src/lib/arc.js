@@ -26,6 +26,8 @@ export const ABI = {
     "function dispute(uint256 jobId, string reason)",
     "function cancel(uint256 jobId)",
     "function refund(uint256 jobId)",
+    "function claimPayout(uint256 jobId)",
+    "function pendingPayout(uint256 jobId) view returns (uint256)",
     "function nextJobId() view returns (uint256)",
     "function jobs(uint256) view returns (address payer, address cleaner, uint96 fee, uint64 deadline, uint16 outputBefore, uint16 outputAfter, uint8 status, bytes32 proof, bytes32 ogStorageRoot, string ogRequestId)",
     "event JobOpened(uint256 indexed jobId, address indexed payer, uint256 fee, uint64 deadline, uint16 outputBefore, string ogRequestId)",
@@ -34,7 +36,9 @@ export const ABI = {
     "event JobRefunded(uint256 indexed jobId, address indexed payer, uint256 fee)",
     "event JobCancelled(uint256 indexed jobId, address indexed payer, uint256 fee)",
     "event JobDisputed(uint256 indexed jobId, address indexed cleaner, string reason)",
-    "event DisputeResolved(uint256 indexed jobId, bool paidCleaner, address indexed to, uint256 fee)",
+    "event DisputeResolved(uint256 indexed jobId, bool paidCleaner, address indexed recipient, uint256 amount)",
+    "event PayoutDeferred(uint256 indexed jobId, address indexed recipient, uint256 amount)",
+    "event PayoutClaimed(uint256 indexed jobId, address indexed recipient, uint256 amount)",
     "event EpisodeLinked(uint256 indexed jobId, bytes32 ogStorageRoot)",
   ]),
   shop: parseAbi([
@@ -42,6 +46,7 @@ export const ABI = {
     "function costOf(uint32 wh) view returns (uint256)",
     "function placeOrder(string day, uint32 wantWh, uint64 deadline) returns (uint256)",
     "function refund(uint256 orderId)",
+    "function claimRefund(uint256 orderId)",
   ]),
   billing: parseAbi([
     "function key(string flat, string month) pure returns (bytes32)",
