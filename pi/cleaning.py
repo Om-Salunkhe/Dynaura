@@ -173,10 +173,13 @@ class CleaningWatch:
     def _look(self, source: str, lvl: float | None) -> dict:
         if not self._can_look():
             raise DustCheckMissing("the camera or the 0G dust check is not installed on this Pi")
-        jpeg = self._capture()
-        self.frame, self.frame_at = jpeg, time.time()
+        jpeg = self._capture()  # None on a real Pi with no camera: 0G then judges from the meter alone
+        self.frame, self.frame_at = jpeg, (time.time() if jpeg else None)
         try:
-            self._frame_path.write_bytes(jpeg)
+            if jpeg:
+                self._frame_path.write_bytes(jpeg)
+            else:  # no picture this time: don't keep showing an older one as the panel now
+                self._frame_path.unlink(missing_ok=True)
         except OSError as e:
             log.warning("could not keep the camera frame: %s", e)
         ctx = self._ctx(lvl, source)
