@@ -2,6 +2,7 @@
 // so anyone can check what the app shows. Only entities the building wallet created and still
 // owns count (see arkivReads.js for the queries themselves).
 import { useEffect, useState } from "react";
+import { verifyPayout } from "./arkivProof.js";
 import * as reads from "./arkivReads.js";
 
 export const OWNER = import.meta.env.VITE_ARKIV_OWNER || "";
@@ -42,6 +43,13 @@ export const fetchSales = (opts) => reads.sales(arkiv(), opts);
 export const fetchDailyOutput = (days = 7) => reads.dailyOutput(arkiv(), days);
 /** Signed 1-minute readings: fetchReadings({ meter: "panel", since: unixSeconds }) */
 export const fetchReadings = (opts) => reads.readings(arkiv(), opts);
+
+/** "Verify payout": re-fetches a paid job's signed panel readings from Arkiv (job.proofWindow),
+ *  checks every signature against the Pi's device key and recomputes the escrow's proof hash.
+ *  verifyJobPayout(job, { expectedHash: <proofHash read from Arc> }) compares with Arc; without it,
+ *  with job.proofHash from Arkiv. Returns { ok, signaturesOk, hashOk, computed, expected, signer,
+ *  window, readings }. */
+export const verifyJobPayout = (job, opts) => verifyPayout(arkiv(), job, opts);
 
 export const ARKIV_BUSY_TEXT = "Arkiv busy, retrying";
 

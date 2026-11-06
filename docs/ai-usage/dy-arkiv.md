@@ -32,8 +32,8 @@ the scope; humans decided what to build and reviewed the output.
   - It rebuilt the Pi's Python strings (the signed reading messages, the escrow's proof hash) in
     JavaScript and checked them against Python's own output.
   - It verified that all 76 live readings on Arkiv recover to the Pi's device key.
-  - dy-web's "Verify payout" ships the hash check. This session added the exact-window
-    `fetchReadings({ since, until })` it needs.
+  - It wrote `web/src/lib/arkivProof.js` (`verifyJobPayout`): signatures plus hash over the
+    exact window, used by dy-web's "Verify payout" against the hash stored on Arc.
 - **A cleaner-owned work receipt:** created by the building and transferred to the cleaner's
   wallet in one atomic batch.
 - **Measured the public endpoint** under load. When the evening numbers contradicted the morning
