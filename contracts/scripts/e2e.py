@@ -3,12 +3,15 @@
     pip install "web3>=7" python-dotenv
     python contracts/scripts/e2e.py --env path/to/arc.env [--root 0x<0G storage root>] [--request-id <0G request id>]
 
-The env file needs ARC_ORACLE_PRIVATE_KEY (the Pi wallet: oracle, owner, treasury) and
-ARC_CLEANER_PRIVATE_KEY. Keys are never printed.
+The env file needs ARC_ORACLE_PRIVATE_KEY (the Pi wallet: oracle and treasury),
+ARC_CLEANER_PRIVATE_KEY and, for the dispute, ARC_COMMITTEE_PRIVATE_KEY (the owner, after
+scripts/committee.py). Keys are never printed.
 
 1. Escrow: the Pi locks a small fee (with the 0G request ID), the cleaner accepts, the Pi links the
    0G episode root and releases the fee with a meter proof (panel back at 95%).
-2. Billing: the Pi posts a test bill for flat "E2E" and the cleaner wallet pays it as the resident.
+2. Dispute: another job; the cleaner disputes it ("cloudy"), and the committee wallet (not the Pi)
+   resolves it by paying the cleaner.
+3. Billing: the Pi posts a test bill for flat "E2E" and the cleaner wallet pays it as the resident.
    The solar part goes to the treasury and the grid part to the grid payee, in one transaction.
 
 Every transaction is printed as an explorer link and saved under "demoTxs" in deployments.json.
@@ -40,6 +43,7 @@ def main() -> None:
     ap.add_argument("--request-id", default="", help="0G request ID of the panel_dirty decision")
     ap.add_argument("--root", default="", help="0G Storage root of the episode (0x + 64 hex)")
     ap.add_argument("--skip-bill", action="store_true")
+    ap.add_argument("--skip-dispute", action="store_true")
     ap.add_argument("--deployments", default=str(DEPLOY), help="deployments.json to read and update")
     args = ap.parse_args()
 
@@ -100,7 +104,31 @@ def main() -> None:
     print(f"  job #{job_id}: {STATUS[j[6]]}, output {j[4]}% -> {j[5]}%, cleaner received {usd(got)}, 0G request {j[9]}")
     assert STATUS[j[6]] == "paid" and got == fee
 
-    # ---- 2. billing: one payment, split by where the power came from ----
+    # ---- 2. dispute: the cleaner disputes, the committee (not the Pi) resolves ----
+    if not args.skip_dispute and env.get("ARC_COMMITTEE_PRIVATE_KEY"):
+        committee = Account.from_key(env["ARC_COMMITTEE_PRIVATE_KEY"])
+        assert esc.functions.owner().call() == committee.address, "the committee must own the escrow (scripts/committee.py)"
+        job2 = esc.functions.nextJobId().call()
+        print(f"\nDispute: job #{job2}")
+        send(pi, usdc.functions.approve(esc.address, fee), "approve fee 2")
+        send(pi, esc.functions.openJob(fee, int(time.time()) + 20 * 60, 47, f"{request_id}-d"), "openJob 2")
+        send(cleaner, esc.functions.accept(job2), "accept 2")
+        send(cleaner, esc.functions.dispute(job2, "Cleaned it, but it is cloudy: the meter can't show it yet"), "dispute")
+        try:
+            send(pi, esc.functions.resolve(job2, True), "resolve by the Pi")
+            raise SystemExit("the Pi could resolve a dispute: it must not")
+        except SystemExit:
+            raise
+        except Exception:
+            print("  resolve by the Pi       refused, as it should be (only the committee resolves)")
+        before = usdc.functions.balanceOf(cleaner.address).call()
+        send(committee, esc.functions.resolve(job2, True), "resolve (committee)")
+        got = usdc.functions.balanceOf(cleaner.address).call() - before
+        j = esc.functions.jobs(job2).call()
+        print(f"  job #{job2}: {STATUS[j[6]]}, the committee paid the cleaner {usd(got)}")
+        assert STATUS[j[6]] == "paid" and got == fee
+
+    # ---- 3. billing: one payment, split by where the power came from ----
     if not args.skip_bill:
         month = time.strftime("e2e-%H%M%S")  # unique, at most 16 bytes
         bill_id = bill.functions.nextBillId().call()
