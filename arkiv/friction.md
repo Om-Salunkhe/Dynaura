@@ -164,7 +164,7 @@ it's a lot to absorb in a hackathon.
   when the nonce was used.
 - Retry once **on the same nonce** only when the nonce is unused, so at most one copy can land.
 - Anything else is marked "uncertain" in `/health` and never resent.
-- 10 offline tests cover these paths.
+- 11 offline tests cover these paths.
 
 **Suggestion.** A small `safeWrite()` helper in the SDK that does this, or that at least returns
 `{ txHash, nonce }` before waiting for the receipt, would save every team from building it.

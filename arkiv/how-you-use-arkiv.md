@@ -39,7 +39,7 @@ wallet **created and still owns** (`.createdBy(w).ownedBy(w)`; see [Trust](#trus
 | **Keeper** (every 6 h) | maintenance, bill, sale, daily_output | **`$expiresAt <= head + 30 days`** | 20 | Extend records worth keeping before they lapse | Yes (bridge) |
 
 The same queries run in our live smoke test
-([`bridge/smoke.mjs`](../bridge/smoke.mjs), 32/32 checks), so what we test is what the screens show.
+([`bridge/smoke.mjs`](../bridge/smoke.mjs), 36/36 checks), so what we test is what the screens show.
 
 ## Reads from the browser, and the access key
 
@@ -110,7 +110,7 @@ Arkiv writes are transactions, and an exception doesn't tell you whether one lan
 5. **Reads back off** with jittered exponential delay on 429/5xx.
 
 `GET /health` on the bridge shows the queue, in-flight write, counts, uncertain writes, balance,
-the heartbeat's remaining life and the keeper's last run. Ten offline tests
+the heartbeat's remaining life and the keeper's last run. Eleven offline tests
 ([`writer.test.mjs`](../bridge/writer.test.mjs)) cover the failure paths.
 
 ## Live transactions
@@ -121,16 +121,18 @@ This is the hero moment's Arkiv trail in order:
 
 | Step | What Arkiv records | Transaction |
 |---|---|---|
-| Meters (every minute) | 4 signed readings in one sealed batch | [`0x5353ec51…`](https://rabdi.explorer.arkiv.network/tx/0x5353ec51cca74540f86ddc86c509b1602ccbf0047d2161871eb3c2a44490bf7c) |
-| Building online | Heartbeat patch + extend, one tx | [`0x1516e956…`](https://rabdi.explorer.arkiv.network/tx/0x1516e9560a8ca753d9b8d12dcbe4974bbe90441eccafe3e30d6a37b2483f4347) |
-| Dyna plans (0G) | Decision with 0G request ID + storage root, sealed | [`0x55ce72ee…`](https://rabdi.explorer.arkiv.network/tx/0x55ce72eeb3450a9ad4945fccde22af14fabd4a3c10694bae432e80303cddaf89) |
-| Spare solar for shops | Offer, expires at the window end | [`0xe0be6505…`](https://rabdi.explorer.arkiv.network/tx/0xe0be6505276c4b4324c392f74ba80498a96005753f115203af102ce1146ce5b1) |
-| Panel dirty → escrow opens (Arc) | Cleaning job `open`, output 52% | [`0xf4a6fe39…`](https://rabdi.explorer.arkiv.network/tx/0xf4a6fe393999e88b76cd514abf62b91fa623c0f78571481bad61ff05cfcb3993) |
-| Cleaner accepts | Patch `status = accepted` | [`0x42079121…`](https://rabdi.explorer.arkiv.network/tx/0x42079121be8688a2e50fd6b7171efe955a4b49a8502eb65853a63568e99c6ac1) |
-| Meter sees 94% → USDC released | Patch `status = paid`, `output_after = 94.1` | [`0x1fc63a1a…`](https://rabdi.explorer.arkiv.network/tx/0x1fc63a1aa6e7be67478ec720bd34709b4f04bbce816960513b45119b41d0ebda) |
-| Lasting record | Maintenance entry, sealed | [`0x07dcc7b5…`](https://rabdi.explorer.arkiv.network/tx/0x07dcc7b50c534de1a7d378a2ea0436dcd3f146fa973a6f35161195a054ed0c07) |
-| Shop pays on Arc | Sale, sealed | [`0x60e7cb29…`](https://rabdi.explorer.arkiv.network/tx/0x60e7cb2972edeb8a36b9b8d1a4968315fd21c88a31f247d71340ceb7974d16c8) |
-| Month end | Bill for flat A, sealed | [`0xcff6f083…`](https://rabdi.explorer.arkiv.network/tx/0xcff6f08300c863dc2d58bab60d8e0835f7f83367b956a63ebcb9dcacfc69ccbb) |
+| Meters (every minute) | 4 signed readings in one sealed batch | [`0xc4300c83…`](https://rabdi.explorer.arkiv.network/tx/0xc4300c83655737bf7433e5c19b45bb289b56005439ae558c6fd8ff68558583ae) |
+| Building online | Heartbeat patch + extend, one tx | [`0xa877ed1c…`](https://rabdi.explorer.arkiv.network/tx/0xa877ed1c5c037e495ce60a6f21130f517abd100e75f16de9b9d763a71260a369) |
+| Dyna plans (0G) | Decision with `og_request_id` + `og_storage_root`, sealed | [`0x9253662a…`](https://rabdi.explorer.arkiv.network/tx/0x9253662a3db82af30c4ab6555cec9cffa22a78e71463f7f9fef1035aed7f9d2d) |
+| Spare solar for shops | Offer, expires at the window end | [`0x04d951d9…`](https://rabdi.explorer.arkiv.network/tx/0x04d951d99918adee71710db3714d81028ffbde46d412cf535c064956ef32444c) |
+| 0G dust check (0G Storage offline) | Decision written **without** its root, left patchable | [`0xed36f607…`](https://rabdi.explorer.arkiv.network/tx/0xed36f607c789b4b2cd3f428d0b9461eccaad47a86aef10119c4c5c4338216312) |
+| Upload lands | Root patched in **once** (a second, different root was refused) | [`0x6bddae51…`](https://rabdi.explorer.arkiv.network/tx/0x6bddae51c14d23b85fbfa26c640a0f8e0ef1cebdf67f0e7737ddcf69a7c6d04a) |
+| Panel dirty → escrow opens (Arc) | Cleaning job `open`, output 52%, `og_request_id` of the dust check | [`0xcd706d9b…`](https://rabdi.explorer.arkiv.network/tx/0xcd706d9bb492f80a09555b2a0bb67f89789f2faa45b677e412f73b19cbbd10af) |
+| Cleaner accepts | Patch `status = accepted` | [`0xde55acb4…`](https://rabdi.explorer.arkiv.network/tx/0xde55acb47a8af99dbacc9dcacc590cbcea19378b615ca9d403ddc1866c20ccbe) |
+| Meter sees 94% → USDC released | Patch `status = paid`, `output_after = 94.1`, `og_storage_root` | [`0xa1ba4b3b…`](https://rabdi.explorer.arkiv.network/tx/0xa1ba4b3b3fd28a5c7d1f8ee045f5e68471c9e97231d0b744f0e420364c12ea38) |
+| Lasting record | Maintenance entry, sealed | [`0x9478663a…`](https://rabdi.explorer.arkiv.network/tx/0x9478663a5b2ebae1126e0914f9f1597fef37669b8f77681205d5d95c8c044300) |
+| Shop pays on Arc | Sale, sealed | [`0x464a2344…`](https://rabdi.explorer.arkiv.network/tx/0x464a234407b0e374e4a18c2f4f316dce919708c61282f588b4d3a2586176ddc0) |
+| Month end | Bill for flat A, sealed | [`0x15620473…`](https://rabdi.explorer.arkiv.network/tx/0x15620473aa9ba19438426417fda40217d76093bdc305374940b4735edbe7b10c) |
 
 **TODO (Pawan/Om):** add the same trail from the live demo on `sunrise-apartments`, from the Pi's
 bridge, once it has run.

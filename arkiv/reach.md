@@ -33,7 +33,7 @@ the link.
 ## What others can reuse
 
 - **[`bridge/writer.mjs`](../bridge/writer.mjs):** a single-writer queue for Arkiv that reconciles
-  failed writes by hash or nonce instead of resending. It's independent of Dynaura and has 10
+  failed writes by hash or nonce instead of resending. It's independent of Dynaura and has 11
   offline tests. Any device writing to Arkiv (sensors, kiosks, Pis) needs exactly this.
 - **[`bridge/trust-check.mjs`](../bridge/trust-check.mjs):** a one-command live demonstration of
   why readers must scope by creator as well as owner.

@@ -58,9 +58,9 @@ demo building wallet above.
 
 ```bash
 cd bridge && npm ci
-npm test                                        # writer failure paths, offline (10 tests)
+npm test                                        # writer failure paths, offline (11 tests)
 BUILDING_ID=test-<you>-1 npm start              # needs ARKIV_PRIVATE_KEY + ARKIV_ACCESS_KEY in ../.env
-npm run smoke                                   # live: writes every schema, reads it back like the app (32 checks)
+npm run smoke                                   # live: writes every schema, reads it back like the app (36 checks)
 BUILDING_ID=test-<you>-1 node --env-file=../.env trust-check.mjs   # live: why reads scope by creator
 ```
 
