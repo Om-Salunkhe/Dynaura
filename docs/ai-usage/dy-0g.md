@@ -38,3 +38,10 @@ An AI coding assistant (Claude Code) worked on the 0G part of Dynaura in this se
 | `pi/zg.py` | `model` parameter; a missing model is a separate error so the vision call can fall back | Same tests |
 
 Found by reading the Router's public `/models` list rather than assuming: 0G's own `0gm-1.0-35b-a3b` takes text and images and is the only TEE-attested (TDX) vision model listed, so it is the default `ZG_VISION_MODEL`.
+
+## Round 3 (Sat night): fair share + solar credits
+
+| Area | Work | How it was checked |
+|---|---|---|
+| `pi/trader.py` | `decide_routes`: 0G, as market maker, decides who buys the spare sun (neighbours who used more than their share, the shop, the grid) and the neighbour price. The Pi caps every buyer, keeps the price inside the export..import band, and sends whatever is left to the grid. With no 0G, the whole spare goes to the grid at the feed-in rate, recorded as `no-ai`. Also `trades()` for the API and `TradeLoop` | `pi/tests/test_trader.py`: a mocked 0G Router over HTTP (the noon example, over-routing, more demand than spare, no routes, TEE failed, nothing to sell, no store, the loop, 0G unreachable) |
+| `pi/planner.py` | With credits on, a "spare sun forecast" line in the prompt and a `spare_plan` key in the plan; with credits off the plan is unchanged | Same test file |
