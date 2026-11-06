@@ -174,6 +174,28 @@ def test_ledger_end_to_end_with_store_settle_and_arkiv():
     assert w["needs"] == {} and w["spare_wh"] > 0
 
 
+def test_real_board_available_sun_never_hammers_a_dead_forecast():
+    import config
+    calls = []
+
+    class NoSim:
+        pass
+
+    led = credits.Ledger(FakeStore([]), NoSim(), path=str(Path(tempfile.mkdtemp()) / "c.db"))
+    assert led.available_w() is None, "no PANEL_BEST_W: unknown, so no spare is made up"
+    old = getattr(config, "PANEL_BEST_W", 0)
+    config.PANEL_BEST_W = 3.0
+    import forecast
+    real = forecast.forecast_day
+    forecast.forecast_day = lambda which: calls.append(which) or (_ for _ in ()).throw(OSError("offline"))
+    try:
+        assert led.available_w() is None and led.available_w() is None
+        assert len(calls) == 1, "one failed fetch, then a 5-minute pause"
+    finally:
+        forecast.forecast_day = real
+        config.PANEL_BEST_W = old
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

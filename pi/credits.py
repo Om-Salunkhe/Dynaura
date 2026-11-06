@@ -216,8 +216,10 @@ class Ledger:
             return None
         if getattr(config, "IGNORE_CLOCK", False):
             return best
+        if self._forecast and not self._forecast[1] and time.time() - self._forecast[0] < 300:
+            return None  # the last fetch failed: try again in 5 minutes, not every sample
         try:
-            if not self._forecast or time.time() - self._forecast[0] > 1800:
+            if not self._forecast or not self._forecast[1] or time.time() - self._forecast[0] > 1800:
                 import forecast
                 self._forecast = (time.time(), forecast.forecast_day("today"))
             hour = datetime.now().hour
@@ -225,6 +227,7 @@ class Ledger:
             return best * min(1.0, max(0.0, rad / 1000))
         except Exception as e:
             log.info("no forecast for the available sun: %s", e)
+            self._forecast = (time.time(), {})
             return None
 
     def sample(self, dt: float, now: float | None = None) -> None:
