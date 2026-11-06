@@ -87,6 +87,7 @@ function fromV3(api, live) {
       proof: j.arc?.proof_hash,
       requestId: j.og?.request_id,
       proofWindow: j.arc?.proof_window, // [from_minute, to_minute] the proof hashed, if the Pi says
+      proofInput: j.arc?.proof_input, // the exact string the Pi hashed (preferred for Verify payout)
       releasedAt: j.state === "paid" ? j.updated_at : null,
     },
     og: j && { open: j.og?.storage_root, paid: ["paid", "resolved"].includes(j.state) ? j.og?.storage_root : null },

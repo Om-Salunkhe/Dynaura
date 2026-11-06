@@ -4,9 +4,11 @@
 //          checks every signature and recomputes the hash (lib/arkivProof.js)
 // The payout is proven when every reading is signed by the Pi and their hash equals the hash on Arc.
 import { useEffect, useState } from "react";
+import { sha256, stringToBytes } from "viem";
 import { getJSON, useLive } from "./api.js";
 import { ABI, ADDR, publicClient } from "./arc.js";
 import { fetchReadings, verifyJobPayout } from "./arkiv.js";
+import { verifyReading } from "./arkivProof.js";
 
 // The Pi's device key (public): it signs every 1-minute meter summary. A connected Pi reports
 // its own as `device` in GET /api/health, which wins; VITE_DEVICE_ADDRESS overrides the default.
@@ -42,7 +44,50 @@ async function windowFor(job) {
 }
 
 /**
- * job: { id (Arc job id), proofWindow? [from_minute, to_minute] (arc.proof_window), releasedAt? }
+ * The exact recipe when the Pi gives arc.proof_input (the string it hashed), per dy-arc:
+ *  a) sha256(utf8(proof_input)) must equal the proofHash on Arc (no rebuilding of the string)
+ *  b) each [minute, avg_w, sig] in it must be a panel reading on Arkiv with the same sig and
+ *     avg_w within 1e-6, and that reading must be signed by the Pi's device key
+ */
+async function verifyFromInput(proofInput, onChain, device) {
+  const computed = sha256(stringToBytes(proofInput));
+  const hashOk = computed.toLowerCase() === onChain.toLowerCase();
+  let listed;
+  try {
+    listed = JSON.parse(proofInput);
+  } catch {
+    return { ok: false, onChain, computed, hashOk, why: "The Pi's proof input isn't valid JSON." };
+  }
+  const minutes = listed.map((x) => x[0]);
+  const ark = await fetchReadings({ meter: "panel", since: Math.min(...minutes), until: Math.max(...minutes), limit: 100 });
+  const rows = await Promise.all(
+    listed.map(async ([minute, avgW, sig]) => {
+      const r = ark.find((x) => x.minute === minute);
+      if (!r) return { minute, avgW, found: false, matches: false, signatureOk: false };
+      const matches = String(r.sig).toLowerCase() === String(sig).toLowerCase() && Math.abs(Number(avgW) - Number(r.avgW)) < 1e-6;
+      const { ok: signatureOk } = await verifyReading(r, device);
+      return { minute, avgW, found: true, matches, signatureOk };
+    }),
+  );
+  const readingsOk = rows.every((r) => r.found && r.matches);
+  const signaturesOk = rows.every((r) => r.signatureOk);
+  return {
+    ok: hashOk && readingsOk && signaturesOk,
+    hashOk,
+    readingsOk,
+    signaturesOk,
+    onChain,
+    computed,
+    signer: device,
+    piSigner: true,
+    rows,
+    how: "the exact input the Pi hashed",
+    why: !readingsOk ? (rows.some((r) => !r.found) ? "A hashed reading isn't on Arkiv (yet)." : "A hashed reading differs from Arkiv's copy.") : undefined,
+  };
+}
+
+/**
+ * job: { id (Arc job id), proofInput? (arc.proof_input), proofWindow? [from_minute, to_minute] (arc.proof_window), releasedAt? }
  * device: the Pi's device address (usePiDevice()); every reading must recover to exactly it.
  * Returns { ok, signaturesOk, hashOk, onChain, computed, signer, piSigner, rows, how, ogRequestId, why? }
  */
@@ -50,6 +95,8 @@ export async function verifyPayout(job, device = DEVICE_ADDRESS) {
   const chain = await publicClient.readContract({ address: ADDR.escrow, abi: ABI.escrow, functionName: "jobs", args: [BigInt(job.id)] });
   const [, , , , , , , onChain, ogStorageRoot, ogRequestId] = chain;
   if (/^0x0+$/.test(onChain)) return { ok: false, onChain, why: "No meter proof on Arc for this job (paid by a committee decision)." };
+
+  if (job.proofInput) return { ...(await verifyFromInput(job.proofInput, onChain, device)), ogRequestId, ogStorageRoot };
 
   const { window, how } = await windowFor(job);
   if (!window) return { ok: false, onChain, why: "Not enough signed panel readings on Arkiv around the release time." };

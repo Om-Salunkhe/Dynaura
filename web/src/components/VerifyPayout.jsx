@@ -29,7 +29,7 @@ export default function VerifyPayout({ hero }) {
     setBusy(true);
     setRes(null);
     try {
-      setRes(await verifyPayout({ id: j.id, proofWindow: j.proofWindow, releasedAt: j.releasedAt }, device));
+      setRes(await verifyPayout({ id: j.id, proofInput: j.proofInput, proofWindow: j.proofWindow, releasedAt: j.releasedAt }, device));
     } catch (e) {
       setRes({ ok: false, why: e.shortMessage || e.message });
     } finally {
@@ -62,6 +62,11 @@ export default function VerifyPayout({ hero }) {
             <span className={`text-[12px] ${res.signaturesOk ? "text-good" : "text-bad"}`}>
               {res.signaturesOk ? "✓" : "✗"} {res.signaturesOk ? "All readings signed by" : "Not every reading is signed by"}{" "}
               the Pi's device key <span className="mono" title={res.signer}>{short(res.signer)}</span>
+            </span>
+          )}
+          {res.readingsOk != null && (
+            <span className={`text-[12px] ${res.readingsOk ? "text-good" : "text-bad"}`}>
+              {res.readingsOk ? "✓ Every hashed reading is on Arkiv, unchanged" : "✗ A hashed reading is missing or different on Arkiv"}
             </span>
           )}
           {res.computed && (
