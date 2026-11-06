@@ -60,9 +60,9 @@ npm run build                                 # writes abi/*.json (read by pi/ a
 
 Mock tokens (`test/MockUSDC.sol`, `test/acceptance/AcceptanceUSDC.sol`) exist only for these tests. Never deploy them.
 
-## On-chain proof (Arc testnet, Fri 6 Nov)
+## On-chain proof (Arc testnet, Fri 6 and Sat 7 Nov)
 
-The whole flow, run for real with `scripts/committee.mjs` and `scripts/e2e.mjs`. Every hash is in `deployments.json` under `demoTxs`.
+The whole flow, run for real with `scripts/committee.mjs`, `scripts/e2e.mjs` and `scripts/credits.mjs`. Every hash is in `deployments.json` under `demoTxs`.
 
 | Step | What happened | Transaction |
 |---|---|---|
@@ -78,6 +78,13 @@ The whole flow, run for real with `scripts/committee.mjs` and `scripts/e2e.mjs`.
 | Ownership | The Pi hands CleaningEscrow to the committee (`transferOwnership`, then `acceptOwnership`) | [`0x0e14b7c0…`](https://explorer.testnet.arc.io/tx/0x0e14b7c01fe353818179ad5767555fe06ce95f053efc9249c580807d439d5229) |
 | Ownership | The same for ShopTrade | [`0x765ae598…`](https://explorer.testnet.arc.io/tx/0x765ae598786d70075dc0dd3aa317085aca5959ee819ddf8f8d9d05576b7ec67f) |
 | Ownership | The same for SolarBilling | [`0xcbb5c44e…`](https://explorer.testnet.arc.io/tx/0xcbb5c44ede94b5bedbdd33e0231a8d3d82ee773033ea17106a07e350be7e0c10) |
+| Fair share | Arc Studio deploys SolarCredits (owner = committee, oracle = Pi) | [`0x4f546ec8…`](https://explorer.testnet.arc.io/tx/0x4f546ec80336d1e7fb52bd73ec35b615fb56ffc0d49f8dc0554fecec974dff41) |
+| Fair share | The committee registers each flat's wallet (`register`, shown for A) | [`0x20c96997…`](https://explorer.testnet.arc.io/tx/0x20c96997fe4bdedf2eca3d1a0af02e44cd66e1d1a14c396cbc95e9faf2d61485) |
+| Fair share | The Pi posts Pawan's day: A left 30 kWh unused, B 10 kWh, C used 20 kWh over its share (`postPeriod`) | [`0x1e4bf2ca…`](https://explorer.testnet.arc.io/tx/0x1e4bf2cac3395c5dcf02af6715886af4ac7681a2e6018fb08e91ccd06dea6cea) |
+| Fair share | C pays its neighbours for the 20 kWh: 0.26 USDC (`payIn`) | [`0x039349e2…`](https://explorer.testnet.arc.io/tx/0x039349e236a5f9fca86337da44268d0032140d264024ddf137c9c59a781b45a0) |
+| Fair share | Shop and grid revenue goes into the pool: 0.14 USDC (`fund`) | [`0x59fb00a5…`](https://explorer.testnet.arc.io/tx/0x59fb00a5149233c3e787712564b77861cf4fb236a8e32cb37d42fe7def501f7f) |
+| Fair share | **A claims 0.30 USDC**: pool × 30 / 40, computed on chain (`claim`) | [`0xe26af95a…`](https://explorer.testnet.arc.io/tx/0xe26af95abbb552d6a1a1915ae68318afef9c465c4999d2faf9197afbd4c65339) |
+| Fair share | **B claims 0.10 USDC**: pool × 10 / 40. An equal split would have paid each 0.20 (`claim`) | [`0x3611a780…`](https://explorer.testnet.arc.io/tx/0x3611a7805a4be62f073dfd899f42f36414e521cef70f3d118f4e3e37fb498283) |
 
 | Role | Wallet |
 |---|---|
