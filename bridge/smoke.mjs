@@ -160,14 +160,20 @@ const off = await step("write shop offer (expires when the window closes)", () =
   post("/offer", { day: today, kwh: 0.42, price_usdc: 0.08, window_end: now + 10 * 60, og_request_id: `smoke-${run}` }),
 )
 
-// Cleaning flow v3: the Pi posts its Job as is, and keeps the returned key as job.arkiv_key.
+// Cleaning flow v3, in dy-arc's flat payload (pi/cleaning.py): job_id is the PI's job id and
+// arc_job_id the escrow id once approved. The bridge maps them to case_id / job_id on Arkiv.
 const jobId = 800_000 + (run % 99_999) // Arc escrow id, known from approval on
-const caseId = `smoke-${run}`
+const piJobId = 700_000 + (run % 99_999)
+const caseId = String(piJobId)
 const deadline = now + 60 * 60
-const og = { request_id: `smoke-dust-${run}`, tee: true, decision_id: decisionId + 2, dirty: true, coverage_pct: 38.5, input: "vision", reason: "dust film" }
 const cleaner = privateKeyToAccount(generatePrivateKey()).address // the cleaner's wallet
-const job = (state, extra = {}) => ({ id: caseId, state, fee_usdc: 2, deadline, created_at: now, dusty_pct: 52.3, og, arc: {}, ...extra })
-const j1 = await step("cleaning job flagged by 0G (create, no escrow yet)", () => post("/cleaning_job", job("flagged", { fee_usdc: undefined, deadline: undefined })))
+const job = (status, extra = {}) => ({
+  job_id: piJobId, arc_job_id: null, status, fee_usdc: 2, created_at: now, deadline: now + 86_400,
+  output_before: 52.3, dusty_pct: 52.3, after_pct: null, output_after: null,
+  og_request_id: `smoke-dust-${run}`, og_storage_root: null, og_tee: true, coverage_pct: 38.5, og_input: "vision",
+  proof_hash: null, open_tx: null, release_tx: null, refund_tx: null, arc_tx: null, ...extra,
+})
+const j1 = await step("cleaning job flagged by 0G (create, no escrow yet)", () => post("/cleaning_job", job("flagged")))
 const j1Entity = j1 && (await entity(j1.key))
 await step("a flag nobody approves lapses in 48 h", async () => {
   const head = await ctx.client.getBlockNumber()
@@ -176,25 +182,20 @@ await step("a flag nobody approves lapses in 48 h", async () => {
   return { note: `${hours.toFixed(1)} h left` }
 })
 const j2 = await step("admin approves (patch + extend to deadline + 7 days)", async () => {
-  const r = await post("/cleaning_job", { ...job("approved"), arkiv_key: j1.key })
+  const r = await post("/cleaning_job", job("approved", { deadline }))
   expect(r.key === j1.key && r.patched && r.extended, JSON.stringify(r))
   return r
 })
 const j2Entity = j2 && (await entity(j2.key))
-await step("escrow open on Arc -> open (patch)", () =>
-  post("/cleaning_job", { ...job("open", { arc: { job_id: jobId, open_tx: "0x" + "11".repeat(32) } }), arkiv_key: j1.key }),
-)
-await step("cleaner accepts -> accepted (patch)", () => post("/cleaning_job", { ...job("accepted", { arc: { job_id: jobId } }), arkiv_key: j1.key }))
-await step("cleaner marks done -> cleaned (patch)", () => post("/cleaning_job", { ...job("cleaned", { arc: { job_id: jobId } }), arkiv_key: j1.key }))
+await step("escrow open on Arc -> open (patch)", () => post("/cleaning_job", job("open", { deadline, arc_job_id: jobId, open_tx: "0x" + "11".repeat(32), arc_tx: "0x" + "11".repeat(32) })))
+await step("cleaner accepts -> accepted (patch)", () => post("/cleaning_job", job("accepted", { deadline, arc_job_id: jobId, open_tx: "0x" + "11".repeat(32) })))
+await step("cleaner marks done -> cleaned (patch)", () => post("/cleaning_job", job("cleaned", { deadline, arc_job_id: jobId, open_tx: "0x" + "11".repeat(32) })))
 const j3 = await step("meter proves it: paid at 94% (patch)", () =>
-  post("/cleaning_job", {
-    ...job("paid", {
-      after_pct: 94.1,
-      og: { ...og, storage_root: "0x" + "cd".repeat(32) },
-      arc: { job_id: jobId, cleaner, release_tx: "0x" + "22".repeat(32), proof_hash: "0x" + "ee".repeat(32), proof_window: [minute - 120, minute] },
-    }),
-    arkiv_key: j1.key,
-  }),
+  post("/cleaning_job", job("paid", {
+    deadline, arc_job_id: jobId, after_pct: 94.1, output_after: 94.1, og_storage_root: "0x" + "cd".repeat(32),
+    open_tx: "0x" + "11".repeat(32), release_tx: "0x" + "22".repeat(32), arc_tx: "0x" + "22".repeat(32),
+    proof_hash: "0x" + "ee".repeat(32), proof_window: [minute - 120, minute], cleaner,
+  })),
 )
 await step("paid job: a work receipt made by the building, owned by the cleaner", async () => {
   const rc = j3?.receipt
@@ -203,7 +204,7 @@ await step("paid job: a work receipt made by the building, owned by the cleaner"
   expect(e.$creator.toLowerCase() === health.wallet.toLowerCase(), "created by the building")
   expect(e.$owner.toLowerCase() === cleaner.toLowerCase(), "owned by the cleaner")
   expect(e.$creationFlags?.readonly === true && e.$creationFlags?.permissionlessExtension === true, "sealed, anyone may extend")
-  const again = await post("/work_receipt", { id: caseId, arc: { job_id: jobId, cleaner }, fee_usdc: 2 })
+  const again = await post("/work_receipt", { job_id: piJobId, arc_job_id: jobId, cleaner, status: "paid", fee_usdc: 2 })
   expect(again.key === rc.key && again.issued === false, "issued once")
   const mine = await reads.workReceipts(ctx, { cleaner })
   expect(mine.length === 1 && mine[0].key === rc.key && mine[0].afterPct === 94.1, `cleaner's history ${JSON.stringify(mine)}`)

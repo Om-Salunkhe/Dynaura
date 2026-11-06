@@ -256,7 +256,7 @@ route("POST", "/cleaning_job", async (b) => {
   if (!cols.status) throw Object.assign(new Error("state (or status) is required"), { status: 400 })
   if (!cols.case_id && !cols.job_id && !b.arkiv_key) throw Object.assign(new Error("id, arc.job_id or arkiv_key is required"), { status: 400 })
   if (!JOB_STATES.includes(cols.status)) console.warn(`cleaning_job: unknown state "${cols.status}" written as is`)
-  const cacheId = cols.case_id ?? `arc:${b.arc?.job_id ?? b.job_id}`
+  const cacheId = cols.case_id ?? `arc:${cols.job_id?.value}`
   const end = wantedEnd(cols.status, b.deadline)
 
   return write(`cleaning_job ${cacheId} ${cols.status}`, async (tx) => {
@@ -285,7 +285,7 @@ route("POST", "/cleaning_job", async (b) => {
     }
 
     const expiration = end ? until(end, ExpirationTime.fromHours(1)) : ExpirationTime.fromHours(48)
-    const r = await walletClient.createEntity(CleaningJob, { building: BUILDING, ...cols }, { expiration }, tx)
+    const r = await walletClient.createEntity(CleaningJob, { building: BUILDING, created_at: u64(BigInt(nowS())), ...cols }, { expiration }, tx)
     jobKeys.set(cacheId, r.entityKey)
     return { key: r.entityKey, txHash: r.txHash, patched: false, extended: false }
   }, { ops: 2 }).then(async (out) => {

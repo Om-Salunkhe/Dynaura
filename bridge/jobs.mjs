@@ -20,23 +20,37 @@ const txt = (v, n = 120) => (v === undefined || v === null || v === "" ? undefin
 const unix = (v) => (isNum(v) ? u64(BigInt(Math.floor(Number(v)))) : undefined)
 const teeOf = (t) => (typeof t === "boolean" ? t : t && typeof t === "object" ? Boolean(t.verified ?? t.ok ?? t.valid) : undefined)
 
-/** A v3 Job (or a v2 flat job) as CleaningJob columns; fields the Pi didn't send are left out. */
+// States in which a job has no real escrow deadline yet: a deadline sent with them is ignored.
+const NO_DEADLINE_YET = new Set(["flagged", "no_check", "rejected"])
+
+/**
+ * The Pi's cleaning job as CleaningJob columns; fields it didn't send are left out. Three shapes:
+ *  - dy-arc's flat v3 payload (pi/cleaning.py): { job_id: <Pi job id>, arc_job_id: <Arc id|null>,
+ *    status, fee_usdc, deadline, dusty_pct, after_pct, og_request_id, og_storage_root, proof_hash,
+ *    open_tx, release_tx, refund_tx, arc_tx, created_at?, proof_window?, cleaner?, og_tee?,
+ *    coverage_pct?, og_input? }. The presence of arc_job_id marks it: job_id is then the PI's id.
+ *  - the nested Job of the shared contract: { id, state, og: {...}, arc: {...} }
+ *  - v2: { job_id: <Arc id>, status, output_before, ... }
+ * On Arkiv, case_id is always the Pi's id and job_id always the Arc escrow id.
+ */
 export function jobColumns(b) {
   const og = b.og || {}
   const arc = b.arc || {}
+  const flatV3 = Object.hasOwn(b, "arc_job_id")
   const win = arc.proof_window || b.proof_window || []
+  const status = String(b.state ?? b.status ?? "")
   const cols = {
-    status: String(b.state ?? b.status ?? ""),
-    case_id: txt(b.id, 64),
-    job_id: unix(arc.job_id ?? b.job_id),
+    status,
+    case_id: txt(b.id ?? (flatV3 ? b.job_id : undefined), 64),
+    job_id: unix(arc.job_id ?? (flatV3 ? b.arc_job_id : b.job_id)),
     created_at: unix(b.created_at),
     fee_usdc: isNum(b.fee_usdc) ? d(b.fee_usdc) : undefined,
-    deadline: unix(b.deadline),
+    deadline: NO_DEADLINE_YET.has(status) ? undefined : unix(b.deadline),
     dusty_pct: isNum(b.dusty_pct ?? b.output_before) ? d(b.dusty_pct ?? b.output_before, 1) : undefined,
     after_pct: isNum(b.after_pct ?? b.output_after) ? d(b.after_pct ?? b.output_after, 1) : undefined,
-    coverage_pct: isNum(og.coverage_pct) ? d(og.coverage_pct, 1) : undefined,
-    og_input: txt(og.input, 20),
-    og_tee: teeOf(og.tee),
+    coverage_pct: isNum(og.coverage_pct ?? b.coverage_pct) ? d(og.coverage_pct ?? b.coverage_pct, 1) : undefined,
+    og_input: txt(og.input ?? b.og_input, 20),
+    og_tee: teeOf(og.tee ?? b.og_tee),
     og_request_id: txt(og.request_id ?? ogRequestId(b)),
     og_storage_root: txt(og.storage_root ?? ogStorageRoot(b)),
     proof_hash: txt(arc.proof_hash ?? b.proof_hash),
