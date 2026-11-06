@@ -306,6 +306,19 @@ def main():
     except ArcUnavailable:
         check("approve without Arc raises ArcUnavailable", True)
 
+    print("real Pi with no camera: 0G judges from the meter alone")
+    seen = []
+
+    def meter_only(jpeg, ctx):
+        seen.append(jpeg)
+        return dict(DIRTY)
+
+    w6, _, _ = make(meter_only, cam=lambda hw: None)
+    w6.hw.pct = 50
+    r = w6.scan()
+    check("scan with no camera frame flags the panel instead of crashing", seen == [None] and r.get("job"), r)
+    check("no stale photo is shown as the panel now", w6.frame is None and not w6._frame_path.exists())
+
     print("cleaning v3: all checks passed")
 
 
