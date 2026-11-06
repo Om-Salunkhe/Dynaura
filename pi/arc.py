@@ -1,6 +1,7 @@
-"""Arc testnet: the Pi wallet is the oracle of the three contracts in contracts/.
-It opens and releases cleaning escrows, settles shop orders and posts monthly bills,
-always from what its own meters measured. USDC is both the money and the gas on Arc."""
+"""Arc testnet: the Pi wallet is the oracle of the contracts in contracts/.
+It opens and releases cleaning escrows, settles shop orders, posts monthly bills and posts each
+period's fair-share credits, always from what its own meters measured. USDC is both the money and
+the gas on Arc."""
 import json
 import logging
 import threading
@@ -54,6 +55,7 @@ class Arc:
         self.escrow = self._contract("CleaningEscrow", config.ARC_ESCROW)
         self.shop = self._contract("ShopTrade", config.ARC_SHOP)
         self.billing = self._contract("SolarBilling", config.ARC_BILLING)
+        self.credits = self._contract("SolarCredits", config.ARC_CREDITS)
 
     def _contract(self, name: str, address: str):
         if not address:
@@ -173,3 +175,123 @@ class Arc:
         rcpt = self.send(b.functions.postBill(flat, month, resident, to_units(solar_usdc), to_units(grid_usdc),
                                               int(solar_wh), int(grid_wh), readings_hash))
         return b.events.BillPosted().process_receipt(rcpt)[0]["args"]["billId"], self.tx_hash(rcpt)
+
+    # ---- solar credits (fair share of the spare sun) ---------------------
+    # On chain, energy is in Wh of the real building (1 Wh on the model = BILL_SCALE Wh real) and the
+    # neighbour rate in micro-USDC per real Wh (0.013 USDC/kWh -> 13). SolarCredits then pays each flat
+    # pool * unusedWh / sum(unusedWh) itself.
+    def credits_post(self, key: str, flats: dict, neighbor_rate_usdc: float, readings_hash) -> str:
+        """Post one period (oracle). flats = {"A": {"unused_wh": 30, "over_wh": 0}, ...} in model Wh,
+        the shape of GET /api/credits. A period is posted once; posting it again reverts."""
+        c = self.need(self.credits)
+        names, unused, over = credit_rows(flats)
+        rcpt = self.send(c.functions.postPeriod(credit_period_id(key), names, unused, over,
+                                                rate_to_chain(neighbor_rate_usdc), as_bytes32(readings_hash)))
+        return self.tx_hash(rcpt)
+
+    def credits_fund(self, key: str, usdc: float) -> str:
+        """Put shop and grid revenue into the period's pool (the Pi is the society treasury)."""
+        c = self.need(self.credits)
+        units = to_units(usdc)
+        self.ensure_allowance(c.address, units)
+        return self.tx_hash(self.send(c.functions.fund(credit_period_id(key), units)))
+
+    def credits_claim(self, key: str, flat: str) -> str:
+        """Pay a flat its share now. Anyone may trigger it: the USDC goes to the flat's registered wallet."""
+        c = self.need(self.credits)
+        return self.tx_hash(self.send(c.functions.claim(credit_period_id(key), flat)))
+
+    def credits_status(self, key: str) -> dict:
+        """What SolarCredits holds for one period: posted?, the pool, and per flat what is claimable/claimed."""
+        c = self.need(self.credits)
+        pid = credit_period_id(key)
+        posted, rate, rhash, total_unused, total_in, total_claimed = c.functions.periodInfo(pid).call()
+        out = {"period_id": pid, "key": key, "posted": posted, "neighbor_rate_usdc": rate / 1000,
+               "readings_hash": "0x" + bytes(rhash).hex(), "total_unused_wh": total_unused,
+               "total_in_usdc": from_units(total_in), "total_claimed_usdc": from_units(total_claimed), "flats": {}}
+        if not posted:
+            return out
+        for flat in c.functions.flatsOf(pid).call():
+            _, unused, over, paid_in, claimed = c.functions.flatInfo(pid, flat).call()
+            wallet = c.functions.walletOf(flat).call()
+            out["flats"][flat] = {"unused_wh": unused, "over_wh": over, "paid_in": paid_in,
+                                  "owes_usdc": from_units(over * rate), "claimed_usdc": from_units(claimed),
+                                  "claimable_usdc": from_units(c.functions.claimable(pid, flat).call()),
+                                  "wallet": None if int(wallet, 16) == 0 else wallet}
+        return out
+
+    def credits_settle(self, key: str, flats: dict, neighbor_rate_usdc: float, fund_usdc: float,
+                       readings_hash) -> dict:
+        """POST /api/admin/credits/settle: post the period (once) and fund it with the shop and grid
+        revenue (only what the Pi hasn't put in yet). Safe to call again. Returns the API's chain{}."""
+        st = self.credits_status(key)
+        post_tx = fund_tx = None
+        if not st["posted"]:
+            post_tx = self.credits_post(key, flats, neighbor_rate_usdc, readings_hash)
+            st = self.credits_status(key)
+        paid_in = sum(f["owes_usdc"] for f in st["flats"].values() if f["paid_in"])
+        missing = round(fund_usdc - (st["total_in_usdc"] - paid_in), 6)
+        if missing >= 1e-6 and st["total_unused_wh"] > 0:
+            fund_tx = self.credits_fund(key, missing)
+            st = self.credits_status(key)
+        txs = self.credits_txs(key)
+        return {**st, "post_tx": post_tx or txs["post_tx"], "fund_tx": fund_tx or txs["fund_tx"],
+                "claims": {f: txs["claims"].get(f) for f in st["flats"]}}
+
+    def credits_txs(self, key: str) -> dict:
+        """Best effort: the period's transactions from SolarCredits' events (one event type per query:
+        Arc's RPC refuses eth_getLogs filtered on several event types)."""
+        out = {"post_tx": None, "fund_tx": None, "claims": {}}
+        c = self.credits
+        if not (self.enabled and c is not None):
+            return out
+        pid = credit_period_id(key)
+        try:
+            frm = max(config.ARC_CREDITS_FROM_BLOCK, 0)
+            for name, slot in (("PeriodPosted", "post_tx"), ("PeriodFunded", "fund_tx"), ("CreditClaimed", "claims")):
+                ev = getattr(c.events, name)()
+                for log_ in ev.get_logs(from_block=frm, argument_filters={"periodId": pid}):
+                    h = log_["transactionHash"].hex()
+                    h = h if h.startswith("0x") else "0x" + h
+                    if slot == "claims":
+                        out["claims"][log_["args"]["flat"]] = h  # the latest claim per flat
+                    else:
+                        out[slot] = h  # the latest post / fund
+        except Exception as e:
+            log.warning("SolarCredits event lookup failed: %s", str(e)[:200])
+        return out
+
+
+def credit_period_id(key: str) -> str:
+    """bytes32 id of a credits period: keccak256("<building>:<key>"), key "2026-11-07" (day) or "2026-11" (month)."""
+    h = Web3.keccak(text=f"{config.BUILDING_ID}:{key}").hex()
+    return h if h.startswith("0x") else "0x" + h
+
+
+def wh_to_chain(wh_model: float) -> int:
+    """Model Wh -> Wh of the real building (BILL_SCALE 1000: 1 Wh on the model is 1 kWh real)."""
+    return int(round(max(float(wh_model or 0), 0.0) * config.BILL_SCALE))
+
+
+def rate_to_chain(usdc_per_kwh: float) -> int:
+    """USDC per real kWh -> micro-USDC per real Wh (0.013 -> 13)."""
+    return int(round(float(usdc_per_kwh) * 1000))
+
+
+def as_bytes32(h) -> bytes:
+    b = bytes.fromhex(h[2:] if h.startswith("0x") else h) if isinstance(h, str) else bytes(h or b"")
+    if len(b) != 32:
+        raise ValueError("readings_hash must be 32 bytes")
+    return b
+
+
+def credit_rows(flats: dict) -> tuple[list[str], list[int], list[int]]:
+    """Sorted flat names with their unused and over-share energy on chain. A flat is under its share
+    or over it, never both (the contract refuses that), so only the larger of the two is kept."""
+    names, unused, over = [], [], []
+    for flat in sorted(flats):
+        u, o = wh_to_chain(flats[flat].get("unused_wh")), wh_to_chain(flats[flat].get("over_wh"))
+        names.append(flat)
+        unused.append(u if u >= o else 0)
+        over.append(o if o > u else 0)
+    return names, unused, over
