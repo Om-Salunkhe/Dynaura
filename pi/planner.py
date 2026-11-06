@@ -23,6 +23,8 @@ Rules:
 - If the sun is weak, move upkeep jobs (garden, pool) to another day by leaving them out.
 - A flat that is away uses almost nothing; its share can go to other flats.
 - Offer spare solar to nearby shops only if there is clearly more than the building needs.
+- Give every flat one to three short tips in recommendations.
+- split_kwh (flats + common + buffer) adds up to what the roof can make tomorrow.
 Answer with ONE JSON object only, no other text:
 {"summary": "one sentence",
  "solar_window": ["HH:MM", "HH:MM"],
@@ -148,7 +150,8 @@ def validate(plan: dict, forecast: dict) -> dict:
 def make_plan(forecast: dict, history: list[dict], away: dict[str, bool]) -> tuple[dict, zg.ZGReply, str]:
     """Returns (validated plan, 0G reply, prompt). Raises zg.ZGUnavailable on any failure."""
     prompt = build_prompt(forecast, history, away)
-    reply = zg.chat([{"role": "system", "content": system_prompt()}, {"role": "user", "content": prompt}], max_tokens=6000)
+    reply = zg.chat_maybe_thinking([{"role": "system", "content": system_prompt()}, {"role": "user", "content": prompt}],
+                                   config.PLAN_THINKING, max_tokens=6000)
     plan = validate(zg.extract_json(reply.text), forecast)
     log.info("0G plan %s: %s", reply.request_id, plan["summary"])
     return plan, reply, prompt

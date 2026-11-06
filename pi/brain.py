@@ -12,6 +12,10 @@ from hw import FLATS
 log = logging.getLogger("dynaura.brain")
 
 
+class PlanBusy(RuntimeError):
+    """A plan is already being made (0G can take a while); don't start a second one."""
+
+
 class Brain:
     def __init__(self, hw, store, uploader=None):
         self.hw = hw
@@ -46,28 +50,36 @@ class Brain:
             for d in self.store.daily(7)
         ]
 
-    def run_plan(self, which: str = "tomorrow") -> dict:
+    def run_plan(self, which: str = "tomorrow", wait: bool = True) -> dict:
         """Ask 0G for a plan. If 0G (or the forecast) fails, go to no-AI mode:
-        no decision is faked, every flat stays on grid, the pump stays off, and it is logged."""
-        with self._lock:
-            try:
-                forecast = forecast_day(which)
-                away = {f: self.hw.away(f) for f in FLATS}
-                plan, reply, prompt = planner.make_plan(forecast, self.history(), away)
-            except Exception as e:
-                return self._no_ai(str(e))
-            did = self.store.add_decision(
-                "plan", "ai", plan["summary"], plan,
-                request_id=reply.request_id, model=reply.model, tee=reply.tee, input=prompt,
-            )
-            if self.uploader:
-                self.uploader.enqueue(did, {"forecast": forecast, "raw_answer": reply.text})
-            self.notify(did)
-            self.plan = plan
-            self.decision = self.store.latest("plan")
-            self._publish_offer(plan, reply.request_id)
-            log.info("plan #%s recorded (0G %s)", did, reply.request_id)
-            return self.public()
+        no decision is faked, every flat stays on grid, the pump stays off, and it is logged.
+        wait=False: raise PlanBusy instead of queueing behind a plan that is already being made."""
+        if not self._lock.acquire(blocking=wait):
+            raise PlanBusy("a plan is already being made")
+        try:
+            return self._run_plan(which)
+        finally:
+            self._lock.release()
+
+    def _run_plan(self, which: str) -> dict:
+        try:
+            forecast = forecast_day(which)
+            away = {f: self.hw.away(f) for f in FLATS}
+            plan, reply, prompt = planner.make_plan(forecast, self.history(), away)
+        except Exception as e:
+            return self._no_ai(str(e))
+        did = self.store.add_decision(
+            "plan", "ai", plan["summary"], plan,
+            request_id=reply.request_id, model=reply.model, tee=reply.tee, input=prompt,
+        )
+        if self.uploader:
+            self.uploader.enqueue(did, {"forecast": forecast, "raw_answer": reply.text})
+        self.notify(did)
+        self.plan = plan
+        self.decision = self.store.latest("plan")
+        self._publish_offer(plan, reply.request_id)
+        log.info("plan #%s recorded (0G %s)", did, reply.request_id)
+        return self.public()
 
     def _publish_offer(self, plan: dict, request_id: str | None) -> None:
         kwh = plan.get("shop_offer_kwh") or 0
@@ -109,4 +121,5 @@ class Brain:
             "storage_root": d.get("storage_root"),
             "ts": d.get("ts"),
             "reason": (d.get("output") or {}).get("reason") if d.get("mode") == "no-ai" else None,
+            "planning": self._lock.locked(),  # a plan is being made right now
         }

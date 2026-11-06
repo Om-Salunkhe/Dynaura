@@ -133,6 +133,21 @@ def chat(messages: list[dict], max_tokens: int = 4000, temperature: float = 0.2,
     return reply
 
 
+NO_THINKING = {"chat_template_kwargs": {"enable_thinking": False}}
+
+
+def chat_maybe_thinking(messages: list[dict], thinking: bool, **kw) -> ZGReply:
+    """0gm-1.0 is Qwen3-based and thinks before it answers: a trade took ~80 s and a plan ~130 s with
+    thinking, a few seconds without. thinking=False asks it not to. If the Router refuses the option,
+    ask once more with thinking (the Router did answer, so offline still fails fast)."""
+    if not thinking:
+        try:
+            return chat(messages, extra_body=NO_THINKING, **kw)
+        except ZGModelUnavailable as e:
+            log.warning("0G refused enable_thinking=false, asking with thinking: %s", e)
+    return chat(messages, **kw)
+
+
 def check_dust(jpeg, ctx, **kw) -> dict:
     """The 0G dust check lives in pi/dust.py (it records decisions); this is a shortcut to it."""
     import dust
