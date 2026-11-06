@@ -88,3 +88,11 @@ test("dy-arc's flat v3 payload: job_id is the Pi's id, arc_job_id the escrow", (
   assert.equal(noCheck.fee_usdc, "0")
   assert.ok(!("deadline" in noCheck))
 })
+
+test("a v3-only state marks the payload v3 even without arc_job_id", () => {
+  const c = v(jobColumns({ job_id: 5, status: "no_check", fee_usdc: 0, dusty_pct: 100 }))
+  assert.equal(c.case_id, "5", "the Pi's id")
+  assert.ok(!("job_id" in c), "not mistaken for an Arc escrow id")
+  const old = v(jobColumns({ job_id: 5, status: "open", fee_usdc: 2 }))
+  assert.equal(old.job_id, 5n, "a v2 state keeps the v2 meaning")
+})
