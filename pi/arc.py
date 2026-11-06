@@ -151,6 +151,19 @@ class Arc:
                 "delivered_wh": o[3], "price_per_kwh": from_units(o[4]), "deadline": o[5],
                 "status": ORDER_STATUS[o[6]], "day": o[7]}
 
+    def order_tx(self, order_id: int, lookback: int = 20000) -> str | None:
+        """The shop's prepay transaction (OrderPlaced event), looked up in the last `lookback` blocks
+        when the Pi first sees the order. Best effort: None if the RPC won't say."""
+        try:
+            shop = self.need(self.shop)
+            start = max(0, self.w3.eth.block_number - lookback)
+            for ev in shop.events.OrderPlaced().get_logs(from_block=start, argument_filters={"orderId": order_id}):
+                h = ev["transactionHash"].hex()
+                return h if h.startswith("0x") else "0x" + h
+        except Exception as e:
+            log.warning("OrderPlaced lookup for order #%s failed: %s", order_id, str(e)[:200])
+        return None
+
     def settle_order(self, order_id: int, delivered_wh: int) -> tuple[float, float, str]:
         shop = self.need(self.shop)
         rcpt = self.send(shop.functions.settle(order_id, int(delivered_wh)))

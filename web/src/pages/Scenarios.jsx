@@ -166,19 +166,30 @@ function Story({ n, title, story, steps, children }) {
 }
 
 function Actions({ items, run, connected }) {
+  // one action at a time: an Arc transaction takes a few seconds, and a second press would hit a
+  // request that already moved on (e.g. "the cleaning request is open, not flagged")
+  const [busy, setBusy] = useState(null);
   const list = items.filter(Boolean);
   if (!list.length) return null;
+  const press = async (a) => {
+    setBusy(a.label);
+    try {
+      await run(a.label, a.fn);
+    } finally {
+      setBusy(null);
+    }
+  };
   return (
     <div className="flex flex-wrap gap-2">
       {list.map((a) => (
         <button
           key={a.label}
           type="button"
-          disabled={!connected || a.disabled}
+          disabled={!connected || a.disabled || !!busy}
           className={`${a.quiet ? "btn-ghost" : "btn"} min-h-[48px] px-5 text-base disabled:opacity-40`}
-          onClick={() => run(a.label, a.fn)}
+          onClick={() => press(a)}
         >
-          {a.label}
+          {busy === a.label ? `${a.label}…` : a.label}
         </button>
       ))}
     </div>
@@ -388,7 +399,11 @@ const ROUTE_NAME = (to) => (to === "shop" ? "Nearby shop" : to === "grid" ? "Gri
 function SellScenario({ live, connected, run, title, n }) {
   const [market, reloadMarket] = usePoll("/api/marketplace", connected, 4000);
   const [trades, reloadTrades] = usePoll("/api/decisions?kind=trade&limit=1", connected, 4000);
-  const t = market?.trader?.last || (trades?.[0] ? { ...trades[0].output, request_id: trades[0].request_id, mode: trades[0].mode, at: trades[0].ts } : null);
+  // every trade is a decision, so the log's newest one is the latest trade, with its 0G proofs
+  const dec = trades?.[0];
+  const t = dec
+    ? { ...dec.output, request_id: dec.request_id, mode: dec.mode, at: dec.ts, storage_root: dec.storage_root, episode_tx: dec.episode_tx }
+    : market?.trader?.last || null;
   const routes = t?.routes || [];
   const panelW = sunW(live) || 0;
   // what the flats draw from the sun right now (flats on grid don't use the panel's share)
@@ -402,6 +417,14 @@ function SellScenario({ live, connected, run, title, n }) {
     reloadTrades();
     return r;
   };
+  const openOrder = orders.find((o) => o.status === "open");
+  const settleNow = async () => {
+    const r = await postJSON(`/api/admin/settle/${openOrder.order_id}`, {}, { admin: true });
+    reloadMarket();
+    return r;
+  };
+  const sale = sales[0];
+  const proofOrder = (sale && orders.find((o) => o.order_id === sale.order_id)) || orders[0];
   return (
     <>
       <Story
@@ -412,10 +435,17 @@ function SellScenario({ live, connected, run, title, n }) {
           { text: `Spare sun: panel gives ${W(panelW)}, flats on solar use ${W(usedW)}`, done: panelW - usedW > 0.05, hint: "Keep the lamp on for about 30 seconds: “Sell” counts the last 5 minutes and the one in progress" },
           { text: "Dyna on 0G decides who buys the spare", done: !!t && t.mode === "ai", hint: "Press “Sell the spare now” (it also runs by itself every few minutes)" },
           { text: "A nearby shop sees the offer and prepays on Arc", done: orders.some((o) => o.status === "open" || o.status === "settled"), hint: "Pawan's phone: Shop → Offers" },
-          { text: "After the window the Pi settles what was delivered", done: sales.length > 0 },
+          { text: "The Pi settles on Arc: the shop pays for what was delivered, the rest goes back", done: sales.length > 0, hint: openOrder ? "Press “Settle on Arc now”, or it settles by itself at the end of the window" : null },
         ]}
       >
-        <Actions connected={connected} run={run} items={[{ label: "Sell the spare now (0G)", fn: sellNow }]} />
+        <Actions
+          connected={connected}
+          run={run}
+          items={[
+            { label: "Sell the spare now (0G)", fn: sellNow },
+            openOrder && { label: "Settle on Arc now", fn: settleNow },
+          ]}
+        />
         {t && (
           <div className="rounded-2xl bg-inner p-4">
             <div className="label">0G's trade</div>
@@ -440,6 +470,40 @@ function SellScenario({ live, connected, run, title, n }) {
             </div>
           </div>
         )}
+        {(t?.request_id || proofOrder) && (
+          <div className="rounded-2xl border border-line p-4">
+            <div className="label">Proof of the P2P sale</div>
+            <ul className="mt-2 flex flex-col gap-2 text-base">
+              {t?.request_id && (
+                <li className="flex flex-wrap items-center justify-between gap-2">
+                  <span>0G decided who buys the spare</span>
+                  <span className="flex flex-wrap gap-2 text-sm">
+                    <ZgChip id={t.request_id} label="0G request" />
+                    {t.storage_root && <Proof kind="og" id={t.storage_root} label="0G Storage" />}
+                    {t.episode_tx && <Proof kind="ogtx" id={t.episode_tx} label="0G registry" />}
+                  </span>
+                </li>
+              )}
+              {proofOrder && (
+                <li className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    Shop prepaid {proofOrder.deposit_usdc} USDC for {(Number(proofOrder.want_wh) / 1000).toFixed(3)} kWh
+                  </span>
+                  {proofOrder.tx ? <Proof kind="arc" id={proofOrder.tx} label="Prepaid on Arc" /> : <span className="text-sm text-muted">order #{proofOrder.order_id} on Arc</span>}
+                </li>
+              )}
+              {sale && (
+                <li className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    Settled: {sale.kwh} kWh delivered, {Number(sale.usdc).toFixed(4)} USDC to the society
+                    {sale.refunded > 0 && `, ${Number(sale.refunded).toFixed(4)} back to the shop`}
+                  </span>
+                  {sale.arc_tx && <Proof kind="arc" id={sale.arc_tx} label="Settled on Arc" />}
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
       </Story>
       <Building
         live={live}
@@ -456,10 +520,9 @@ function SellScenario({ live, connected, run, title, n }) {
             {orders.slice(0, 3).map((o) => (
               <div key={o.order_id} className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                 <span>
-                  Order #{o.order_id}: {o.status}
-                  {o.kwh != null && `, ${o.kwh} kWh`}
+                  Order #{o.order_id}: {o.status}, {(Number(o.want_wh) / 1000).toFixed(3)} kWh for {o.deposit_usdc} USDC
                 </span>
-                {o.tx && <Proof kind="arc" id={o.tx} />}
+                {o.tx && <Proof kind="arc" id={o.tx} label="Prepaid" />}
                 {o.settle_tx && <Proof kind="arc" id={o.settle_tx} label="Settled" />}
               </div>
             ))}
