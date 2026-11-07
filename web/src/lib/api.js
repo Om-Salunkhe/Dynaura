@@ -104,6 +104,31 @@ const stopDemo = () => {
   demoTimer = null;
 };
 
+// Some proxies (a Cloudflare quick tunnel, for one) pass the stream's headers but hold back its
+// events. If the stream is silent, read the same live state from /api/state once a second.
+let pollTimer = null;
+const stopPoll = () => {
+  clearInterval(pollTimer);
+  pollTimer = null;
+};
+function startPoll() {
+  if (pollTimer) return;
+  const tick = () =>
+    fetch(apiUrl() + "/api/state", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d) => {
+        if (!pollTimer) return;
+        stopDemo();
+        setLive({ ...d, demo: false, connected: true });
+      })
+      .catch(() => {
+        failReason = "no answer";
+        startDemo();
+      });
+  pollTimer = setInterval(tick, 1000);
+  tick();
+}
+
 function openStream() {
   clearTimeout(retryTimer);
   retryTimer = null;
@@ -117,9 +142,10 @@ function openStream() {
     startDemo();
     return;
   }
-  const first = setTimeout(() => liveState.demo && startDemo(), 2500);
+  const first = setTimeout(() => liveState.demo && startPoll(), 2500);
   es.onmessage = (e) => {
     retryMs = 2000;
+    stopPoll();
     stopDemo();
     setLive({ ...JSON.parse(e.data), demo: false, connected: true });
   };
@@ -128,7 +154,7 @@ function openStream() {
     failReason = "no answer";
     es?.close();
     es = null;
-    startDemo();
+    if (!pollTimer) startDemo();
     if (liveSubs.size) retryTimer = setTimeout(openStream, retryMs);
     retryMs = Math.min(retryMs * 2, 10000);
   };
@@ -149,6 +175,7 @@ function subscribe(fn) {
       es = null;
       clearTimeout(retryTimer);
       retryTimer = null;
+      stopPoll();
       stopDemo();
     }, 1500);
   };
@@ -164,6 +191,7 @@ onConnectionChange(() => {
   es?.close();
   es = null;
   retryMs = 2000;
+  stopPoll();
   stopDemo();
   setLive(demoLive());
   if (liveSubs.size) {
