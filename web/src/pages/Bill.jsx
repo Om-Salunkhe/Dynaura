@@ -74,7 +74,15 @@ export default function Bill() {
   return (
     <div className="flex flex-col gap-3">
       <PageHeader kicker={`${flat.name} · split by what your meter measured`} title={`${b.month} bill`} right={live ? <WalletButton /> : null} />
+      <p className="m-0 -mt-2 text-[13.5px] leading-relaxed text-muted">
+        Your flat's power this month. <span className="text-ink-2">You pay for what your own meter used</span>, and{" "}
+        <span className="text-ink-2">you earn for the sun you left for your neighbours</span>.
+      </p>
 
+      <SectionTitle
+        title="What you owe"
+        sub="Billed from your flat's own meter. One USDC payment on Arc, split automatically between the society (solar) and the grid."
+      />
       <section className="card flex items-center gap-5 rounded-[14px] p-5">
         <div
           className="grid h-28 w-28 flex-none place-items-center rounded-full"
@@ -98,7 +106,7 @@ export default function Bill() {
             <span className="text-sm text-muted">USDC</span>
           </span>
           <span className="chip w-fit bg-sun-soft py-1 text-xs text-sun-ink">
-            {b.credit.toFixed(2)} {live ? "saved by solar" : "credit for sharing"}
+            {b.credit.toFixed(2)} saved by solar
           </span>
         </div>
       </section>
@@ -144,6 +152,10 @@ export default function Bill() {
         {live && <Line k="Proof" v={<span className="mono text-xs">{pi.data.readings_hash.slice(0, 10)}… of {pi.data.minutes} signed minutes</span>} />}
       </section>
 
+      <SectionTitle
+        title="What you earned"
+        sub="Your fair share of the panel. Sun you didn't use is sold to a neighbour, the shop or the grid, and you're paid for your part of it."
+      />
       <FairShare flat={who.flat} />
 
       {arkBills?.length > 0 && (
@@ -189,6 +201,15 @@ function Line({ k, v }) {
     <div className="flex items-center justify-between gap-3 py-3 text-sm">
       <span className="text-muted">{k}</span>
       <span className="text-right font-medium">{v}</span>
+    </div>
+  );
+}
+
+function SectionTitle({ title, sub }) {
+  return (
+    <div className="mt-3 flex flex-col gap-0.5 px-1">
+      <span className="text-[15px] font-medium">{title}</span>
+      {sub && <span className="text-[12.5px] leading-relaxed text-muted">{sub}</span>}
     </div>
   );
 }
