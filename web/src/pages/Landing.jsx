@@ -3,25 +3,44 @@ import Icon from "../components/Icon.jsx";
 import Logo from "../components/Logo.jsx";
 import { useLive } from "../lib/api.js";
 
-const PILLARS = [
+const SPONSORS = [
   {
-    verb: "Decides",
-    who: "0G Compute",
-    text: "Dyna reads tomorrow's sun and moves pumps, chargers and spare solar into it. Every plan carries its 0G request ID, from a TEE-attested model.",
+    name: "0G",
+    role: "Decides",
+    line: "The AI that runs the building, with proof of every decision.",
+    uses: [
+      "Plans each day: which flats run on sun, when the pump and chargers run.",
+      "Looks at the panel: a vision check tells dust from clouds before any money moves.",
+      "Sells the spare sun: prices neighbour trades by scarcity, sends the rest to the shop or the grid.",
+      "Logs every decision to 0G Storage and records it in a registry on 0G Chain.",
+    ],
+    proof: { label: "EpisodeRegistry on 0G Chain", href: "https://chainscan-galileo.0g.ai/address/0xb62f4531f035d5cd188799d96bac553b5d7da984" },
   },
   {
-    verb: "Pays",
-    who: "Arc · USDC",
-    text: "Bills, shop trades and the panel-cleaning escrow settle in USDC. The cleaner is paid only when the meter proves the panel is clean.",
+    name: "Arc",
+    role: "Pays",
+    line: "USDC that moves only when the meter says so.",
+    uses: [
+      "Holds the cleaner's fee in escrow, released only when the meter proves the panel is clean.",
+      "Splits the building's solar income by each flat's unused share, computed on chain.",
+      "Splits each bill between solar and grid, and settles spare sun sold to the shop next door.",
+      "Contracts written, tested and deployed in Arc Studio; disputes go to the committee wallet.",
+    ],
+    proof: { label: "SolarCredits on Arc", href: "https://explorer.testnet.arc.io/address/0x12b06e364ecc08aead9ce2142382682b9d46859c" },
   },
   {
-    verb: "Remembers",
-    who: "Arkiv",
-    text: "Readings and decisions are kept as expiring records that any resident can query. No database to trust.",
+    name: "Arkiv",
+    role: "Remembers",
+    line: "The building's record book, readable by anyone.",
+    uses: [
+      "Keeps signed meter readings, decisions, bills and jobs as records anyone can query.",
+      "Lets records expire on purpose: offers at sunset, and a missed heartbeat is the offline alarm.",
+      "Hands the cleaner a work receipt their own wallet owns, so no one can delete it.",
+      "Backs one-click payout checks: readings from Arkiv, proof from Arc, decision from 0G.",
+    ],
+    proof: { label: "The building's records on Arkiv", href: "https://rabdi.explorer.arkiv.network/address/0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd" },
   },
 ];
-
-const FLOW = ["Dust on the panel", "0G confirms it", "USDC escrow opens", "Panel cleaned", "Meter back above 90%", "Cleaner paid"];
 
 export default function Landing() {
   return (
@@ -29,8 +48,7 @@ export default function Landing() {
       <LandingNav />
       <Hero />
       <LiveStrip />
-      <Pillars />
-      <Flow />
+      <BuiltOn />
       <footer className="mx-auto flex max-w-[1120px] flex-col gap-2 border-t border-white/[0.07] px-6 py-10 text-[12.5px] text-white/40 sm:flex-row sm:justify-between">
         <span>Dynaura · built at ETHGlobal Mumbai 2026</span>
         <span>A 3-flat model building, one roof, real meters.</span>
@@ -147,39 +165,43 @@ function LiveStrip() {
   );
 }
 
-function Pillars() {
+function BuiltOn() {
   return (
-    <section id="how" className="mx-auto mt-24 max-w-[1120px] px-6 sm:mt-32">
-      <h2 className="m-0 max-w-[620px] text-[30px] font-light leading-tight tracking-[-0.03em] sm:text-[40px]">
-        An AI with a body, a wallet and a memory.
+    <section id="how" className="mx-auto mb-24 mt-24 max-w-[1120px] px-6 sm:mb-32 sm:mt-32">
+      <h2 className="m-0 max-w-[680px] text-[30px] font-light leading-tight tracking-[-0.03em] sm:text-[40px]">
+        Built on 0G, Arc and Arkiv.
       </h2>
+      <p className="m-0 mt-4 max-w-[620px] text-[15px] font-light leading-relaxed text-white/55">
+        0G decides, Arc pays, Arkiv remembers. Every payout can be traced through all three: the decision, the money and
+        the meter readings behind it.
+      </p>
       <div className="mt-10 grid grid-cols-1 gap-px overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.08] md:grid-cols-3">
-        {PILLARS.map((p) => (
-          <div key={p.verb} className="flex flex-col gap-3 bg-black px-6 py-7">
+        {SPONSORS.map((sp) => (
+          <div key={sp.name} className="flex flex-col gap-4 bg-black px-6 py-7">
             <span className="flex items-baseline justify-between gap-3">
-              <span className="text-[20px] font-light tracking-[-0.02em]">{p.verb}</span>
-              <span className="mono text-[11px] text-[#f7b75e]">{p.who}</span>
+              <span className="text-[26px] font-light tracking-[-0.02em]">{sp.name}</span>
+              <span className="mono text-[11px] uppercase tracking-[0.12em] text-[#f7b75e]">{sp.role}</span>
             </span>
-            <p className="m-0 text-[14px] font-light leading-relaxed text-white/55">{p.text}</p>
+            <p className="m-0 text-[14.5px] font-light leading-snug text-white/85">{sp.line}</p>
+            <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+              {sp.uses.map((u) => (
+                <li key={u} className="flex gap-2.5 text-[13.5px] font-light leading-relaxed text-white/55">
+                  <span className="mt-[9px] h-1 w-1 flex-none rounded-full bg-[#f5a53c]" />
+                  {u}
+                </li>
+              ))}
+            </ul>
+            <a
+              href={sp.proof.href}
+              target="_blank"
+              rel="noreferrer"
+              className="mono mt-auto pt-2 text-[11.5px] text-white/45 transition-colors hover:text-white"
+            >
+              {sp.proof.label} ↗
+            </a>
           </div>
         ))}
       </div>
-    </section>
-  );
-}
-
-function Flow() {
-  return (
-    <section className="mx-auto mb-24 mt-20 max-w-[1120px] px-6 sm:mb-32">
-      <span className="text-[12px] text-white/45">The moment we demo</span>
-      <p className="m-0 mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[16px] font-light text-white/80 sm:text-[18px]">
-        {FLOW.map((step, i) => (
-          <span key={step} className="flex items-center gap-3">
-            {step}
-            {i < FLOW.length - 1 && <span className="text-[#f5a53c]/70">→</span>}
-          </span>
-        ))}
-      </p>
     </section>
   );
 }
