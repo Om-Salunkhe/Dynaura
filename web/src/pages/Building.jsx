@@ -1,7 +1,9 @@
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import SunFlow from "../components/SunFlow.jsx";
 import { today } from "../data/demo.js";
 import { shortId, useLive } from "../lib/api.js";
+import { panelVolts, panelWatts } from "../lib/panel.js";
 import { routingStory, usePlan } from "../lib/plan.js";
 import { FLATS, useRole } from "../lib/role.jsx";
 
@@ -27,7 +29,12 @@ export default function Building() {
         <Row
           icon="panel"
           title="Roof panel"
-          value={`${(live.meters?.panel?.w ?? 0).toFixed(2)} W`}
+          value={
+            <span className="flex flex-col items-end leading-tight">
+              <span className="num text-xl">{panelVolts(live)} V</span>
+              <span className="num text-[11px] font-normal text-muted">{panelWatts(live)} W</span>
+            </span>
+          }
           tone="sun"
           extra={live.pump?.on ? "Tank pump running" : null}
         />
@@ -64,6 +71,8 @@ export default function Building() {
           </div>
         </section>
       )}
+
+      <SunFlow />
 
       {(away.length > 0 || story.reason) && (
         <section className="card flex items-start gap-3 rounded-[14px]">

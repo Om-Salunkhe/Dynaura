@@ -38,3 +38,16 @@ An AI coding assistant (Claude Code) worked on the 0G part of Dynaura in this se
 | `pi/zg.py` | `model` parameter; a missing model is a separate error so the vision call can fall back | Same tests |
 
 Found by reading the Router's public `/models` list rather than assuming: 0G's own `0gm-1.0-35b-a3b` takes text and images and is the only TEE-attested (TDX) vision model listed, so it is the default `ZG_VISION_MODEL`.
+
+## Round 3 (Sat night): fair share + solar credits
+
+| Area | Work | How it was checked |
+|---|---|---|
+| `pi/trader.py` | `decide_routes`: 0G, as market maker, decides who buys the spare sun (neighbours who used more than their share, the shop, the grid) and the neighbour price. The Pi caps every buyer, keeps the price inside the export..import band, and sends whatever is left to the grid. With no 0G, the whole spare goes to the grid at the feed-in rate, recorded as `no-ai`. Also `trades()` for the API and `TradeLoop` | `pi/tests/test_trader.py`: a mocked 0G Router over HTTP (the noon example, over-routing, more demand than spare, no routes, TEE failed, nothing to sell, no store, the loop, 0G unreachable) |
+| `pi/planner.py` | With credits on, a "spare sun forecast" line in the prompt and a `spare_plan` key in the plan; with credits off the plan is unchanged | Same test file |
+
+Measured live on `router-api.0g.ai` (Sat ~01:00): a trade took 82.6 s with the model's thinking on (1,949 reasoning tokens). With `chat_template_kwargs: {enable_thinking: false}` it took 5.6-11.3 s with 0 reasoning tokens and the same routes on the test cases. The `/no_think` prompt suffix did not turn thinking off (44-53 s). Trades use thinking off; the plan and the dust check keep it.
+
+Policy (manager, Sat ~01:20): neighbours who drew more than their share are served first by the Pi's rule (pro rata if they need more than the spare). 0G sets the neighbour price by scarcity and how the rest splits between the shop and the grid. Live check with thinking off (4.2-4.4 s): 12 Wh spare with B 10 over and a 20 Wh shop order gave B 10 at 0.019 and the shop 2; 60 Wh spare with B 2 over gave 0.0066 (near feed-in); Pawan's example kept the 0.013 midpoint.
+
+Plan latency (Sat ~03:00): the integration run's start-up plan took 129 s with thinking and a second one timed out at 150 s. With thinking off, three live plans took 4.9-5.9 s with valid JSON. Two prompt rules (a few tips per flat; the split adds up to the roof's forecast) fixed the sparse tips and splits above the roof seen in the first no-thinking runs: after them, 5.1-5.4 s, every split equal to the forecast, 2-3 tips per flat.

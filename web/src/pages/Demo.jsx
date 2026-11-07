@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { ConnectionDialog, ConnectionPill, MixedContentBanner } from "../components/Connection.jsx";
 import HeroSteps from "../components/HeroSteps.jsx";
 import Icon from "../components/Icon.jsx";
+import Logo from "../components/Logo.jsx";
 import OfflineBanner, { SafeStopBanner, isOffline } from "../components/OfflineBanner.jsx";
 import Proof from "../components/Proof.jsx";
 import { admin as demoAdmin, plan as demoPlan } from "../data/demo.js";
@@ -47,8 +48,8 @@ export default function Demo() {
     noon: connected
       ? [
           { label: "Sun out", fn: () => postJSON("/api/moment/sun", {}, { admin: true }) },
-          { label: "Flat B away", fn: () => postJSON("/api/moment/away-B", {}, { admin: true }) },
-          { label: "Flat B home", fn: () => postJSON("/api/moment/home-B", {}, { admin: true }) },
+          { label: "Flat A light", fn: () => postJSON("/api/moment/light-A", {}, { admin: true }) },
+          { label: "Flat B heavy", fn: () => postJSON("/api/moment/heavy-B", {}, { admin: true }) },
           { label: "Run the pump", fn: () => postJSON("/api/moment/pump", {}, { admin: true }) },
         ]
       : [],
@@ -97,9 +98,7 @@ export default function Demo() {
     <div className="flex min-h-screen flex-col gap-4 px-[3vw] py-[2vw] 2xl:gap-6">
       <header className="flex items-center justify-between gap-6">
         <Link to="/home" className="flex items-center gap-4" title="Back to the app">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#111418] text-sun">
-            <Icon name="sun" size={30} />
-          </span>
+          <Logo size={52} />
           <span className="flex flex-col">
             <span className="text-3xl font-medium tracking-[-0.5px]">Dynaura</span>
             <span className="hidden text-lg text-muted 2xl:block">Sunrise Apartments · 0G decides, Arc pays, Arkiv remembers</span>
@@ -161,8 +160,9 @@ function Kicker({ n, children }) {
 
 const teeLabel = (tee) => {
   const e = Object.entries(tee || {});
-  if (!e.length) return null;
-  return e.some(([k, v]) => /verif/i.test(k) && v === true) ? "TEE verified" : "TEE data attached";
+  // The Router has no per-call verified flag today: say only what is true (TEE-attested model, sealed call)
+  if (e.some(([k, v]) => /verif/i.test(k) && v === true)) return "TEE verified";
+  return "TEE-attested model";
 };
 
 // ---- 1 · Morning plan ------------------------------------------------------
@@ -173,7 +173,7 @@ function Morning({ connected, offline, live }) {
   const view = hasPlan ? planToView(api, live.runner?.jobs) : demoPlan;
   const win = hasPlan ? api.plan.solar_window : ["10:00", "15:00"];
   const jobs = view.groups.flatMap((g) => g.jobs).sort((a, b) => a.start - b.start).slice(0, 6);
-  const tee = hasPlan ? teeLabel(api.tee) : "TEE verified";
+  const tee = hasPlan ? teeLabel(api.tee) : "TEE-attested model";
   const reqId = hasPlan ? api.request_id : view.requestId;
 
   if (connected && !hasPlan) {
@@ -255,7 +255,7 @@ function demoBuilding(live, scene, hero, offline) {
   if (!live.demo) return { panelW: live.meters?.panel?.w ?? 0, flats: live.flats || {}, meters: live.meters || {}, pump: live.pump?.on };
   const flats = {
     A: { source: offline ? "grid" : "solar", away: false },
-    B: { source: "grid", away: true },
+    B: { source: offline ? "grid" : "solar", away: false },
     C: { source: offline ? "grid" : "solar", away: false },
   };
   // nothing draws from the panel while every flat is on grid, so its meter reads ~0

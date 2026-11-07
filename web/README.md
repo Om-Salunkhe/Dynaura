@@ -18,13 +18,15 @@ Every value is public: no secrets go in `VITE_` variables, because they end up i
 | Variable | What it is | Default |
 |---|---|---|
 | `VITE_API_URL` | Default Pi address (can be changed in the app at runtime, or with `?pi=`) | `http://localhost:8000` |
-| `VITE_ARKIV_OWNER` | The building wallet that writes the Arkiv records (bridge `/health`) | none: Arkiv screens show demo data |
+| `VITE_ARKIV_OWNER` | The building wallet that writes the Arkiv records (bridge `/health`) | `0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd` (the live building) |
 | `VITE_BUILDING_ID` | Which building's records to read | `sunrise-apartments` |
+| `VITE_DEVICE_ADDRESS` | The Pi's device key that signs every meter reading (Verify payout checks it; a live Pi's `/api/health` wins) | `0x1EADd21328207546a4785bE042499B9D228952Ed` |
 | `VITE_OG_WALLET` | The Pi's 0G Storage wallet, the fallback link for 0G proofs not indexed yet | none |
 | `VITE_ARC_RPC_URL` | Arc testnet RPC | `https://rpc.testnet.arc.io` |
 | `VITE_ARC_ESCROW` | CleaningEscrow on Arc testnet | `0xf215116c72784e7490ddf3166dcb53b84855b8b9` |
 | `VITE_ARC_SHOP` | ShopTrade on Arc testnet | `0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47` |
 | `VITE_ARC_BILLING` | SolarBilling on Arc testnet | `0x5bd5aecc43968994e90f33df7177fb384401902b` |
+| `VITE_ARC_CREDITS` | SolarCredits (fair-share payouts) on Arc testnet | `0x12b06e364ecc08aead9ce2142382682b9d46859c` |
 
 The admin key and the Arkiv access key are not here on purpose (see below).
 

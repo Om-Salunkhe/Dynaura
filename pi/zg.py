@@ -91,7 +91,9 @@ def _find_tee(obj, out=None, path=""):
     return out
 
 
-def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2, model: str | None = None) -> ZGReply:
+def chat(messages: list[dict], max_tokens: int = 4000, temperature: float = 0.2, model: str | None = None,
+         extra_body: dict | None = None) -> ZGReply:
+    """extra_body: more Router/model options next to verify_tee (e.g. chat_template_kwargs)."""
     model = model or config.ZG_MODEL
     t0 = time.monotonic()
     try:
@@ -100,7 +102,7 @@ def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2,
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
-            extra_body={"verify_tee": True},
+            extra_body={**(extra_body or {}), "verify_tee": True},
         )
     except ZGUnavailable:
         raise
@@ -129,6 +131,21 @@ def chat(messages: list[dict], max_tokens: int = 1200, temperature: float = 0.2,
     log.info("0G answered in %d ms (request %s, provider %s, tee_verified %s)",
              latency_ms, reply.request_id, trace.get("provider"), reply.tee_verified)
     return reply
+
+
+NO_THINKING = {"chat_template_kwargs": {"enable_thinking": False}}
+
+
+def chat_maybe_thinking(messages: list[dict], thinking: bool, **kw) -> ZGReply:
+    """0gm-1.0 is Qwen3-based and thinks before it answers: a trade took ~80 s and a plan ~130 s with
+    thinking, a few seconds without. thinking=False asks it not to. If the Router refuses the option,
+    ask once more with thinking (the Router did answer, so offline still fails fast)."""
+    if not thinking:
+        try:
+            return chat(messages, extra_body=NO_THINKING, **kw)
+        except ZGModelUnavailable as e:
+            log.warning("0G refused enable_thinking=false, asking with thinking: %s", e)
+    return chat(messages, **kw)
 
 
 def check_dust(jpeg, ctx, **kw) -> dict:

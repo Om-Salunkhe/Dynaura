@@ -8,8 +8,8 @@ import VerifyPayout from "../components/VerifyPayout.jsx";
 import { cleaner } from "../data/demo.js";
 import { useLive } from "../lib/api.js";
 import { ARC_READY, errText, short, useWallet, write } from "../lib/arc.js";
-import { fetchCleaningJobs, useArkiv } from "../lib/arkiv.js";
-import { verifyPayout } from "../lib/verify.js";
+import { fetchCleaningJobs, fetchWorkReceipts, useArkiv } from "../lib/arkiv.js";
+import { usePiDevice, verifyPayout } from "../lib/verify.js";
 import { stageIndex, useHero } from "../lib/hero.js";
 
 const STEPS = [
@@ -30,7 +30,7 @@ export default function CleanerJobs() {
   const paidNow = hero.stage === "paid" ? hero.job?.fee || 0 : 0;
   // The public job board on Arkiv: every escrow the building opened, with its status
   const board = useArkiv(() => fetchCleaningJobs({ limit: 10 }), null, [hero.stage]);
-  const arkJobs = board.live && board.data.length ? board.data : null;
+  const arkJobs = (board.live || board.limited) && board.data?.length ? board.data : null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -85,6 +85,8 @@ export default function CleanerJobs() {
         </section>
       )}
 
+      {w.address && <WorkReceipts address={w.address} />}
+
       {!hero.live && !arkJobs && (
         <section className="card flex flex-col gap-1 rounded-[14px]">
           <span className="pb-1 text-base font-medium">Paid jobs</span>
@@ -105,6 +107,41 @@ export default function CleanerJobs() {
   );
 }
 
+/** The cleaner's work history: Arkiv receipts the building created but the cleaner's wallet owns. */
+function WorkReceipts({ address }) {
+  const r = useArkiv(() => fetchWorkReceipts({ cleaner: address }), null, [address]);
+  const list = (r.live || r.limited) && Array.isArray(r.data) ? r.data : null;
+  return (
+    <section className="card flex flex-col gap-1 rounded-[14px]">
+      <span className="text-base font-medium">Your work receipts</span>
+      <span className="pb-1 text-xs text-muted">One Arkiv receipt per paid job. The building creates it, your wallet owns it.</span>
+      {!list && <span className="text-xs text-muted">{r.limited ? "Arkiv busy, retrying" : r.error ? "Couldn't read Arkiv right now." : "Loading…"}</span>}
+      {list?.length === 0 && <span className="text-sm text-muted">No receipts yet. The first one arrives in your wallet when a job pays out.</span>}
+      {list?.map((w) => (
+        <div key={w.key} className="flex flex-col gap-1.5 border-t border-line py-2.5 text-sm first-of-type:border-0">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium">{w.jobId != null ? `Job #${w.jobId}` : `Case ${w.caseId ?? ""}`}</span>
+            <span className="text-[13px] font-medium">{(Number(w.feeUsdc) || 0).toFixed(2)} USDC</span>
+          </div>
+          <span className="flex flex-wrap items-center gap-2 text-[11px]">
+            {w.dustyPct != null && (
+              <span className="text-muted">
+                {Math.round(w.dustyPct)}%{w.afterPct != null ? ` → ${Math.round(w.afterPct)}%` : ""} output
+              </span>
+            )}
+            {w.paidAt && <span className="text-muted">{new Date(w.paidAt * 1000).toLocaleDateString([], { day: "numeric", month: "short" })}</span>}
+            <Proof kind="arc" id={w.releaseTx} />
+            <Proof kind="arkiv" id={w.key} label="Arkiv" />
+          </span>
+          {w.owner && w.owner.toLowerCase() === address.toLowerCase() && (
+            <span className="text-[11px] text-muted">In your wallet: the committee can't delete it.</span>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 // One job on the Arkiv board. Works with the v2 and v3 cleaning_job fields: a v3 case has no
 // Arc id or fee until the committee approves it.
 const GOOD = new Set(["paid", "resolved"]);
@@ -112,6 +149,7 @@ const BAD = new Set(["refunded", "rejected", "disputed", "no_check"]);
 function BoardRow({ j }) {
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
+  const device = usePiDevice();
   const fee = Number(j.feeUsdc) || 0;
   const before = j.dustyPct ?? j.outputBefore;
   const after = j.afterPct ?? j.outputAfter;
@@ -120,7 +158,7 @@ function BoardRow({ j }) {
   const verify = async () => {
     setBusy(true);
     try {
-      setRes(await verifyPayout({ id: j.jobId, proofWindow: j.proofWindow }));
+      setRes(await verifyPayout({ id: j.jobId, proofWindow: j.proofWindow }, device));
     } catch (e) {
       setRes({ ok: false, why: e.shortMessage || e.message });
     } finally {
@@ -154,7 +192,9 @@ function BoardRow({ j }) {
       </span>
       {res && (
         <span className={`text-[11.5px] ${res.ok ? "text-good" : "text-bad"}`}>
-          {res.ok ? "✓ The proof on Arc matches the signed readings on Arkiv" : `✗ ${res.why || "Doesn't match the proof on Arc"}`}
+          {res.ok
+            ? `✓ Signed by the Pi's device key (${res.signer.slice(0, 6)}…${res.signer.slice(-4)}) and matches the proof on Arc`
+            : `✗ ${res.why || (!res.signaturesOk ? "A reading isn't signed by the Pi" : "Doesn't match the proof on Arc")}`}
         </span>
       )}
     </div>

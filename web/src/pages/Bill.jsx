@@ -1,5 +1,6 @@
 import { useState } from "react";
 import DemoBadge from "../components/DemoBadge.jsx";
+import FairShare from "../components/FairShare.jsx";
 import Icon from "../components/Icon.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import Proof from "../components/Proof.jsx";
@@ -20,7 +21,7 @@ export default function Bill() {
   const { adminKey } = useConnection();
   const ark = useArkiv(() => fetchBills({ flat: who.flat }), null, [who.flat]);
   // newest first from Arkiv; a re-posted month keeps only its newest bill
-  const arkBills = ark.live ? ark.data.filter((p, i, all) => all.findIndex((q) => q.month === p.month) === i) : null;
+  const arkBills = ark.live || (ark.limited && Array.isArray(ark.data)) ? ark.data.filter((p, i, all) => all.findIndex((q) => q.month === p.month) === i) : null;
   const live = !pi.demo && pi.data;
   const [demoPaid, setDemoPaid] = useState(false);
   const [busy, setBusy] = useState(null);
@@ -142,6 +143,8 @@ export default function Bill() {
         <Line k="Rates" v={b.rule} />
         {live && <Line k="Proof" v={<span className="mono text-xs">{pi.data.readings_hash.slice(0, 10)}… of {pi.data.minutes} signed minutes</span>} />}
       </section>
+
+      <FairShare flat={who.flat} />
 
       {arkBills?.length > 0 && (
         <section className="card flex flex-col gap-1 rounded-[14px]">

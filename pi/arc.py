@@ -1,6 +1,8 @@
-"""Arc testnet: the Pi wallet is the oracle of the three contracts in contracts/.
-It opens and releases cleaning escrows, settles shop orders and posts monthly bills,
-always from what its own meters measured. USDC is both the money and the gas on Arc."""
+"""Arc testnet: the Pi wallet is the oracle of the contracts in contracts/.
+It opens and releases cleaning escrows, settles shop orders, posts monthly bills and posts each
+period's fair-share credits, always from what its own meters measured. USDC is both the money and
+the gas on Arc."""
+import hashlib
 import json
 import logging
 import threading
@@ -44,6 +46,9 @@ class Arc:
     def __init__(self):
         self.enabled = bool(config.ARC_PRIVATE_KEY)
         self._lock = threading.Lock()  # one transaction at a time keeps the nonce simple
+        # Unset contracts are None, so need() answers ArcUnavailable (never AttributeError) on a Pi
+        # without an Arc key or without one of the addresses.
+        self.escrow = self.shop = self.billing = self.credits = None
         if not self.enabled:
             log.info("Arc is off (no ARC_PRIVATE_KEY)")
             return
@@ -54,6 +59,7 @@ class Arc:
         self.escrow = self._contract("CleaningEscrow", config.ARC_ESCROW)
         self.shop = self._contract("ShopTrade", config.ARC_SHOP)
         self.billing = self._contract("SolarBilling", config.ARC_BILLING)
+        self.credits = self._contract("SolarCredits", config.ARC_CREDITS)
 
     def _contract(self, name: str, address: str):
         if not address:
@@ -145,6 +151,35 @@ class Arc:
                 "delivered_wh": o[3], "price_per_kwh": from_units(o[4]), "deadline": o[5],
                 "status": ORDER_STATUS[o[6]], "day": o[7]}
 
+    # Arc's public RPC refuses eth_getLogs over more than 10,000 blocks (-32012), so look back 9,000
+    LOG_LOOKBACK = 9000
+
+    def _event_tx(self, contract, event: str, **filters) -> str | None:
+        """Hash of the newest `event` matching `filters` in the last LOG_LOOKBACK blocks, or None."""
+        start = max(0, self.w3.eth.block_number - self.LOG_LOOKBACK)
+        logs = getattr(self.need(contract).events, event)().get_logs(from_block=start, argument_filters=filters)
+        for ev in reversed(list(logs)):
+            h = ev["transactionHash"].hex()
+            return h if h.startswith("0x") else "0x" + h
+        return None
+
+    def order_tx(self, order_id: int) -> str | None:
+        """The shop's prepay transaction (OrderPlaced event), looked up when the Pi first sees the
+        order. Best effort: None if the RPC won't say."""
+        try:
+            return self._event_tx(self.shop, "OrderPlaced", orderId=order_id)
+        except Exception as e:
+            log.warning("OrderPlaced lookup for order #%s failed: %s", order_id, str(e)[:200])
+        return None
+
+    def accept_tx(self, job_id: int) -> str | None:
+        """The cleaner's accept transaction (JobAccepted event). Best effort, like order_tx."""
+        try:
+            return self._event_tx(self.escrow, "JobAccepted", jobId=job_id)
+        except Exception as e:
+            log.warning("JobAccepted lookup for escrow #%s failed: %s", job_id, str(e)[:200])
+        return None
+
     def settle_order(self, order_id: int, delivered_wh: int) -> tuple[float, float, str]:
         shop = self.need(self.shop)
         rcpt = self.send(shop.functions.settle(order_id, int(delivered_wh)))
@@ -173,3 +208,127 @@ class Arc:
         rcpt = self.send(b.functions.postBill(flat, month, resident, to_units(solar_usdc), to_units(grid_usdc),
                                               int(solar_wh), int(grid_wh), readings_hash))
         return b.events.BillPosted().process_receipt(rcpt)[0]["args"]["billId"], self.tx_hash(rcpt)
+
+    # ---- solar credits (fair share of the spare sun) ---------------------
+    # pi/credits.py (dy-arkiv) works out each flat's unused and over-share energy for a period;
+    # SolarCredits then pays each flat pool * unusedWh / sum(unusedWh) itself. Units on chain: energy
+    # in Wh of the real building (round(model Wh * BILL_SCALE)), money in USDC base units (6 decimals).
+    def post_credits(self, period_id, flats: list[str], unused_wh: list[int], over_wh: list[int],
+                     neighbor_rate: int, readings_hash) -> str:
+        """Post one period (oracle, once). neighbor_rate is in USDC base units per real kWh
+        (13000 = 0.013 USDC/kWh); the contract takes it per Wh, so it is divided by 1000 here."""
+        c = self.need(self.credits)
+        if not (len(flats) == len(unused_wh) == len(over_wh)):
+            raise ValueError("flats, unused_wh and over_wh must have the same length")
+        for f, u, o in zip(flats, unused_wh, over_wh):
+            if u > 0 and o > 0:
+                raise ValueError(f"flat {f} can't be both under its share and over it")
+        rate = int(round(int(neighbor_rate) / 1000))
+        if rate * 1000 != int(neighbor_rate):
+            log.warning("neighbour rate %s per kWh rounded to %s per Wh on chain", neighbor_rate, rate)
+        rcpt = self.send(c.functions.postPeriod(period_bytes(period_id), list(flats), [int(x) for x in unused_wh],
+                                                [int(x) for x in over_wh], rate, as_bytes32(readings_hash)))
+        return self.tx_hash(rcpt)
+
+    def fund_credits(self, period_id, amount: int) -> str:
+        """Put shop and grid revenue (USDC base units) into the period's pool. The Pi is the treasury."""
+        c = self.need(self.credits)
+        self.ensure_allowance(c.address, int(amount))
+        return self.tx_hash(self.send(c.functions.fund(period_bytes(period_id), int(amount))))
+
+    def claim_credits(self, period_id, flat: str) -> str:
+        """Pay a flat its share now. Anyone may trigger it: the USDC goes to the flat's registered wallet."""
+        c = self.need(self.credits)
+        return self.tx_hash(self.send(c.functions.claim(period_bytes(period_id), flat)))
+
+    def credits_status(self, period_id) -> dict:
+        """What SolarCredits holds for one period: posted?, the pool, and per flat what's claimable/claimed."""
+        c = self.need(self.credits)
+        pid = period_bytes(period_id)
+        posted, rate, rhash, total_unused, total_in, total_claimed = c.functions.periodInfo(pid).call()
+        out = {"period_id": "0x" + pid.hex(), "posted": posted, "neighbor_rate": rate * 1000,
+               "readings_hash": "0x" + bytes(rhash).hex(), "total_unused_wh": total_unused,
+               "total_in_usdc": from_units(total_in), "total_claimed_usdc": from_units(total_claimed), "flats": {}}
+        if not posted:
+            return out
+        for flat in c.functions.flatsOf(pid).call():
+            _, unused, over, paid_in, claimed = c.functions.flatInfo(pid, flat).call()
+            wallet = c.functions.walletOf(flat).call()
+            out["flats"][flat] = {"unused_wh": unused, "over_wh": over, "paid_in": paid_in,
+                                  "owes_usdc": from_units(over * rate), "claimed_usdc": from_units(claimed),
+                                  "claimable_usdc": from_units(c.functions.claimable(pid, flat).call()),
+                                  "wallet": None if int(wallet, 16) == 0 else wallet}
+        return out
+
+    def credits_settle(self, key: str, flats: dict, neighbor_rate_usdc: float, fund_usdc: float,
+                       readings_hash) -> dict:
+        """POST /api/admin/credits/settle (pi/credits.py): post the period once and fund it with the
+        shop + grid revenue, only what the Pi hasn't put in yet, so settling again is safe.
+        key "2026-11-07" or "2026-11"; flats = GET /api/credits flats, in model Wh;
+        neighbor_rate_usdc in USDC per real kWh. Returns chain{}."""
+        pid = period_bytes(key)
+        st = self.credits_status(pid)
+        post_tx = fund_tx = None
+        if not st["posted"]:
+            names = sorted(flats)
+            wh = lambda f, k: int(round(max(float(flats[f].get(k) or 0), 0.0) * config.BILL_SCALE))
+            post_tx = self.post_credits(pid, names, [wh(f, "unused_wh") for f in names],
+                                        [wh(f, "over_wh") for f in names], int(round(neighbor_rate_usdc * 1e6)),
+                                        readings_hash)
+            st = self.credits_status(pid)
+        paid_in = sum(to_units(f["owes_usdc"]) for f in st["flats"].values() if f["paid_in"])
+        missing = to_units(fund_usdc) - (to_units(st["total_in_usdc"]) - paid_in)
+        if missing > 0 and st["total_unused_wh"] > 0:
+            fund_tx = self.fund_credits(pid, missing)
+            st = self.credits_status(pid)
+        txs = self.credit_txs(pid)
+        return {**st, "key": key, "post_tx": post_tx or txs["post_tx"], "fund_tx": fund_tx or txs["fund_tx"],
+                "claims": {f: txs["claims"].get(f) for f in st["flats"]}}
+
+    def credit_claims(self, period_id) -> dict:
+        """{flat: tx of its latest claim, or None}, from CreditClaimed events (best effort)."""
+        return self.credit_txs(period_id)["claims"]
+
+    def credit_txs(self, period_id) -> dict:
+        """The period's post / fund / claim transactions from SolarCredits' events. One event type per
+        query: Arc's RPC refuses eth_getLogs filtered on several event types."""
+        out = {"post_tx": None, "fund_tx": None, "claims": {}}
+        c = self.credits
+        if not (self.enabled and c is not None):
+            return out
+        pid = period_bytes(period_id)
+        try:
+            for name, slot in (("PeriodPosted", "post_tx"), ("PeriodFunded", "fund_tx"), ("CreditClaimed", "claims")):
+                for ev in getattr(c.events, name)().get_logs(from_block=config.ARC_CREDITS_FROM_BLOCK,
+                                                             argument_filters={"periodId": pid}):
+                    h = ev["transactionHash"].hex()
+                    h = h if h.startswith("0x") else "0x" + h
+                    if slot == "claims":
+                        out["claims"][ev["args"]["flat"]] = h
+                    else:
+                        out[slot] = h
+        except Exception as e:
+            log.warning("SolarCredits event lookup failed: %s", str(e)[:200])
+        return out
+
+
+def credit_period_id(key: str) -> str:
+    """bytes32 id of a credits period, as pi/credits.py makes it: sha256("dynaura-credits:<key>"),
+    key "2026-11-07" for a day."""
+    return "0x" + hashlib.sha256(f"dynaura-credits:{key}".encode()).hexdigest()
+
+
+def period_bytes(key_or_id) -> bytes:
+    """A period as bytes32: a key ("2026-11-07") becomes sha256("dynaura-credits:<key>"); a 32-byte id
+    (bytes or 0x-hex) is used as it is."""
+    if isinstance(key_or_id, (bytes, bytearray)) or (isinstance(key_or_id, str) and key_or_id.startswith("0x")):
+        return as_bytes32(key_or_id)
+    return as_bytes32(credit_period_id(key_or_id))
+
+
+def as_bytes32(h) -> bytes:
+    """bytes32 from 32 bytes or 0x-hex."""
+    b = bytes.fromhex(h[2:] if h.startswith("0x") else h) if isinstance(h, str) else bytes(h or b"")
+    if len(b) != 32:
+        raise ValueError("expected 32 bytes (a period id or a readings hash)")
+    return b

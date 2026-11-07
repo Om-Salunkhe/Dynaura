@@ -4,9 +4,12 @@ import DemoBadge from "../components/DemoBadge.jsx";
 import Legend from "../components/Legend.jsx";
 import CleaningAlert from "../components/CleaningAlert.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import SettleCredits from "../components/SettleCredits.jsx";
 import { admin } from "../data/demo.js";
+import Icon from "../components/Icon.jsx";
 import { useLive } from "../lib/api.js";
-import { ARKIV_READY, fetchHeartbeat, useArkiv } from "../lib/arkiv.js";
+import { panelVolts, panelWatts } from "../lib/panel.js";
+import { ARKIV_BUSY_TEXT, ARKIV_READY, fetchHeartbeat, useArkiv } from "../lib/arkiv.js";
 
 /** The Pi renews one Arkiv entity every 30 s with a 2-minute lifetime. If it stops, the entity
  *  expires and this card says "offline": no monitoring server, the expiry is the alarm. */
@@ -24,10 +27,10 @@ function Heartbeat() {
     <section className="card flex items-center justify-between rounded-[14px] py-3 text-sm">
       <span className="flex items-center gap-2 font-medium">
         <span className={`h-2.5 w-2.5 rounded-full ${online ? "bg-sun" : "bg-bad"}`} />
-        {online ? "Building online" : hb.error ? "Arkiv not reachable" : "Building offline"}
+        {online ? "Building online" : hb.limited ? ARKIV_BUSY_TEXT : hb.error ? "Arkiv not reachable" : "Building offline"}
       </span>
       <span className="text-xs text-muted">
-        {online ? `Arkiv heartbeat ${ago}s ago · ${hb.data.mode}` : hb.error ? "can't read the heartbeat" : "heartbeat expired on Arkiv"}
+        {online ? `Arkiv heartbeat ${ago}s ago · ${hb.data.mode}` : hb.limited ? "public endpoint out of queries" : hb.error ? "can't read the heartbeat" : "heartbeat expired on Arkiv"}
       </span>
     </section>
   );
@@ -46,6 +49,27 @@ export default function AdminOverview() {
       />
       <CleaningAlert />
 
+      <section className="card flex items-center justify-between rounded-[14px] p-4">
+        <span className="flex items-center gap-2.5 text-sm">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sun-soft text-sun-ink">
+            <Icon name="panel" />
+          </span>
+          <span className="flex flex-col">
+            <span className="font-medium">Roof panel generating</span>
+            <span className="flex items-center gap-1.5 text-xs text-muted">
+              live from the meter <DemoBadge demo={live.demo} />
+            </span>
+          </span>
+        </span>
+        <span className="flex flex-col items-end">
+          <span className="flex items-baseline gap-1">
+            <span className="num text-[40px] font-light leading-none">{panelVolts(live)}</span>
+            <span className="text-sm text-muted">V</span>
+          </span>
+          <span className="num text-[11.5px] text-muted">{panelWatts(live)} W of sun</span>
+        </span>
+      </section>
+
       <div className="grid grid-cols-2 gap-2.5">
         <Tile label="Solar generated" value={`${admin.generatedKwh} kWh`} note={`${admin.forecastPct}% of forecast`} good />
         <Tile label="Used in building" value={`${admin.usedKwh} kWh`} note={`Flats ${admin.flatsKwh} · common ${admin.commonKwh}`} />
@@ -54,6 +78,8 @@ export default function AdminOverview() {
       </div>
 
       <Heartbeat />
+
+      <SettleCredits />
 
       <section className="card flex items-center justify-between rounded-[14px] py-3">
         <span className="flex items-center gap-2 text-sm font-medium">

@@ -6,8 +6,10 @@ one to three tips per flat, and how much spare sun to offer nearby shops.
 """
 import json
 import logging
+import os
 import re
 
+import config
 import zg
 from society import BY_ID, ICONS, JOBS
 
@@ -21,6 +23,8 @@ Rules:
 - If the sun is weak, move upkeep jobs (garden, pool) to another day by leaving them out.
 - A flat that is away uses almost nothing; its share can go to other flats.
 - Offer spare solar to nearby shops only if there is clearly more than the building needs.
+- Give every flat one to three short tips in recommendations.
+- split_kwh (flats + common + buffer) adds up to what the roof can make tomorrow.
 Answer with ONE JSON object only, no other text:
 {"summary": "one sentence",
  "solar_window": ["HH:MM", "HH:MM"],
@@ -28,6 +32,35 @@ Answer with ONE JSON object only, no other text:
  "recommendations": {"A": [{"title": "...", "why": "...", "icon": "washer|heater|car|water|leaf|bolt|sun"}], "B": [], "C": []},
  "split_kwh": {"flats": <number>, "common": <number>, "buffer": <number>},
  "shop_offer_kwh": <number>}"""
+
+# Fair share + solar credits (CREDITS_ENABLED): the plan also says where tomorrow's spare sun should go.
+SPARE_KEY = """ "spare_plan": {"neighbors_kwh": <number>, "shop_kwh": <number>, "grid_kwh": <number>, "why": "short reason"}}"""
+
+
+def credits_on() -> bool:
+    on = getattr(config, "CREDITS_ENABLED", None)
+    return bool(on) if on is not None else os.getenv("CREDITS_ENABLED", "true").lower() == "true"
+
+
+def system_prompt() -> str:
+    if not credits_on():
+        return SYSTEM
+    return SYSTEM.replace('"shop_offer_kwh": <number>}', '"shop_offer_kwh": <number>,\n' + SPARE_KEY)
+
+
+def spare_line(forecast: dict, history: list[dict]) -> str:
+    """A rough spare-sun forecast: what the roof can make, minus what the flats and the jobs used."""
+    used = [float(d["flats_kwh"]) for d in history if isinstance(d.get("flats_kwh"), (int, float))]
+    jobs = sum(j["kw"] * j["minutes"] / 60 for j in JOBS)
+    if not used:
+        return (f"Spare sun forecast: the roof can make about {forecast['building_kwh']} kWh; no history of the "
+                f"flats' use yet; the society jobs need up to {jobs:.1f} kWh.")
+    avg = sum(used) / len(used)
+    spare = max(0.0, forecast["building_kwh"] - avg - jobs)
+    return (f"Spare sun forecast: the roof can make about {forecast['building_kwh']} kWh, the flats used about "
+            f"{avg:.2f} kWh a day last week and the society jobs need up to {jobs:.1f} kWh, so roughly {spare:.2f} kWh "
+            "spare. Say in spare_plan where it should go: neighbours who use more than their share, the shop, or the grid.")
+
 
 TIME = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 
@@ -51,7 +84,9 @@ def build_prompt(forecast: dict, history: list[dict], away: dict[str, bool]) -> 
         f"Tomorrow ({forecast['date']}): {forecast['strength']} sun, {forecast['sun_hours']} peak-sun-hours, "
         f"roof can make about {forecast['building_kwh']} kWh.\nHourly: {hours}\n\n"
         f"Society jobs:\n{jobs}\n\nLast 7 days (from the building's Arkiv records):\n{hist}\n\n"
-        f"Away tomorrow: {', '.join(f for f, a in away.items() if a) or 'nobody'}\n\nMake tomorrow's plan."
+        f"Away tomorrow: {', '.join(f for f, a in away.items() if a) or 'nobody'}\n\n"
+        + (spare_line(forecast, history) + "\n\n" if credits_on() else "")
+        + "Make tomorrow's plan."
     )
 
 
@@ -87,7 +122,19 @@ def validate(plan: dict, forecast: dict) -> dict:
     if sum(split.values()) <= 0:
         split = {"flats": round(total * 0.58, 1), "common": round(total * 0.34, 1), "buffer": round(total * 0.08, 1)}
 
+    extra = {}
+    if credits_on():
+        sp = plan.get("spare_plan") if isinstance(plan.get("spare_plan"), dict) else {}
+        kwh = {}
+        for k in ("neighbors_kwh", "shop_kwh", "grid_kwh"):
+            try:
+                kwh[k] = round(max(0.0, float(sp.get(k) or 0)), 2)
+            except (TypeError, ValueError):
+                kwh[k] = 0.0
+        extra["spare_plan"] = {**kwh, "why": str(sp.get("why") or "")[:120]} if sp else None
+
     return {
+        **extra,
         "date": forecast["date"],
         "summary": str(plan.get("summary", ""))[:200],
         "solar_window": window,
@@ -103,7 +150,8 @@ def validate(plan: dict, forecast: dict) -> dict:
 def make_plan(forecast: dict, history: list[dict], away: dict[str, bool]) -> tuple[dict, zg.ZGReply, str]:
     """Returns (validated plan, 0G reply, prompt). Raises zg.ZGUnavailable on any failure."""
     prompt = build_prompt(forecast, history, away)
-    reply = zg.chat([{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}])
+    reply = zg.chat_maybe_thinking([{"role": "system", "content": system_prompt()}, {"role": "user", "content": prompt}],
+                                   config.PLAN_THINKING, max_tokens=6000)
     plan = validate(zg.extract_json(reply.text), forecast)
     log.info("0G plan %s: %s", reply.request_id, plan["summary"])
     return plan, reply, prompt

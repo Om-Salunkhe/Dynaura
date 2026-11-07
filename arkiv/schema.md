@@ -36,8 +36,11 @@ through an identical copy in [`web/src/lib/arkivSchemas.js`](../web/src/lib/arki
 | `dynaura.offer` | Spare solar offered to nearby shops | `building`, `day` | `kwh`, `price_usdc`, `window_end`, `og_request_id` (the 0G plan that found the spare solar) | **Until `window_end`** (the solar window). **The market closes itself** | **Sealed** (readonly) | Shop offers page |
 | `dynaura.sale` | kWh sold to a shop and settled on Arc | `building`, `order_id` (ShopTrade), `buyer` (shop wallet) | `buyer_name`, `kwh`, `usdc`, `arc_tx` | **180 days**, kept alive by the keeper | **Sealed** (readonly) | Admin trading page |
 | `dynaura.cleaning_job` | **One cleaning request, from 0G's flag to payout** (cleaning flow v3) | `building`, `case_id` (the Pi's job id), `status`, `job_id` (CleaningEscrow, once approved), `og_request_id` (the 0G dust check) | `created_at`, `fee_usdc`, `deadline`, `dusty_pct`, `after_pct`, `coverage_pct`, `og_input` (vision / meter-only), `og_tee`, `og_storage_root`, `proof_hash`, `proof_from`/`proof_to` (the signed readings window), `open_tx`, `release_tx`, `refund_tx` | **Follows the job:** a flag nobody approves lapses after 48 h; an approved job lives until a week after the escrow deadline (time to dispute); a dispute adds 7 days. Never shortened | **Patched on every transition:** flagged → approved → open → accepted → cleaned → paid, or rejected / refunded / disputed → resolved; `no_check` when 0G was unreachable | Cleaner job board (with the 0G and Arc proof links) |
+| `dynaura.work_receipt` | **A paid cleaner's receipt, owned by the cleaner's wallet** | `building`, `cleaner` (address), `case_id`, `job_id` | `fee_usdc`, `paid_at`, `dusty_pct`, `after_pct`, `release_tx`, `og_request_id`, `proof_hash` | **Maximum** (`ExpirationTime.max()`), and anyone may extend it (`permissionlessExtension`) | **Sealed.** Created by the building and transferred to the cleaner **in the same transaction**: the building stays its creator, the cleaner owns it, so the committee can't delete the cleaner's work history | The cleaner's work history (`fetchWorkReceipts({ cleaner })`) |
 | `dynaura.maintenance` | Maintenance visit on the solar asset | `building`, `date` | `at` (unix s, sort key), `title`, `details` (bytes), `arc_tx` | **180 days**, kept alive by the keeper | **Sealed** (readonly) | Admin upkeep (trading page), History |
 | `dynaura.bill` | One flat's monthly bill, paid on Arc | `building`, `flat`, `month` (YYYY-MM) | `kwh`, `solar_pct`, `usdc`, `arc_tx` | **180 days**, kept alive by the keeper | **Sealed** (readonly) | Resident Bill page, History |
+| `dynaura.credit_period` | **One day of fair share** for the building: each flat's fair share of the sun, what it used, what it left for others, and what that earned | `building`, `day` (YYYY-MM-DD) | `available_wh`, `common_wh` (the pump), `spare_wh`, `neighbor_wh`, `shop_wh`, `grid_wh`, `revenue_usdc`, `prices` (JSON), `flats` (JSON: per flat `share_wh`, `used_wh`, `unused_wh`, `over_wh`, `earned_usdc`, `owes_usdc`, `net_usdc`, `equal_split_usdc`), `trade_ids`, `readings_hash`, `period_id` + `post_tx` (SolarCredits on Arc, once settled), `updated` | **180 days**, kept alive by the keeper | Patched every 10 min during the day and once when settled on Arc | Resident Bill ("your share of the sun"), Building |
+| `dynaura.trade` | **One 0G trade decision:** where a window's spare sun went (a neighbour, the shop, the grid) and why | `building`, `decision_id`, `at`, `mode` (ai / no-ai), `og_request_id` | `spare_wh`, `neighbor_price` (inside the export..import band), `routes` (JSON: to, wh, price), `reason` (bytes) | **30 days.** The full prompt and answer stay in the 0G episode log | **Sealed** (readonly); written once per decision | Building ("where the sun went"), Bill (the trades that sold your spare) |
 
 `str` values are capped at 128 bytes, so long text (`decision.summary`, `maintenance.details`)
 goes in `bytes` columns. Those can't be filtered or sorted, which we don't need for them.
@@ -60,10 +63,19 @@ dynaura.reading.sig                 -> signature by the Pi's device key over the
                                        recover the signer from the reading's own values
 ```
 
+## Fair share + solar credits
+
+Per minute, from the signed summaries and what the panel could give: each flat's fair share is
+`(available - common) * weight / sum(weights)`; `unused = max(0, share - used)`. Summed over a day,
+the spare pool goes to neighbours (what over-users took), the shop (0G's routes) and the grid (the
+rest). Each flat earns `revenue * unused / sum(unused)`, shown next to an equal split. A day's
+numbers live on Arkiv (`dynaura.credit_period`), the routing decisions behind them too
+(`dynaura.trade`, each with its 0G request id), and the money moves on Arc (SolarCredits).
+
 ## Lifetimes and the keeper
 
 Arkiv caps one lifetime at 7,884,000 blocks: about 182.5 days of 2-second blocks. Records worth
-keeping (`maintenance`, `bill`, `sale`, `daily_output`) are created with 180 days. Every 6 hours
+keeping (`maintenance`, `bill`, `sale`, `daily_output`, `credit_period`) are created with 180 days. Every 6 hours
 the bridge's keeper queries those that expire within 30 days and extends them to
 `ExpirationTime.max()`. The query is `lte("$expiresAt", head + 30 days)`, scoped to the building
 wallet. So they live as long as the building keeps running and paying for them, and lapse if it

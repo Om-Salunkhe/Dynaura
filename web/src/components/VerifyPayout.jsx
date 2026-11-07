@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ARC_READY } from "../lib/arc.js";
 import { ARKIV_READY } from "../lib/arkiv.js";
-import { verifyPayout } from "../lib/verify.js";
+import { usePiDevice, verifyPayout } from "../lib/verify.js";
 
 const short = (h) => (h && h.length > 14 ? `${h.slice(0, 8)}…${h.slice(-6)}` : h || "–");
 const teeOk = (tee) => tee === true || (tee && typeof tee === "object" && Object.entries(tee).some(([k, v]) => /verif/i.test(k) && v === true));
@@ -11,6 +11,7 @@ const teeOk = (tee) => tee === true || (tee && typeof tee === "object" && Object
 export default function VerifyPayout({ hero }) {
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState(null);
+  const device = usePiDevice();
   const j = hero.job;
   if (hero.stage !== "paid" || !j) return null;
   const v = hero.verdict || {};
@@ -28,7 +29,7 @@ export default function VerifyPayout({ hero }) {
     setBusy(true);
     setRes(null);
     try {
-      setRes(await verifyPayout({ id: j.id, proofWindow: j.proofWindow, proofMinutes: j.proofMinutes, releasedAt: j.releasedAt }));
+      setRes(await verifyPayout({ id: j.id, proofInput: j.proofInput, proofWindow: j.proofWindow, releasedAt: j.releasedAt }, device));
     } catch (e) {
       setRes({ ok: false, why: e.shortMessage || e.message });
     } finally {
@@ -55,12 +56,28 @@ export default function VerifyPayout({ hero }) {
       {res && (
         <div className={`flex flex-col gap-1.5 rounded-[10px] border p-3 text-[12px] ${res.ok ? "border-good" : "border-bad"}`}>
           <span className={`text-[13px] font-medium ${res.ok ? "text-good" : "text-bad"}`}>
-            {res.ok ? "✓ Matches: the proof on Arc is the hash of the signed readings on Arkiv" : `✗ ${res.why || "Doesn't match the proof on Arc"}`}
+            {res.ok ? "✓ Proven: readings signed by the Pi, and their hash is the proof on Arc" : `✗ ${res.why || "Doesn't check out"}`}
           </span>
+          {res.signer && (
+            <span className={`text-[12px] ${res.signaturesOk ? "text-good" : "text-bad"}`}>
+              {res.signaturesOk ? "✓" : "✗"} {res.signaturesOk ? "All readings signed by" : "Not every reading is signed by"}{" "}
+              the Pi's device key <span className="mono" title={res.signer}>{short(res.signer)}</span>
+            </span>
+          )}
+          {res.readingsOk != null && (
+            <span className={`text-[12px] ${res.readingsOk ? "text-good" : "text-bad"}`}>
+              {res.readingsOk ? "✓ Every hashed reading is on Arkiv, unchanged" : "✗ A hashed reading is missing or different on Arkiv"}
+            </span>
+          )}
+          {res.computed && (
+            <span className={`text-[12px] ${res.hashOk ? "text-good" : "text-bad"}`}>
+              {res.hashOk ? "✓ Hash matches the escrow's proof on Arc" : "✗ Hash differs from the escrow's proof on Arc"}
+            </span>
+          )}
           {res.rows?.length > 0 && (
             <span className="mono text-[11px] text-muted">
-              {res.rows.length} signed panel minutes ({res.window}):{" "}
-              {res.rows.map((r) => `${new Date(r.minute * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} ${r.avgW.toFixed(3)} W`).join(" · ")}
+              {res.rows.length} panel minutes ({res.how}):{" "}
+              {res.rows.map((r) => `${new Date(r.minute * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} ${Number(r.avgW).toFixed(3)} W${r.signatureOk ? "" : " ✗"}`).join(" · ")}
             </span>
           )}
           {res.computed && <span className="mono text-[11px]">recomputed {short(res.computed)}</span>}

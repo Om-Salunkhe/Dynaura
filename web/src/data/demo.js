@@ -1,14 +1,15 @@
 // Demo data so every screen works before the Pi, 0G, Arc and Arkiv are wired in.
 // Numbers are at model scale (the cardboard building), like the real meters.
 
-const HOME_W = { A: 0.42, B: 0.03, C: 0.38 };
+// Noon demo story: Flat A light, Flat B heavy, Flat C in between (all home, all on solar)
+const HOME_W = { A: 0.12, B: 0.62, C: 0.38 };
 
 export function demoState() {
   const jitter = () => 1 + (Math.random() - 0.5) * 0.04;
   const meters = {
     panel: { v: 5.0, ma: 420 * jitter(), w: +(2.1 * jitter()).toFixed(3) },
-    A: { v: 5.0, ma: 84, w: +(HOME_W.A * jitter()).toFixed(3) },
-    B: { v: 5.0, ma: 6, w: +(HOME_W.B * jitter()).toFixed(3) },
+    A: { v: 5.0, ma: 24, w: +(HOME_W.A * jitter()).toFixed(3) },
+    B: { v: 5.0, ma: 124, w: +(HOME_W.B * jitter()).toFixed(3) },
     C: { v: 5.0, ma: 76, w: +(HOME_W.C * jitter()).toFixed(3) },
   };
   return {
@@ -16,7 +17,7 @@ export function demoState() {
     meters,
     flats: {
       A: { source: "solar", away: false },
-      B: { source: "grid", away: true },
+      B: { source: "solar", away: false },
       C: { source: "solar", away: false },
     },
     pump: { on: true },
@@ -27,7 +28,7 @@ export function demoState() {
 
 export const today = {
   A: { kwh: 0.61, solarPct: 72, cost: 0.14 },
-  B: { kwh: 0.08, solarPct: 90, cost: 0.02 },
+  B: { kwh: 0.95, solarPct: 64, cost: 0.24 },
   C: { kwh: 0.74, solarPct: 64, cost: 0.19 },
 };
 
@@ -102,7 +103,7 @@ export const panelWeek = [
 ];
 
 export const timeline = [
-  { kind: "ai", when: "Today 12:00", title: "AI decision", text: "Tank pump on solar, Flat B's share sent to Flat C", proof: "0G proof 0xa91c…04be" },
+  { kind: "ai", when: "Today 12:00", title: "AI decision", text: "Tank pump on solar; Flat A's spare sold to the shop and the grid", proof: "0G proof 0xa91c…04be" },
   { kind: "clean", when: "Mon", title: "Panel cleaned", text: "Output back to 96%, cleaner paid 2.00 USDC", proof: "Arc tx · job #3" },
   { kind: "alert", when: "Sun", title: "Dust alert", text: "54% of forecast on a clear day", proof: "0G proof 0x3d07…e811" },
   { kind: "bill", when: "1 Nov", title: "Bill settled", text: "October split across 3 flats", proof: "Arc tx" },
@@ -120,11 +121,11 @@ export const admin = {
   p2pUsdc: 0.23,
   flats: [
     { id: "A", label: "Flat A · Ground", kwh: 8.2, usdc: 4.2, solarPct: 72, note: "" },
-    { id: "B", label: "Flat B · 1st", kwh: 4.7, usdc: 1.95, solarPct: 80, note: "Away 9 days" },
+    { id: "B", label: "Flat B · 1st", kwh: 4.7, usdc: 1.95, solarPct: 80, note: "" },
     { id: "C", label: "Flat C · 2nd", kwh: 9.2, usdc: 5.1, solarPct: 64, note: "" },
   ],
   discomWeek: [40, 22, 12, 8, 100, 46, 28],
-  discomNote: "Tue peak: Flat B away and pool filter off",
+  discomNote: "Tue peak: a clear sky and the pool filter off",
   price: 0.08,
   sales: [
     { buyer: "Corner grocery · shop", kwh: 1.2, when: "Tue 12:00", price: 0.1 },
@@ -171,12 +172,12 @@ export const dynaChat = [
       "Tomorrow's sun is strong. Heating at 13:30 instead would run on solar and save about 0.04 USDC.",
     ],
     actions: ["Set geyser for 13:30", "Not now"],
-    proof: "Answered on 0G · TEE verified · 0x51be…9a02",
+    proof: "Answered on 0G · TEE-attested model · 0x51be…9a02",
   },
   { from: "me", text: "How much did sharing earn me?" },
   {
     from: "dyna",
-    text: ["While you were away this month, 1.2 kWh of your spare sun went to Flat C. That's a 0.35 USDC credit on your November bill."],
+    text: ["Today you left 30 units of your fair share unused. Dyna sold them to the shop and the grid, which earned you 1.57 USDC; an equal split would have given 0.70."],
     proof: "From Arkiv records · 0G · 0x8c2d…11f7",
   },
 ];

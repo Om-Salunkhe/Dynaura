@@ -198,6 +198,11 @@ network blip:
 - it shows its labelled demo data, with a "busy" flag the screens can use
   ([`arkivReads.js`](../web/src/lib/arkivReads.js), with an offline test).
 
+**Already reported upstream** as
+[Arkiv-Network/reported-issues#17](https://github.com/Arkiv-Network/reported-issues/issues/17) on an
+older testnet: the keyless budget, its `ANON_COST_LIMITED` 429, and the missing documentation. Our
+numbers add that it still happens on Rabdi with SDK 1.0.1.
+
 **Suggestion.** Document the anonymous budget: its size, what it's counted per (IP?), and when
 it resets. Send a `Retry-After` header with the 429. Also a read-only browser key type, and an
 Asia-region RPC.
@@ -279,6 +284,7 @@ return `{ txHash, nonce }` right after sending, with the receipt as a second pro
 
 ### Issues to file upstream
 
-Items 1, 2, 3, 5, 6, 7, 10, 11 and 12 are ready to file at
-[Arkiv-Network/reported-issues](https://github.com/Arkiv-Network/reported-issues). **TODO (Pawan):**
-approve filing them and add the links here.
+Items 1, 2, 3, 5, 6, 7, 10, 11 and 12 are drafted in Arkiv's own issue-form format, ready to file
+at [Arkiv-Network/reported-issues](https://github.com/Arkiv-Network/reported-issues). We searched
+first: item 9 is already #17, and item 6 is related to #22. Filing is public, so the team approves
+each draft first; the issue links go here once they're filed.

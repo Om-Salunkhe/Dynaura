@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { getJSON } from "./api.js";
 import { FLATS } from "./role.jsx";
 
-export const DEMO_ROUTING = "Flat B is away, so its spare sun goes to Flat C.";
+export const DEMO_ROUTING = "Flat A is light and Flat B is heavy, so most of the spare sun is A's: A earns the most when it's sold.";
 
 /** /api/plan, polled while the Pi is reachable (null in demo or before the first answer). */
 export function usePlan(connected, every = 10000) {
