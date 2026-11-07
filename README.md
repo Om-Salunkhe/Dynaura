@@ -18,7 +18,6 @@ Built from scratch at ETHGlobal Mumbai (5–7 Nov 2026) by Om Salunkhe, Devang G
 | Arc roles | Owner (all four contracts): committee [`0x6c11…63D6`](https://explorer.testnet.arc.io/address/0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6) · oracle: the Pi [`0xA2F1…1Ccf`](https://explorer.testnet.arc.io/address/0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf) · USDC `0x3600…0000` |
 | Pi device key | `0x1EADd21328207546a4785bE042499B9D228952Ed` signs every 1-minute meter reading (Verify payout checks it) |
 | Arkiv building wallet | [`0xd961…17Cd`](https://rabdi.explorer.arkiv.network/address/0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) (Rabdi testnet, chain 7794095; building `sunrise-apartments`) |
-| Prize tracks | 0G: Physical AI: Agents with a Body · Arc: Best Smart Contracts with Advanced Stablecoin Logic, In Arc Studio · Arkiv: Build on Arkiv (from scratch) |
 
 ---
 
@@ -122,9 +121,6 @@ The purchase is always a user-signed wallet transaction. A 0G request ID is a Ro
 
 ## 0G: the brain
 
-*Track: **Physical AI: Agents with a Body** (and the best-build-on-real-hardware prize).*
-<!-- To switch to "Build with 0G PC", change this line and the "Prize tracks" row at the top. The bullets below cover both tracks' must-shows. -->
-
 0G is the brain at the building's checkpoints. The Pi is the spinal cord: it meters, switches relays and keeps everything safe on its own.
 
 - **0G inside the decision loop, at three checkpoints.**
@@ -156,8 +152,6 @@ We checked both safe-stop rows end to end. We downloaded both logs back from 0G 
 Explorers: [0G Storage (Galileo)](https://storagescan-galileo.0g.ai) · [0G Chain (Galileo)](https://chainscan-galileo.0g.ai).
 
 ## Arc: the money
-
-*Track: **Best Smart Contracts with Advanced Stablecoin Logic** (In Arc Studio).*
 
 Our USDC contracts were **written, tested and deployed in [Arc Studio](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852)** to Arc testnet (chain 5042002), with the source verified on the explorer. They use USDC (the ERC-20 at `0x3600…0000`, 6 decimals) for both money and gas. The **oracle** is the Pi's wallet: the only address allowed to release a fee, settle a sale, post a bill or post a credit period, and only from what its own meters measured. The **owner** is the society committee: it resolves disputes and can change the oracle and treasury.
 
@@ -194,8 +188,6 @@ Deploy transactions: [escrow](https://explorer.testnet.arc.io/tx/0x7bc2adcd3d0ef
 **Reusable by other builders:** `CleaningEscrow` is a generic "pay when a device proves the job is done" escrow, and `SolarCredits` a generic "pay contributors by measured contribution" pool. Swap the panel meter for any sensor (a water-tank level, a lift's uptime, an air-quality reading) and it works unchanged.
 
 ## Arkiv: the record book
-
-*Track: Build on Arkiv (from scratch).*
 
 Every record is written by one **building wallet** through [`bridge/`](bridge/) with `@arkiv-network/sdk`. Readers always filter by that owner, because anyone can write any tag. No names, phone numbers or addresses are stored, only flats `A`, `B`, `C`.
 

@@ -24,7 +24,6 @@ All four were written, tested and deployed in [Arc Studio](https://studio.arc.io
 - **Oracle:** the Pi [`0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf`](https://explorer.testnet.arc.io/address/0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf). It opens and releases jobs, posts bills and credit periods, and settles shop orders. It can't resolve disputes or take a job.
 - **USDC:** `0x3600000000000000000000000000000000000000` (6 decimals; also Arc's gas).
 - **Deployer:** Arc Studio's smart wallet. Ownership was then transferred to the committee (Ownable2Step).
-- **Bounty:** Best Smart Contracts with Advanced Stablecoin Logic, In Arc Studio.
 
 ## Shared rules
 
