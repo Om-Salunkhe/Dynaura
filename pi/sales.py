@@ -47,6 +47,7 @@ class ShopSettler:
         self.routed = None    # callback(order dict) -> model Wh 0G really routed after detection
         self.error: str | None = None
         self._next = 1
+        self._backoff = 0.0  # extra wait after Arc rate-limits us (429), so the loop doesn't keep the IP throttled
         self._stop = threading.Event()
 
     def step(self, now: float | None = None) -> None:
@@ -60,7 +61,11 @@ class ShopSettler:
                 if order["status"] == "open":
                     order["detected_at"] = now
                     # the shop's prepay on Arc, so the app can link it as the sale's proof
-                    order["tx"] = self.arc.order_tx(self._next) if hasattr(self.arc, "order_tx") else None
+                    try:  # the prepay tx is only a proof link: never let its log lookup block the order
+                        order["tx"] = self.arc.order_tx(self._next) if hasattr(self.arc, "order_tx") else None
+                    except Exception as e:
+                        log.info("order %s: prepay tx lookup skipped (%s)", self._next, str(e)[:120])
+                        order["tx"] = None
                     # An offer is single-use. Once Arc proves a buyer prepaid it, never let the
                     # same measured capacity reappear after the order settles.
                     self.offer = None
@@ -76,11 +81,15 @@ class ShopSettler:
                 if now >= o["deadline"]:
                     self.settle(oid)
             self.error = None
+            self._backoff = 0.0
         except ArcUnavailable as e:
             self.error = str(e)
         except Exception as e:
             self.error = str(e)[:200]
-            log.warning("shop settle failed: %s", self.error)
+            if "429" in self.error or "rate limit" in self.error.lower():
+                self._backoff = min(300.0, max(20.0, self._backoff * 2))
+            log.warning("shop settle failed: %s%s", self.error,
+                        f" (next try in {self.interval + self._backoff:.0f} s)" if self._backoff else "")
 
     def settle(self, order_id: int) -> dict:
         o = self.orders.get(order_id) or self.arc.order(order_id)
@@ -160,7 +169,7 @@ class ShopSettler:
                 "sales": self.sales[:20], "error": self.error}
 
     def _run(self) -> None:
-        while not self._stop.wait(self.interval):
+        while not self._stop.wait(self.interval + self._backoff):
             self.step()
 
     def start(self) -> None:
