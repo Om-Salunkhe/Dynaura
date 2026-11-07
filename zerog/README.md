@@ -50,6 +50,8 @@ cast call <address> "episodeOf(bytes32)(uint256)" <root> --rpc-url https://evmrp
 | Network | 0G Galileo testnet (chain ID 16602) |
 | EpisodeRegistry | [`0xb62f4531f035d5cd188799d96bac553b5d7da984`](https://chainscan-galileo.0g.ai/address/0xb62f4531f035d5cd188799d96bac553b5d7da984) (source verified on chainscan-galileo) |
 | Deploy tx | [`0xd1337649…a568`](https://chainscan-galileo.0g.ai/tx/0xd1337649a30e4cf939fcfd0292930fceff2e287a987132c4984f501c02eaa568), block 64198274 |
+| Device (the only wallet that may `record`) | the Pi's 0G wallet [`0x79ba0907fF3810100fD3C6002636B30aD8828274`](https://chainscan-galileo.0g.ai/address/0x79ba0907fF3810100fD3C6002636B30aD8828274), which also pays the Storage uploads |
+| Episodes recorded | 88 by Sat 7 Nov morning (`count()` on the contract), AI and no-AI alike |
 
 The owner, device and compiler settings are in `deployments.json` (written by `deploy.sh`).
 

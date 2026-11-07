@@ -1,5 +1,6 @@
 // Bill page: "Your share of the sun". Share vs used vs unused, what the spare earned against an
 // equal split, the trades that sold it (with their 0G request ids), and Claim on Arc.
+import DemoSunBadge from "./DemoSunBadge.jsx";
 import { useState } from "react";
 import { ARC_READY, ensureAllowance, errText, short, write } from "../lib/arc.js";
 import { flatName, units, usdc, useCredits, useCreditsChain } from "../lib/credits.js";
@@ -82,6 +83,7 @@ export default function FairShare({ flat }) {
         <span className="flex items-center gap-2">
           <span className="text-base font-medium">Your share of the sun</span>
           {c.demo && <span className="chip bg-inner text-muted">Demo</span>}
+          <DemoSunBadge />
         </span>
         {!c.demo && (
           <span role="tablist" className="flex rounded-[9px] border border-line p-0.5 text-[12px]">

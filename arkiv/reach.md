@@ -50,7 +50,7 @@ Yes. Everything here works without our help:
 | **Check our Arkiv write path** | `npm test` in `bridge/` (15 offline tests) and `npm run smoke` (every schema, live) | Node 22 |
 | **See it run on hardware** | The cardboard 3-flat building with a real panel, meters and relays, at ETHGlobal Mumbai | Being there, or the demo video |
 
-Live app: **TODO (Pawan)** the Vercel link once it's deployed with the public read key. Demo video:
+Live app: **[www.dynaura.in](https://www.dynaura.in)** (it reads Arkiv with its own public read key). Demo video:
 **TODO (Pawan)** the link.
 
 ## What other builders can reuse

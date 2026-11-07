@@ -173,6 +173,7 @@ def settle_period(minutes: list[dict], weights: dict[str, float], p: dict | None
                  "revenue_usdc": round(revenue, 6),
                  "prices": {"neighbor": p["neighbor"], "shop": p["shop"], "export": p["export"]}},
         "scale": {"real_kwh_per_wh": k},
+        "demo_sun_scale": getattr(config, "DEMO_SUN_SCALE", 1.0),
     }
 
 
@@ -226,6 +227,12 @@ class Ledger:
 
     # ---- what the panel could give -----------------------------------------------------
     def available_w(self) -> float | None:
+        """What the panel could give, times DEMO_SUN_SCALE (1 = real). The demo factor is reported with every
+        number it touches (see period() and window()), never hidden."""
+        v = self._available_raw_w()
+        return None if v is None else v * getattr(config, "DEMO_SUN_SCALE", 1.0)
+
+    def _available_raw_w(self) -> float | None:
         """Sim knows it. The real board can't measure it (the panel meter reads only what is drawn):
         PANEL_AVAILABLE_W if set (e.g. the desk lamp), else PANEL_BEST_W in demo-clock mode, else
         PANEL_BEST_W x this hour's forecast radiation / 1000 W/m2. None when unknown: the minute then
@@ -396,6 +403,7 @@ class Ledger:
         out = settle_period(rows, self.weights, prices())
         p = prices()
         return {"since": start, "until": until, "window": [start, until], "spare_wh": out["spare_wh"],
+                "demo_sun_scale": getattr(config, "DEMO_SUN_SCALE", 1.0),
                 "needs": {f: x["over_wh"] for f, x in out["flats"].items() if x["over_wh"] > 0},
                 "unused": {f: x["unused_wh"] for f, x in out["flats"].items()},
                 "shop_order_wh": self.shop_order_wh(now),

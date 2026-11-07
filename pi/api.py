@@ -164,6 +164,7 @@ def health():
              "error": App.arkiv.last_error if App.arkiv else None}
     arc = {"enabled": App.arc.enabled, "wallet": App.arc.address if App.arc.enabled else None}
     return {"ok": True, "hw": config.HW, "device": App.signer.address, "arkiv": arkiv, "arc": arc,
+            "demo_sun_scale": config.DEMO_SUN_SCALE,
             "zg_storage_ready": App.uploader.ready() if App.uploader else False,
             "zg_storage": App.uploader.status() if App.uploader else None}
 

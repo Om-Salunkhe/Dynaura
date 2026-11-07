@@ -5,7 +5,9 @@ import Proof from "../components/Proof.jsx";
 import WalletButton from "../components/WalletButton.jsx";
 import { ABI, ADDR, ARC_READY, ensureAllowance, errText, publicClient, txUrl, write } from "../lib/arc.js";
 import { usePi } from "../lib/api.js";
-import { fetchOffers, useArkiv } from "../lib/arkiv.js";
+import { fetchOffers, fetchTrades, useArkiv } from "../lib/arkiv.js";
+import DemoSunBadge from "../components/DemoSunBadge.jsx";
+import { TradeRow, soldTrades } from "../components/FairShare.jsx";
 
 const normalize = (o) =>
   o && {
@@ -20,6 +22,8 @@ const normalize = (o) =>
 export default function ShopOffers() {
   const market = usePi("/api/marketplace", null);
   const arkiv = useArkiv(() => fetchOffers(20), []);
+  const recent = useArkiv(() => fetchTrades({ limit: 12 }), []);
+  const pastTrades = soldTrades(recent.data).slice(0, 5);
   const [bought, setBought] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -58,7 +62,7 @@ export default function ShopOffers() {
       <PageHeader kicker="Corner grocery · Andheri East" title="Live solar marketplace" right={<WalletButton />} />
 
       <section className="card flex flex-col gap-1 rounded-[14px] text-sm">
-        <span className="font-medium">Measured surplus from Sunrise Apartments</span>
+        <span className="flex items-center gap-2 font-medium">Measured surplus from Sunrise Apartments <DemoSunBadge /></span>
         <span className="text-xs text-muted">
           The Pi publishes only surplus that 0G actually routed to the grid. A prepaid Arc order makes the next 0G window
           eligible for the shop; the contract refunds every Wh not delivered.
@@ -100,6 +104,21 @@ export default function ShopOffers() {
           <span className="text-xs text-muted">
             {open.length ? "A prepaid order is being delivered. The next offer appears after it settles." : "The next offer appears after a real 0G trade measures spare solar going to the grid."}
           </span>
+        </section>
+      )}
+
+      {market.demo && pastTrades.length > 0 && (
+        <section className="card flex flex-col gap-1 rounded-[14px]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[14px] font-medium">Recent 0G trades from the building</span>
+            <span className="chip bg-inner text-muted">Read from Arkiv</span>
+          </div>
+          <span className="text-xs text-muted">Real decisions the Pi recorded while it was online. Live offers return when the building is reachable.</span>
+          <div className="mt-1">
+            {pastTrades.map((t) => (
+              <TradeRow key={t.key || t.id} t={t} />
+            ))}
+          </div>
         </section>
       )}
 

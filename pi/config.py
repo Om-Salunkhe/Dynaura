@@ -57,6 +57,10 @@ IGNORE_CLOCK = os.getenv("IGNORE_CLOCK", "false").lower() == "true"  # demo unde
 SPARE_PUMP = os.getenv("SPARE_PUMP", "true").lower() == "true"
 SPARE_PUMP_MIN_W = float(os.getenv("SPARE_PUMP_MIN_W", "") or SOLAR_MIN_W)   # spare power needed to run it
 SPARE_PUMP_COOLDOWN_S = float(os.getenv("SPARE_PUMP_COOLDOWN_S", "180") or 180)  # at most one 0G ask per this
+# DEMO ONLY: multiply the panel's available sun (the model's panel is tiny, so it makes almost no spare).
+# 1 = off. The factor is shown in /api/health, /api/credits, every trade window and the web app ("Demo sun xN"),
+# so a boosted number is never passed off as real generation. 0G's decisions and the Arc/Arkiv records stay real.
+DEMO_SUN_SCALE = max(1.0, float(os.getenv("DEMO_SUN_SCALE", "1") or 1))
 ADMIN_KEY = os.getenv("ADMIN_KEY", "").strip()               # needed for admin changes from the web app
 
 # 0G Storage (Go CLI from github.com/0glabs/0g-storage-client)

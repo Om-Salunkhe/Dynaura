@@ -9,6 +9,22 @@ Dynaura's USDC contracts on Arc. They are **generated, tested and deployed in Ar
 | `SolarCredits` | **Fair share of the spare sun.** Each period the Pi posts, per flat, how much of its fair share it left **unused** and how much it used **over** its share. Flats that used more pay their neighbours (`payIn`: over × the neighbour rate), and shop and grid revenue is added (`fund`). Each flat then claims **pool × its unused / everyone's unused**, computed on chain, to its registered wallet. With Pawan's numbers, A left 30 kWh and B left 10 kWh, so A is paid 3× B, where an equal split pays them the same. Reusable for any "pay contributors by measured contribution". |
 | `SolarBilling` | Each month the meter posts each flat's bill, computed from that flat's own meter, along with the hash of the signed readings behind it. **One payment is split by where the power came from:** the solar part goes to the society treasury and the grid part to the electricity board. |
 
+## Deployed (Arc testnet, chain 5042002)
+
+All four were written, tested and deployed in [Arc Studio](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852), and their source is verified on the explorer.
+
+| Contract | Address |
+|---|---|
+| CleaningEscrow | [`0xf215116c72784e7490ddf3166dcb53b84855b8b9`](https://explorer.testnet.arc.io/address/0xf215116c72784e7490ddf3166dcb53b84855b8b9) |
+| SolarCredits | [`0x12b06e364ecc08aead9ce2142382682b9d46859c`](https://explorer.testnet.arc.io/address/0x12b06e364ecc08aead9ce2142382682b9d46859c) |
+| SolarBilling | [`0x5bd5aecc43968994e90f33df7177fb384401902b`](https://explorer.testnet.arc.io/address/0x5bd5aecc43968994e90f33df7177fb384401902b) |
+| ShopTrade | [`0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47`](https://explorer.testnet.arc.io/address/0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47) |
+
+- **Owner (all four):** the committee wallet [`0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6`](https://explorer.testnet.arc.io/address/0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6). It resolves disputes and registers flat wallets.
+- **Oracle:** the Pi [`0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf`](https://explorer.testnet.arc.io/address/0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf). It opens and releases jobs, posts bills and credit periods, and settles shop orders. It can't resolve disputes or take a job.
+- **USDC:** `0x3600000000000000000000000000000000000000` (6 decimals; also Arc's gas).
+- **Deployer:** Arc Studio's smart wallet. Ownership was then transferred to the committee (Ownable2Step).
+
 ## Shared rules
 
 - **USDC** is the ERC-20 at `0x3600000000000000000000000000000000000000`, with 6 decimals: `2000000` = 2 USDC. Nothing is `payable`, and there are no native transfers.

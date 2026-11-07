@@ -1,5 +1,6 @@
 // Building page: where today's sun went. Panel -> Flats A, B, C, the pump, the shop, the grid as
 // thin horizontal bars, and the latest 0G trade decision with its reason.
+import DemoSunBadge from "./DemoSunBadge.jsx";
 import { fetchTrades, useArkiv } from "../lib/arkiv.js";
 import { periodFlats, units, useCredits } from "../lib/credits.js";
 import { TradeRow, soldTrades } from "./FairShare.jsx";
@@ -39,6 +40,7 @@ export default function SunFlow() {
         <span className="flex items-center gap-2">
           <span className="whitespace-nowrap text-base font-medium">Where the sun went</span>
           {c.demo && <span className="chip bg-inner text-muted">Demo</span>}
+          <DemoSunBadge />
         </span>
         <span className="whitespace-nowrap text-[12px] text-muted">panel {units(d.available_wh)}</span>
       </div>
