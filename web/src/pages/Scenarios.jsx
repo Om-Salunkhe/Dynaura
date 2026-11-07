@@ -6,8 +6,10 @@ import { Link } from "react-router-dom";
 import { ConnectionDialog, ConnectionPill, MixedContentBanner } from "../components/Connection.jsx";
 import Icon from "../components/Icon.jsx";
 import Proof from "../components/Proof.jsx";
+import WalletButton from "../components/WalletButton.jsx";
 import { getJSON, postJSON, shortId, useLive } from "../lib/api.js";
-import { cleaningApi, useCleaningApi } from "../lib/cleaningApi.js";
+import { ABI, ADDR, ensureAllowance, errText, publicClient, write } from "../lib/arc.js";
+import { cleaningApi, refreshCleaning, useCleaningApi } from "../lib/cleaningApi.js";
 
 const SCENARIOS = [
   { key: "sun", n: 1, title: "Sun in, flats switch to solar", short: "Sun → solar" },
@@ -197,6 +199,31 @@ function Actions({ items, run, connected }) {
 }
 
 const admin = (path, body) => () => postJSON(path, body || {}, { admin: true });
+
+// A transaction signed in this browser's wallet (MetaMask): the cleaner or the shop, never the Pi.
+const walletError = (e) => {
+  const m = errText(e);
+  if (/NotAllowed/.test(m)) return "this wallet is the Pi, the committee or the owner. Switch MetaMask to the cleaner's account";
+  if (/rejected|denied/i.test(m)) return "cancelled in the wallet";
+  if (/insufficient|exceeds (the )?balance/i.test(m)) return "this wallet needs test USDC on Arc (faucet.circle.com)";
+  return m;
+};
+const signed = (fn) => async () => {
+  try {
+    return await fn();
+  } catch (e) {
+    throw new Error(walletError(e));
+  }
+};
+
+function WalletRow({ who }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+      <span>Signs with {who}'s wallet:</span>
+      <WalletButton />
+    </div>
+  );
+}
 
 /** The model building: panel on the roof, 3 flats, the tank pump. Follows the live state. */
 function Building({ live, highlight = [], extra }) {
@@ -423,8 +450,25 @@ function SellScenario({ live, connected, run, title, n }) {
     reloadMarket();
     return r;
   };
-  const sale = sales[0];
-  const proofOrder = (sale && orders.find((o) => o.order_id === sale.order_id)) || orders[0];
+  // the proof box follows one order: the open one, else the newest, with its own settlement
+  const proofOrder = openOrder || orders[0];
+  const sale = proofOrder ? sales.find((x) => x.order_id === proofOrder.order_id) : null;
+  // the shop's prepay from this browser, shown until the Pi lists the order (it checks every 10 s)
+  const [bought, setBought] = useState(null);
+  const buyOffer = signed(async () => {
+    if (!offer) throw new Error("no offer yet: press “Sell the spare now” first");
+    if (Date.now() / 1000 >= Number(offer.window_end) - 15) throw new Error("this offer is closing: sell again for a fresh one");
+    const wh = Math.max(1, Math.round(Number(offer.kwh) * 1000));
+    const cost = await publicClient.readContract({ address: ADDR.shop, abi: ABI.shop, functionName: "costOf", args: [wh] });
+    await ensureAllowance("shop", cost);
+    const hash = await write("shop", "placeOrder", [offer.day, wh, BigInt(offer.window_end)]);
+    setBought({ hash, wh, usdc: Number(cost) / 1e6, at: Date.now() });
+    reloadMarket();
+    return { tx: hash };
+  });
+  // a prepay newer than every order the Pi has seen is still on its way to the Pi
+  const pending = bought && !orders.some((o) => o.tx === bought.hash || (o.detected_at || 0) * 1000 >= bought.at) ? bought : null;
+  const prepayTx = pending ? pending.hash : proofOrder?.tx || (bought && openOrder ? bought.hash : null);
   return (
     <>
       <Story
@@ -434,7 +478,7 @@ function SellScenario({ live, connected, run, title, n }) {
         steps={[
           { text: `Spare sun: panel gives ${W(panelW)}, flats on solar use ${W(usedW)}`, done: panelW - usedW > 0.05, hint: "Keep the lamp on for about 30 seconds: “Sell” counts the last 5 minutes and the one in progress" },
           { text: "Dyna on 0G decides who buys the spare", done: !!t && t.mode === "ai", hint: "Press “Sell the spare now” (it also runs by itself every few minutes)" },
-          { text: "A nearby shop sees the offer and prepays on Arc", done: orders.some((o) => o.status === "open" || o.status === "settled"), hint: "Pawan's phone: Shop → Offers" },
+          { text: "A nearby shop sees the offer and prepays on Arc", done: !!pending || orders.some((o) => o.status === "open" || o.status === "settled"), hint: "Press “Shop: Prepay on Arc” with the shop's wallet (or Pawan's phone: Shop → Offers)" },
           { text: "The Pi settles on Arc: the shop pays for what was delivered, the rest goes back", done: sales.length > 0, hint: openOrder ? "Press “Settle on Arc now”, or it settles by itself at the end of the window" : null },
         ]}
       >
@@ -443,9 +487,11 @@ function SellScenario({ live, connected, run, title, n }) {
           run={run}
           items={[
             { label: "Sell the spare now (0G)", fn: sellNow },
+            offer && !openOrder && !pending && { label: "Shop: Prepay on Arc", fn: buyOffer },
             openOrder && { label: "Settle on Arc now", fn: settleNow },
           ]}
         />
+        {offer && !openOrder && <WalletRow who="the shop" />}
         {t && (
           <div className="rounded-2xl bg-inner p-4">
             <div className="label">0G's trade</div>
@@ -470,7 +516,7 @@ function SellScenario({ live, connected, run, title, n }) {
             </div>
           </div>
         )}
-        {(t?.request_id || proofOrder) && (
+        {(t?.request_id || proofOrder || pending) && (
           <div className="rounded-2xl border border-line p-4">
             <div className="label">Proof of the P2P sale</div>
             <ul className="mt-2 flex flex-col gap-2 text-base">
@@ -484,15 +530,17 @@ function SellScenario({ live, connected, run, title, n }) {
                   </span>
                 </li>
               )}
-              {proofOrder && (
+              {(proofOrder || pending) && (
                 <li className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    Shop prepaid {proofOrder.deposit_usdc} USDC for {(Number(proofOrder.want_wh) / 1000).toFixed(3)} kWh
+                    {pending
+                      ? `Shop prepaid ${pending.usdc} USDC for ${(pending.wh / 1000).toFixed(3)} kWh (the Pi picks it up in a few seconds)`
+                      : `Shop prepaid ${proofOrder.deposit_usdc} USDC for ${(Number(proofOrder.want_wh) / 1000).toFixed(3)} kWh`}
                   </span>
-                  {proofOrder.tx ? <Proof kind="arc" id={proofOrder.tx} label="Prepaid on Arc" /> : <span className="text-sm text-muted">order #{proofOrder.order_id} on Arc</span>}
+                  {prepayTx ? <Proof kind="arc" id={prepayTx} label="Prepaid on Arc" /> : <span className="text-sm text-muted">order #{proofOrder.order_id} on Arc</span>}
                 </li>
               )}
-              {sale && (
+              {sale && !pending && (
                 <li className="flex flex-wrap items-center justify-between gap-2">
                   <span>
                     Settled: {sale.kwh} kWh delivered, {Number(sale.usdc).toFixed(4)} USDC to the society
@@ -552,6 +600,16 @@ function CleanScenario({ live, connected, run, title, n }) {
   const at = state ? ORDER[state] ?? -1 : -1;
   const pct = data.pct;
   const terminal = !job || ["paid", "rejected", "refunded", "resolved", "no_check"].includes(state);
+  const escrowId = job?.arc?.job_id;
+  // the cleaner's accept from this browser, until the Pi has looked it up on Arc itself
+  const [accepted, setAccepted] = useState(null);
+  const acceptTx = job?.arc?.accept_tx || (accepted && accepted.id === escrowId ? accepted.hash : null);
+  const acceptOnArc = signed(async () => {
+    const hash = await write("escrow", "accept", [BigInt(escrowId)]);
+    setAccepted({ id: escrowId, hash });
+    await refreshCleaning();
+    return { tx: hash };
+  });
   return (
     <>
       <Story
@@ -570,10 +628,20 @@ function CleanScenario({ live, connected, run, title, n }) {
             terminal && { label: "Scan panel (0G)", fn: cleaningApi.scan },
             state === "flagged" && { label: "Committee approves", fn: () => cleaningApi.approve() },
             state === "flagged" && { label: "Reject", fn: cleaningApi.reject, quiet: true },
+            state === "open" && escrowId != null && !acceptTx && { label: "Cleaner: Accept on Arc", fn: acceptOnArc },
             (state === "accepted" || state === "open") && { label: "Cleaner: Mark done", fn: cleaningApi.done, disabled: state !== "accepted" },
           ]}
         />
-        {state === "open" && <p className="text-base text-muted">Now the cleaner accepts on their phone: Cleaner → Jobs → Accept (their own wallet).</p>}
+        {state === "open" && acceptTx && <p className="text-base text-muted">Accepted on Arc. The Pi sees it within a few seconds, then “Mark done” unlocks.</p>}
+        {state === "open" && !acceptTx && (
+          <>
+            <p className="text-base text-muted">
+              The cleaner accepts escrow #{escrowId} from their own wallet: switch MetaMask to the cleaner's account and press “Cleaner: Accept on Arc”
+              (or on the cleaner's phone: Cleaner → Jobs → Accept). The Pi, the committee and the owner can't take the job.
+            </p>
+            <WalletRow who="the cleaner" />
+          </>
+        )}
         {state === "cleaned" && <p className="text-base text-muted">Take the paper off. The Pi pays when the panel is back to {data.clean_pct ?? 90}% or more.</p>}
         {job && (
           <div className="rounded-2xl bg-inner p-4">
@@ -586,6 +654,8 @@ function CleanScenario({ live, connected, run, title, n }) {
             <div className="mt-2 flex flex-wrap gap-2 text-sm">
               <ZgChip id={job.og?.request_id} label="0G dust check" />
               {job.arc?.open_tx && <Proof kind="arc" id={job.arc.open_tx} label="Escrow opened" />}
+              {acceptTx && <Proof kind="arc" id={acceptTx} label="Cleaner accepted" />}
+              {job.arc?.link_tx && <Proof kind="arc" id={job.arc.link_tx} label="0G proof linked" />}
               {job.arc?.release_tx && <Proof kind="arc" id={job.arc.release_tx} label="Cleaner paid" />}
               {job.arc?.refund_tx && <Proof kind="arc" id={job.arc.refund_tx} label="Refunded" />}
             </div>

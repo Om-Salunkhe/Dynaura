@@ -151,17 +151,33 @@ class Arc:
                 "delivered_wh": o[3], "price_per_kwh": from_units(o[4]), "deadline": o[5],
                 "status": ORDER_STATUS[o[6]], "day": o[7]}
 
-    def order_tx(self, order_id: int, lookback: int = 20000) -> str | None:
-        """The shop's prepay transaction (OrderPlaced event), looked up in the last `lookback` blocks
-        when the Pi first sees the order. Best effort: None if the RPC won't say."""
+    # Arc's public RPC refuses eth_getLogs over more than 10,000 blocks (-32012), so look back 9,000
+    LOG_LOOKBACK = 9000
+
+    def _event_tx(self, contract, event: str, **filters) -> str | None:
+        """Hash of the newest `event` matching `filters` in the last LOG_LOOKBACK blocks, or None."""
+        start = max(0, self.w3.eth.block_number - self.LOG_LOOKBACK)
+        logs = getattr(self.need(contract).events, event)().get_logs(from_block=start, argument_filters=filters)
+        for ev in reversed(list(logs)):
+            h = ev["transactionHash"].hex()
+            return h if h.startswith("0x") else "0x" + h
+        return None
+
+    def order_tx(self, order_id: int) -> str | None:
+        """The shop's prepay transaction (OrderPlaced event), looked up when the Pi first sees the
+        order. Best effort: None if the RPC won't say."""
         try:
-            shop = self.need(self.shop)
-            start = max(0, self.w3.eth.block_number - lookback)
-            for ev in shop.events.OrderPlaced().get_logs(from_block=start, argument_filters={"orderId": order_id}):
-                h = ev["transactionHash"].hex()
-                return h if h.startswith("0x") else "0x" + h
+            return self._event_tx(self.shop, "OrderPlaced", orderId=order_id)
         except Exception as e:
             log.warning("OrderPlaced lookup for order #%s failed: %s", order_id, str(e)[:200])
+        return None
+
+    def accept_tx(self, job_id: int) -> str | None:
+        """The cleaner's accept transaction (JobAccepted event). Best effort, like order_tx."""
+        try:
+            return self._event_tx(self.escrow, "JobAccepted", jobId=job_id)
+        except Exception as e:
+            log.warning("JobAccepted lookup for escrow #%s failed: %s", job_id, str(e)[:200])
         return None
 
     def settle_order(self, order_id: int, delivered_wh: int) -> tuple[float, float, str]:
