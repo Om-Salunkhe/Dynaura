@@ -11,10 +11,12 @@ Built from scratch at ETHGlobal Mumbai (5–7 Nov 2026) by Om Salunkhe, Devang G
 | | |
 |---|---|
 | Demo video | **TBD** |
-| Live app | **TBD** (Vercel; the Pi-backed parts are live only on the venue network, see [Run it](#run-it)) |
+| Live app | **[www.dynaura.in](https://www.dynaura.in)**. Without a Pi it shows clearly labelled demo data; at the venue it reads the live Pi through an https tunnel (`?pi=<url>`, see [Run it](#run-it)) |
 | Arc Studio project | [studio.arc.io/app/63db67fa…](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852) |
 | Arc contracts | [CleaningEscrow](https://explorer.testnet.arc.io/address/0xf215116c72784e7490ddf3166dcb53b84855b8b9) · [SolarBilling](https://explorer.testnet.arc.io/address/0x5bd5aecc43968994e90f33df7177fb384401902b) · [ShopTrade](https://explorer.testnet.arc.io/address/0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47) · [SolarCredits](https://explorer.testnet.arc.io/address/0x12b06e364ecc08aead9ce2142382682b9d46859c) (Arc testnet, chain 5042002; [`deployments.json`](contracts/deployments.json)) |
 | 0G contract | [EpisodeRegistry `0xb62f…a984`](https://chainscan-galileo.0g.ai/address/0xb62f4531f035d5cd188799d96bac553b5d7da984) (0G Galileo testnet, chain 16602, source verified; [`zerog/`](zerog/)) |
+| Arc roles | Owner (all four contracts): committee [`0x6c11…63D6`](https://explorer.testnet.arc.io/address/0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6) · oracle: the Pi [`0xA2F1…1Ccf`](https://explorer.testnet.arc.io/address/0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf) · USDC `0x3600…0000` |
+| Pi device key | `0x1EADd21328207546a4785bE042499B9D228952Ed` signs every 1-minute meter reading (Verify payout checks it) |
 | Arkiv building wallet | [`0xd961…17Cd`](https://rabdi.explorer.arkiv.network/address/0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) (Rabdi testnet, chain 7794095; building `sunrise-apartments`) |
 | Prize tracks | 0G: Physical AI: Agents with a Body · Arc: Best Smart Contracts with Advanced Stablecoin Logic, In Arc Studio · Arkiv: Build on Arkiv (from scratch) |
 
@@ -143,12 +145,11 @@ The purchase is always a user-signed wallet transaction. A 0G request ID is a Ro
 
 | Decision | 0G request ID | 0G Storage root | 0G Chain (EpisodeRegistry) | Arkiv entity |
 |---|---|---|---|---|
-| Daily plan | `648ffb36-494f-485f-9195-905cd8d0de63` | [`0x9690700b…aee3`](https://storagescan-galileo.0g.ai/submission/160107) | [episode #21](https://chainscan-galileo.0g.ai/tx/0xaa5308fde1cf2c82328852db4a1ede61c562c0a94be2d7eaf3a0edeb02a7c7fb), `ai=true` | TBD |
+| Daily plan | `648ffb36-494f-485f-9195-905cd8d0de63` | [`0x9690700b…aee3`](https://storagescan-galileo.0g.ai/submission/160107) | [episode #21](https://chainscan-galileo.0g.ai/tx/0xaa5308fde1cf2c82328852db4a1ede61c562c0a94be2d7eaf3a0edeb02a7c7fb), `ai=true` | [`0x8086…dc25`](https://rabdi.explorer.arkiv.network/entity/0x8086e9d102e3465e679309b1740755143ed7c5a34f9a787226d0ede0c68dcc25) |
 | Dust check: **dirty, 50% covered** (opened cleaning job 11) | `38b9d5f5-1c88-4dd5-a178-4d5f5ae013ab` | [`0x844bb6aa…dcd6`](https://storagescan-galileo.0g.ai/submission/160068) | [episode #11](https://chainscan-galileo.0g.ai/tx/0x54074ae1d73a33b15a9a4fdddbf8124fdfe032b119bf8e4d2b085d1460e1f238), `ai=true` | cleaning_job [`0xf89c…7abb`](https://rabdi.explorer.arkiv.network/entity/0xf89cb161a52c72ec22db10cec421acdf27cc8096b7b49c775eee58f052ea7abb) |
-| Dust check: 0G unreachable (`no_check`) | — (no 0G answer) | TBD | TBD | TBD |
+| Dust check with no 0G verdict (`no_check`; 0G refused the old key) | — (no 0G answer) | [`0x30fe1a95…a32b`](https://storagescan-galileo.0g.ai/submission/159870) | [episode #7](https://chainscan-galileo.0g.ai/tx/0xdec40ec6a74f0890243a7b6201e0a48f90550e96f0d805e7f1e13e2a10e428bb), `ai=false` | — |
 | No-AI safe stop (Pi, 6 Nov 22:34) | — (0G unreachable, no call) | [`0x534e0ec1…5440`](https://storagescan-galileo.0g.ai/submission/159841) | [episode #1](https://chainscan-galileo.0g.ai/tx/0x907d516f0284ec21e3fe7f2686ccf1ea590f5497ba8690ef32a10da5283c015c), `ai=false` | [`0x7980…9c39`](https://rabdi.explorer.arkiv.network/entity/0x798036b1c95ac505f4937ed8484547b50ae10c5fe794e059445acb5f6ea79c39) |
-| No-AI safe stop (next) | — | [`0x7d6726af…b4cf`](https://storagescan-galileo.0g.ai/submission/159842) | [episode #2](https://chainscan-galileo.0g.ai/tx/0xeba80bdbf2c9f9de3e1a4aee8bb3726b3fa710171c786805de0fbe6ed192821c), `ai=false` | TBD |
-| Ask Dyna | TBD | TBD | TBD | TBD |
+| No-AI safe stop (next) | — | [`0x7d6726af…b4cf`](https://storagescan-galileo.0g.ai/submission/159842) | [episode #2](https://chainscan-galileo.0g.ai/tx/0xeba80bdbf2c9f9de3e1a4aee8bb3726b3fa710171c786805de0fbe6ed192821c), `ai=false` | [`0x9305…6dcd`](https://rabdi.explorer.arkiv.network/entity/0x930573213816e068a7659492ef1b871ce6c0c6696aa289bfc91116375b576dcd) |
 
 We checked both safe-stop rows end to end. We downloaded both logs back from 0G Storage: each is a `plan` decision in mode `no-ai` with every flat on grid. Episode #2's `prev.sha256` equals the sha256 of episode #1's log, byte for byte. On chain, `episodeOf(root)` returns 1 and 2.
 
@@ -187,7 +188,7 @@ Deploy transactions: [escrow](https://explorer.testnet.arc.io/tx/0x7bc2adcd3d0ef
 | Job linked to its 0G episode | `linkEpisode(jobId, ogStorageRoot)` | [live](https://explorer.testnet.arc.io/tx/0x7febaa603e24f31b63545471af3f515e7f37b093ba23d650e3534c538184abc1) · [e2e](https://explorer.testnet.arc.io/tx/0x4576b7945b58dcb404051ff1ddc75bb8bbeaf5848154d32c70700328efaf3d30) |
 | Cleaner disputes → committee resolves | `dispute(jobId, reason)` → `resolve(jobId, payCleaner)` | e2e: [dispute](https://explorer.testnet.arc.io/tx/0x7567890a9452e35bfaae8ef36e86f02d75a2d7c82dd63f1dbca898f1d72ab745) → [resolve by the committee](https://explorer.testnet.arc.io/tx/0xdf7ba154225fd9f0514323b596aad4f6b27fdf76f80cffb1dd77b9352b0631e8) (the Pi's resolve is refused) |
 | A flat pays its bill (split solar / grid) | `SolarBilling.pay(billId)` | e2e: [postBill](https://explorer.testnet.arc.io/tx/0x86132eba80d909c0416f530d35f89603bd38fa88f5659fba743a615cf09a3b24) → [pay, split](https://explorer.testnet.arc.io/tx/0x21e8b1741c1550a00324935587b16028da566f1dd87a73e426c17faf5c0cfd87) |
-| A shop order settles | `ShopTrade.settle(orderId, deliveredWh)` | TBD |
+| A shop order settles | `ShopTrade.settle(orderId, deliveredWh)` | not run on chain yet (tested in Studio's suite) |
 | Fair share: the Pi posts the day, a neighbour pays in, revenue is funded, A and B claim | `SolarCredits.postPeriod` → `payIn` → `fund` → `claim` | e2e, Pawan's day: [postPeriod](https://explorer.testnet.arc.io/tx/0x1e4bf2cac3395c5dcf02af6715886af4ac7681a2e6018fb08e91ccd06dea6cea) (A left 30 kWh, B 10, C used 20 over) → [C pays in](https://explorer.testnet.arc.io/tx/0x039349e236a5f9fca86337da44268d0032140d264024ddf137c9c59a781b45a0) 0.26 → [shop + grid fund](https://explorer.testnet.arc.io/tx/0x59fb00a5149233c3e787712564b77861cf4fb236a8e32cb37d42fe7def501f7f) 0.14 → **[A claims 0.30](https://explorer.testnet.arc.io/tx/0xe26af95abbb552d6a1a1915ae68318afef9c465c4999d2faf9197afbd4c65339)**, **[B claims 0.10](https://explorer.testnet.arc.io/tx/0x3611a7805a4be62f073dfd899f42f36414e521cef70f3d118f4e3e37fb498283)**: pool 0.40 USDC split 3:1 on chain (an equal split: 0.20 each). All transactions: [On-chain proof](contracts/README.md#on-chain-proof-arc-testnet-fri-6-and-sat-7-nov) |
 
 **Reusable by other builders:** `CleaningEscrow` is a generic "pay when a device proves the job is done" escrow, and `SolarCredits` a generic "pay contributors by measured contribution" pool. Swap the panel meter for any sensor (a water-tank level, a lift's uptime, an air-quality reading) and it works unchanged.
@@ -223,6 +224,26 @@ EOF
 ```
 
 Without a key, the query uses Arkiv's public endpoint, which has a small free budget. If it answers `{"error":"ANON_COST_LIMITED",…}`, create a free key at [hub.arkiv.network/access-keys](https://hub.arkiv.network/access-keys) and set `ARKIV_KEY` to it. The key is the last part of the URL, `https://rpc.rabdi.db-chain.testnet.arkiv.network/<your-key>`; nothing else changes. More queries (signed readings, "is the building online?"): [`arkiv/README.md`](arkiv/README.md).
+
+## Deployments
+
+Every contract is deployed and its source is verified on the chain's explorer.
+
+| What | Chain | Address |
+|---|---|---|
+| CleaningEscrow | Arc testnet (5042002) | [`0xf215116c72784e7490ddf3166dcb53b84855b8b9`](https://explorer.testnet.arc.io/address/0xf215116c72784e7490ddf3166dcb53b84855b8b9) |
+| SolarCredits | Arc testnet | [`0x12b06e364ecc08aead9ce2142382682b9d46859c`](https://explorer.testnet.arc.io/address/0x12b06e364ecc08aead9ce2142382682b9d46859c) |
+| SolarBilling | Arc testnet | [`0x5bd5aecc43968994e90f33df7177fb384401902b`](https://explorer.testnet.arc.io/address/0x5bd5aecc43968994e90f33df7177fb384401902b) |
+| ShopTrade | Arc testnet | [`0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47`](https://explorer.testnet.arc.io/address/0x17b2d9561991f4f7c0d43a5f0be19dc07c73ef47) |
+| USDC (Arc's native stablecoin and gas) | Arc testnet | `0x3600000000000000000000000000000000000000` |
+| Committee wallet (owner of all four Arc contracts) | Arc testnet | [`0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6`](https://explorer.testnet.arc.io/address/0x6c11FAcF7DE8C250A3E648aB9F73fBDaFe5563D6) |
+| Pi oracle wallet | Arc testnet | [`0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf`](https://explorer.testnet.arc.io/address/0xA2F16C1A2b562349B475046eAb3E9e59B9bD1Ccf) |
+| EpisodeRegistry | 0G Galileo testnet (16602) | [`0xb62f4531f035d5cd188799d96bac553b5d7da984`](https://chainscan-galileo.0g.ai/address/0xb62f4531f035d5cd188799d96bac553b5d7da984) |
+| Pi 0G wallet (Storage uploads, registry device) | 0G Galileo testnet | [`0x79ba0907fF3810100fD3C6002636B30aD8828274`](https://chainscan-galileo.0g.ai/address/0x79ba0907fF3810100fD3C6002636B30aD8828274) |
+| Building wallet (writes every Arkiv entity) | Arkiv Rabdi testnet (7794095) | [`0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd`](https://rabdi.explorer.arkiv.network/address/0xd961a5C42dd84F003Ef3C85a1bD08BE59A8717Cd) |
+| Pi device key (signs meter readings) | off-chain signer | `0x1EADd21328207546a4785bE042499B9D228952Ed` |
+
+Arc Studio project: [studio.arc.io/app/63db67fa…](https://studio.arc.io/app/63db67fa-4bd2-4ba1-a1c5-e7740437e852). The Arc contracts were deployed from Studio's smart wallet, then ownership was handed to the committee (Ownable2Step).
 
 ## Run it
 

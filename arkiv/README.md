@@ -19,6 +19,8 @@ The building's heartbeat expiring is its offline alarm.
 | [friction.md](friction.md) | What got in our way, with reproductions and evidence |
 | [reach.md](reach.md) | Who it's for, whether they'd use it, how to try it today, what's next |
 
+**Live app:** [www.dynaura.in](https://www.dynaura.in). History, the cleaner's job board, shop offers, bills and the fair-share screens read their records straight from Arkiv.
+
 ## The building wallet
 
 | Building | Wallet (writes every record) |
