@@ -60,6 +60,15 @@ class Arc:
         self.shop = self._contract("ShopTrade", config.ARC_SHOP)
         self.billing = self._contract("SolarBilling", config.ARC_BILLING)
         self.credits = self._contract("SolarCredits", config.ARC_CREDITS)
+        self.w3_logs = (self.w3 if config.ARC_LOGS_RPC_URL == config.ARC_RPC_URL else
+                        Web3(Web3.HTTPProvider(config.ARC_LOGS_RPC_URL, request_kwargs={"timeout": 20})))
+
+    def _logs(self, contract):
+        """`contract` bound to the log RPC (ARC_LOGS_RPC_URL), for event lookups."""
+        w3l = getattr(self, "w3_logs", None)
+        if w3l is None or w3l is getattr(self, "w3", None):
+            return contract
+        return w3l.eth.contract(address=contract.address, abi=contract.abi)
 
     def _contract(self, name: str, address: str):
         if not address:
@@ -156,8 +165,8 @@ class Arc:
 
     def _event_tx(self, contract, event: str, **filters) -> str | None:
         """Hash of the newest `event` matching `filters` in the last LOG_LOOKBACK blocks, or None."""
-        start = max(0, self.w3.eth.block_number - self.LOG_LOOKBACK)
-        logs = getattr(self.need(contract).events, event)().get_logs(from_block=start, argument_filters=filters)
+        start = max(0, (getattr(self, "w3_logs", None) or self.w3).eth.block_number - self.LOG_LOOKBACK)
+        logs = getattr(self._logs(self.need(contract)).events, event)().get_logs(from_block=start, argument_filters=filters)
         for ev in reversed(list(logs)):
             h = ev["transactionHash"].hex()
             return h if h.startswith("0x") else "0x" + h
@@ -296,6 +305,7 @@ class Arc:
         c = self.credits
         if not (self.enabled and c is not None):
             return out
+        c = self._logs(c)
         pid = period_bytes(period_id)
         try:
             for name, slot in (("PeriodPosted", "post_tx"), ("PeriodFunded", "fund_tx"), ("CreditClaimed", "claims")):

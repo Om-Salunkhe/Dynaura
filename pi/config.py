@@ -82,6 +82,9 @@ MARKET_OFFER_TTL_MIN = int(os.getenv("MARKET_OFFER_TTL_MIN", "10") or 10)
 
 # Arc testnet (contracts deployed from Arc Studio, see contracts/README.md)
 ARC_RPC_URL = os.getenv("ARC_RPC_URL", "https://rpc.testnet.arc.io").strip()
+# Event-log lookups (proof links only) can use a different RPC: some providers serve calls and
+# transactions but refuse eth_getLogs, and a busy shared IP gets rate-limited on logs first.
+ARC_LOGS_RPC_URL = os.getenv("ARC_LOGS_RPC_URL", "").strip() or ARC_RPC_URL
 ARC_CHAIN_ID = int(os.getenv("ARC_CHAIN_ID", "5042002") or 5042002)
 ARC_PRIVATE_KEY = os.getenv("ARC_PRIVATE_KEY", "").strip()   # Pi wallet = oracle of the contracts
 ARC_USDC = os.getenv("ARC_USDC", "0x3600000000000000000000000000000000000000").strip()
