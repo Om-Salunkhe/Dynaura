@@ -101,9 +101,9 @@ function Hero() {
       </div>
       <div className="relative z-10 mx-auto flex w-full max-w-[860px] flex-col items-center px-6 text-center">
         <h1 className="m-0 text-[46px] font-light leading-[1.02] tracking-[-0.045em] sm:text-[80px]">
-          One roof. Every flat.
+          Shared sun. Fair shares.
           <br />
-          <span className="text-white/55">Run by the sun.</span>
+          <span className="text-white/55">Paid on-chain.</span>
         </h1>
         <p className="mt-7 max-w-[580px] text-[15.5px] font-light leading-relaxed text-white/65 sm:text-[17px]">
           Dynaura is an AI that runs a building's shared solar: it plans the day on 0G, settles every unit in USDC on Arc,
