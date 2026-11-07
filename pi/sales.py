@@ -34,7 +34,7 @@ def delivered_wh(order: dict, cleaning_status: dict | None) -> int:
 
 
 class ShopSettler:
-    def __init__(self, arc, brain, cleaning=None, interval: float = 30.0):
+    def __init__(self, arc, brain, cleaning=None, interval: float = 10.0):
         self.arc = arc
         self.brain = brain
         self.cleaning = cleaning

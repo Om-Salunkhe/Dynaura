@@ -71,6 +71,10 @@ class FakeArc:
         st = self.chain[jid]
         return {"status": st, "cleaner": "0x" + "c1" * 20 if st != "open" else "0x" + "00" * 20, "output_after": 0}
 
+    def accept_tx(self, jid):
+        self.calls.append(("accept_tx", jid))
+        return f"0xaccept{jid}"
+
     def release_cleaning(self, jid, pct, proof):
         self.chain[jid] = "paid"
         self.calls.append(("release", jid, pct, proof))
@@ -209,6 +213,8 @@ def main():
     w.step()
     check("cleaner accepted on Arc -> accepted", w.job["state"] == "accepted" and w.job["cleaner"], w.job)
     check("arc.cleaner is the accepting wallet", w.job["arc"]["cleaner"] == "0x" + "c1" * 20, w.job["arc"])
+    check("the cleaner's accept tx is looked up once", w.job["arc"]["accept_tx"] == "0xaccept1"
+          and sum(1 for c in arc.calls if c[0] == "accept_tx") == 1, w.job["arc"])
     w.mark_done()
     check("Mark done -> cleaned, window restarts", w.job["state"] == "cleaned" and not w.samples, w.job)
     minute(w, 60)

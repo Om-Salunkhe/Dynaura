@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config  # noqa: E402
+from arc import Arc as RealArc  # noqa: E402
 from sales import ShopSettler  # noqa: E402
 
 
@@ -73,6 +74,27 @@ def test_marketplace():
     assert market.orders[1]["settle_tx"] == "0xsettled" and sales[0]["prepay_tx"] == "0xprepaid1"
 
 
+def test_event_lookup_stays_under_the_rpc_range_limit():
+    """Arc's RPC answers -32012 'requested range too large' past 10,000 blocks."""
+    asked = []
+
+    class Event:
+        def get_logs(self, from_block, argument_filters):
+            asked.append((from_block, argument_filters))
+            return [{"transactionHash": bytes.fromhex("ab" * 32)}]
+
+    events = type("Events", (), {"OrderPlaced": lambda self: Event(), "JobAccepted": lambda self: Event()})()
+    arc = RealArc.__new__(RealArc)
+    arc.enabled = True
+    arc.shop = arc.escrow = type("C", (), {"events": events})()
+    arc.w3 = type("W3", (), {"eth": type("Eth", (), {"block_number": 71_110_786})()})()
+    assert arc.order_tx(7) == "0x" + "ab" * 32
+    assert arc.accept_tx(4) == "0x" + "ab" * 32
+    assert asked[0] == (71_110_786 - 9000, {"orderId": 7}) and asked[1][1] == {"jobId": 4}
+    assert all(71_110_786 - b < 10_000 for b, _ in asked)
+
+
 if __name__ == "__main__":
     test_marketplace()
+    test_event_lookup_stays_under_the_rpc_range_limit()
     print("marketplace: all checks passed")
