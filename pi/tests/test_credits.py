@@ -436,6 +436,22 @@ def test_sell_now_counts_the_minute_in_progress():
     assert snap["until"] == m + 30
 
 
+def test_demo_sun_scale_multiplies_available_and_is_reported():
+    # The model's panel is tiny; the demo boost must scale the available sun AND be visible.
+    import config
+    old = getattr(config, "DEMO_SUN_SCALE", 1.0)
+    try:
+        led = credits.Ledger(FakeStore([]), FakeHw(0.5), None, path=str(Path(tempfile.mkdtemp()) / "c.db"))
+        config.DEMO_SUN_SCALE = 1.0
+        assert abs(led.available_w() - 0.5) < 1e-9
+        config.DEMO_SUN_SCALE = 10.0
+        assert abs(led.available_w() - 5.0) < 1e-9, led.available_w()
+        assert led.period("today")["demo_sun_scale"] == 10.0
+        assert led.window(15)["demo_sun_scale"] == 10.0
+    finally:
+        config.DEMO_SUN_SCALE = old
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
