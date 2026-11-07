@@ -33,6 +33,7 @@ export default function CleaningAlert() {
   const v = hero.verdict || {};
   const fee = hero.fee ?? 2;
   const demo = !hero.live;
+  const meterOnly = v.input === "meter-only";
 
   const act = async (which, fn) => {
     setBusy(which);
@@ -51,9 +52,9 @@ export default function CleaningAlert() {
       <div className="flex flex-col gap-1.5">
         {demo ? (
           <DemoFrame />
-        ) : noFrame ? (
-          <div className="grid aspect-[4/3] w-full place-items-center rounded-[10px] border border-dashed border-line bg-inner px-3 text-center text-[11.5px] text-muted">
-            The Pi didn't send the frame (GET /api/camera/latest.jpg)
+        ) : noFrame || meterOnly ? (
+          <div className="grid aspect-[4/3] w-full place-items-center rounded-[10px] border border-line bg-inner px-3 text-center text-[11.5px] text-muted">
+            No camera on this panel
           </div>
         ) : (
           <img
@@ -63,7 +64,9 @@ export default function CleaningAlert() {
             onError={() => setNoFrame(true)}
           />
         )}
-        <span className="text-[11px] text-muted">{v.input === "meter-only" ? "No vision model: judged from the meter and the forecast" : "Frame the 0G vision check looked at"}</span>
+        <span className="text-[11px] text-muted">
+          {noFrame || meterOnly ? "Dyna judged it from the meter and the forecast" : "Frame the 0G vision check looked at"}
+        </span>
       </div>
 
       <div className="flex min-w-0 flex-col gap-3">
